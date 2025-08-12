@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { AlertTriangle, MapPin, Clock, Phone, Navigation, Users } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { sortCallsByTime, isCallCritical, getCallUrgencyLevel } from '@/utils/timeUtils';
 
 interface DriverInterfaceProps {
   currentDriverId: string;
@@ -19,7 +21,7 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
   const [isAvailable, setIsAvailable] = useState(true);
 
   const currentDriver = data.drivers.find(d => d.id === currentDriverId);
-  const openCalls = data.supportCalls.filter(call => call.status === 'ABERTO');
+  const openCalls = sortCallsByTime(data.supportCalls.filter(call => call.status === 'ABERTO'));
 
   const handleRequestSupport = () => {
     const newCall: SupportCall = {
@@ -73,12 +75,17 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
     <div className="min-h-screen bg-background p-4 max-w-md mx-auto">
       <div className="space-y-6">
         {/* Header */}
-        <Card>
+        <Card className="border-none shadow-lg bg-gradient-to-br from-card to-card/80">
           <CardHeader className="text-center">
+            <div className="flex justify-between items-start mb-4">
+              <div className="text-xs text-muted-foreground">SPX Logistics</div>
+              <ThemeToggle />
+            </div>
+            
             <div className="flex flex-col items-center space-y-4">
-              <Avatar className="h-16 w-16">
+              <Avatar className="h-16 w-16 ring-2 ring-primary/20">
                 <AvatarImage src={currentDriver.avatar} />
-                <AvatarFallback className="text-lg">
+                <AvatarFallback className="text-lg bg-gradient-to-br from-primary to-primary-dark text-primary-foreground">
                   {currentDriver.name.split(' ').map(n => n[0]).join('')}
                 </AvatarFallback>
               </Avatar>
@@ -107,21 +114,21 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
         </Card>
 
         {/* Request Support Button */}
-        <Card>
-          <CardHeader>
+        <Card className="overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-warning/10 to-destructive/10">
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
               Solicitar Apoio
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Button 
-              className="w-full h-12 text-lg bg-gradient-to-r from-warning to-destructive hover:shadow-lg"
+              className="w-full h-14 text-lg bg-gradient-to-r from-warning to-destructive hover:shadow-xl hover:scale-[1.02] transition-all duration-300 text-white font-bold"
               onClick={handleRequestSupport}
             >
               🆘 PRECISO DE APOIO
             </Button>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
+            <p className="text-xs text-muted-foreground mt-3 text-center">
               Sua localização será enviada automaticamente
             </p>
           </CardContent>
@@ -151,8 +158,19 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
                   locale: ptBR 
                 });
 
+                const urgencyLevel = getCallUrgencyLevel(call.createdAt);
+                const isCritical = isCallCritical(call.createdAt);
+
+                const cardClassName = `border-l-4 ${
+                  urgencyLevel === 'critical' 
+                    ? 'border-l-destructive animate-pulse shadow-lg shadow-destructive/20 bg-destructive/5' 
+                    : urgencyLevel === 'warning'
+                    ? 'border-l-warning shadow-md shadow-warning/10 bg-warning/5'
+                    : 'border-l-warning'
+                }`;
+
                 return (
-                  <Card key={call.id} className="border-l-4 border-l-warning">
+                  <Card key={call.id} className={cardClassName}>
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -164,16 +182,24 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
                           </Avatar>
                           <div>
                             <p className="font-medium text-sm">{requester.name}</p>
-                            <div className="flex items-center gap-1">
-                              <Clock size={12} className="text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">{timeAgo}</span>
+                            <div className={`flex items-center gap-1 ${isCritical ? 'text-destructive font-medium' : ''}`}>
+                              <Clock size={12} className={isCritical ? 'text-destructive' : 'text-muted-foreground'} />
+                              <span className="text-xs">{timeAgo}</span>
+                              {isCritical && <AlertTriangle size={12} className="text-destructive animate-pulse" />}
                             </div>
                           </div>
                         </div>
                         
-                        <Badge className="bg-warning text-white">
-                          {call.priority}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge className={`${isCritical ? 'bg-destructive' : 'bg-warning'} text-white text-xs`}>
+                            {call.priority}
+                          </Badge>
+                          {isCritical && (
+                            <Badge className="bg-destructive text-white text-xs animate-pulse">
+                              CRÍTICO
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-start gap-2">
@@ -190,11 +216,15 @@ export const DriverInterface = ({ currentDriverId }: DriverInterfaceProps) => {
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          className="flex-1 bg-primary hover:bg-primary-dark"
+                          className={`flex-1 ${
+                            isCritical 
+                              ? 'bg-destructive hover:bg-destructive/90 animate-pulse' 
+                              : 'bg-primary hover:bg-primary-dark'
+                          } text-white font-medium`}
                           onClick={() => handleAcceptCall(call.id)}
                           disabled={!isAvailable}
                         >
-                          🚚 Aceitar Chamado
+                          🚚 {isCritical ? 'ACEITAR URGENTE!' : 'Aceitar Chamado'}
                         </Button>
                         
                         <Button

@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Clock, MapPin, Phone, MessageCircle } from 'lucide-react';
+import { Clock, MapPin, Phone, MessageCircle, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { isCallCritical, getCallUrgencyLevel } from '@/utils/timeUtils';
 
 interface SupportCallCardProps {
   call: SupportCall;
@@ -40,21 +41,41 @@ export const SupportCallCard = ({
     locale: ptBR 
   });
 
+  const urgencyLevel = getCallUrgencyLevel(call.createdAt);
+  const isCritical = isCallCritical(call.createdAt);
+
+  const cardClassName = `w-full hover:shadow-md transition-all duration-300 border-l-4 ${
+    urgencyLevel === 'critical' 
+      ? 'border-l-destructive animate-pulse shadow-lg shadow-destructive/20' 
+      : urgencyLevel === 'warning'
+      ? 'border-l-warning shadow-md shadow-warning/10'
+      : 'border-l-primary'
+  }`;
+
   return (
-    <Card className="w-full hover:shadow-md transition-all duration-300 border-l-4 border-l-primary">
+    <Card className={cardClassName}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <Badge className={`${statusColors[call.status]} text-white font-medium`}>
-            {call.status.replace('_', ' ')}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={`${statusColors[call.status]} text-white font-medium`}>
+              {call.status.replace('_', ' ')}
+            </Badge>
+            {isCritical && (
+              <Badge className="bg-destructive text-white animate-pulse">
+                <AlertTriangle size={12} className="mr-1" />
+                URGENTE
+              </Badge>
+            )}
+          </div>
           <Badge variant="outline" className={`${priorityColors[call.priority]} text-white border-none`}>
             {call.priority}
           </Badge>
         </div>
         
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className={`flex items-center gap-2 text-sm ${isCritical ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
           <Clock size={14} />
           <span>{timeAgo}</span>
+          {isCritical && <AlertTriangle size={14} className="text-destructive animate-pulse" />}
         </div>
       </CardHeader>
 

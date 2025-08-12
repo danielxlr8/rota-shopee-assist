@@ -68,7 +68,7 @@ export const mockSupportCalls: SupportCall[] = [
       lng: -46.6544,
       address: 'R. da Consolação, 800 - São Paulo, SP'
     },
-    createdAt: new Date(Date.now() - 15 * 60 * 1000), // 15 min ago
+    createdAt: new Date(Date.now() - 25 * 60 * 1000), // 25 min ago - Urgente!
     description: 'Pneu furado, preciso de apoio urgente',
     priority: 'URGENTE'
   },
@@ -115,6 +115,19 @@ export const mockSupportCalls: SupportCall[] = [
     createdAt: new Date(Date.now() - 8 * 60 * 1000), // 8 min ago
     description: 'Mercadoria muito pesada, preciso de ajuda para carregar',
     priority: 'MEDIA'
+  },
+  {
+    id: 'call-5',
+    requesterId: '1',
+    status: 'ABERTO',
+    location: {
+      lat: -23.5450,
+      lng: -46.6320,
+      address: 'Av. Faria Lima, 200 - São Paulo, SP'
+    },
+    createdAt: new Date(Date.now() - 18 * 60 * 1000), // 18 min ago - Crítico!
+    description: 'Van quebrada no meio da rua, bloqueando trânsito',
+    priority: 'URGENTE'
   }
 ];
 

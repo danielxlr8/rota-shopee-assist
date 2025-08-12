@@ -2,6 +2,7 @@ import { SupportCall, Driver } from '@/types/logistics';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { SupportCallCard } from './SupportCallCard';
+import { sortCallsByTime } from '@/utils/timeUtils';
 
 interface KanbanColumnProps {
   title: string;
@@ -26,7 +27,8 @@ export const KanbanColumn = ({
   onContactRequester,
   onContactAssigned 
 }: KanbanColumnProps) => {
-  const filteredCalls = calls.filter(call => call.status === status);
+  const filteredCalls = sortCallsByTime(calls.filter(call => call.status === status));
+  const count = filteredCalls.length;
   
   const getDriver = (driverId: string) => drivers.find(d => d.id === driverId);
 
@@ -37,7 +39,7 @@ export const KanbanColumn = ({
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold">{title}</CardTitle>
             <Badge className={`${statusColors[status]} text-white`}>
-              {filteredCalls.length}
+              {count}
             </Badge>
           </div>
         </CardHeader>
