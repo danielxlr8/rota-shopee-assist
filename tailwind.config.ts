@@ -69,6 +69,12 @@ export default {
 					available: 'hsl(var(--status-available))',
 					unavailable: 'hsl(var(--status-unavailable))'
 				},
+				spx: {
+					orange: 'hsl(var(--spx-orange))',
+					'orange-light': 'hsl(var(--spx-orange-light))',
+					'orange-dark': 'hsl(var(--spx-orange-dark))',
+					background: 'hsl(var(--spx-background))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',

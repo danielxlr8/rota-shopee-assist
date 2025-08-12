@@ -9,6 +9,12 @@
     /* Core Brand Colors */
     --background: 240 10% 98%;
     --foreground: 222 15% 15%;
+    
+    /* SPX Orange Theme */
+    --spx-orange: 25 95% 55%;
+    --spx-orange-light: 25 95% 65%;
+    --spx-orange-dark: 25 95% 45%;
+    --spx-background: 25 95% 55%;
 
     /* Card System */
     --card: 0 0% 100%;

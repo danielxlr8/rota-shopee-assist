@@ -31,17 +31,24 @@ export const AdminDashboard = () => {
   const availableDrivers = data.drivers.filter(d => d.status === 'DISPONIVEL').length;
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="min-h-screen bg-spx-orange p-6 relative overflow-hidden">
+      {/* SPX Logo Background */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-10">
+        <div className="text-black font-black text-[30rem] select-none pointer-events-none">
+          SPX
+        </div>
+      </div>
+      
+      <div className="mx-auto max-w-7xl space-y-6 relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Sistema de Apoio Logístico</h1>
-            <p className="text-muted-foreground">Painel Administrativo - Shopee</p>
+            <h1 className="text-3xl font-bold text-black">Sistema de Apoio Logístico</h1>
+            <p className="text-black/80">Painel Administrativo - SPX Shopee</p>
           </div>
           
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-primary text-primary-foreground">
+            <Badge variant="outline" className="bg-black text-white border-black">
               <Truck className="mr-1 h-4 w-4" />
               Sistema Ativo
             </Badge>
