@@ -4,6 +4,8 @@ import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
 import { mockCalls, mockDrivers } from "./data/mockData";
 import type { Driver, SupportCall } from "./types/logistics";
+console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
+console.log("VITE_MAP_KEY:", import.meta.env.VITE_MAP_KEY);
 
 export default function App() {
   const [view, setView] = useState<"admin" | "driver">("admin");
