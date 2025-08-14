@@ -6,9 +6,9 @@ import type {
   Driver,
 } from "../types/logistics";
 import { Clock, MapPin, Send } from "lucide-react";
-// A importação da 'date-fns' será temporariamente ignorada
-// import { formatDistanceToNow } from 'date-fns';
-// import { ptBR } from 'date-fns/locale';
+import { formatDistanceToNow } from "date-fns";
+// CORREÇÃO: Usando um caminho de importação mais específico para a localidade.
+import { ptBR } from "date-fns/locale/pt-BR";
 
 // ... (Outros componentes como AvatarComponent, etc. continuam iguais)
 export const AvatarComponent = ({
@@ -58,7 +58,7 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   );
 };
 
-// ===== CALLCARD MODIFICADO PARA DEPURAÇÃO =====
+// ===== CALLCARD COM FORMATAÇÃO DE DATA RESTAURADA =====
 export const CallCard = ({
   call,
   onAction,
@@ -68,8 +68,11 @@ export const CallCard = ({
   onAction?: (id: string) => void;
   actionText?: string;
 }) => {
-  // A formatação de data complexa foi temporariamente desativada.
-  // const timeAgo = formatDistanceToNow(new Date(call.timestamp), { addSuffix: true, locale: ptBR });
+  // A formatação de data complexa foi reativada.
+  const timeAgo = formatDistanceToNow(new Date(call.timestamp), {
+    addSuffix: true,
+    locale: ptBR,
+  });
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
@@ -86,8 +89,8 @@ export const CallCard = ({
       <div className="text-sm text-gray-600 space-y-2">
         <div className="flex items-center space-x-2">
           <Clock size={16} className="text-gray-400" />
-          {/* Em vez de 'timeAgo', mostramos uma data simples para o teste. */}
-          <span>{new Date(call.timestamp).toLocaleTimeString()}</span>
+          {/* Mostrando o tempo decorrido novamente */}
+          <span>{timeAgo}</span>
         </div>
         <div className="flex items-center space-x-2">
           <MapPin size={16} className="text-gray-400" />
