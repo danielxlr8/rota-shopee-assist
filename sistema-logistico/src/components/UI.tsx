@@ -10,7 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 // CORREÇÃO: Usando um caminho de importação mais específico para a localidade.
 import { ptBR } from "date-fns/locale/pt-BR";
 
-// ... (Outros componentes como AvatarComponent, etc. continuam iguais)
+// ... (o resto do seu ficheiro continua igual)
 export const AvatarComponent = ({
   user,
 }: {
@@ -57,8 +57,6 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
     </span>
   );
 };
-
-// ===== CALLCARD COM FORMATAÇÃO DE DATA RESTAURADA =====
 export const CallCard = ({
   call,
   onAction,
@@ -68,7 +66,6 @@ export const CallCard = ({
   onAction?: (id: string) => void;
   actionText?: string;
 }) => {
-  // A formatação de data complexa foi reativada.
   const timeAgo = formatDistanceToNow(new Date(call.timestamp), {
     addSuffix: true,
     locale: ptBR,
@@ -89,7 +86,6 @@ export const CallCard = ({
       <div className="text-sm text-gray-600 space-y-2">
         <div className="flex items-center space-x-2">
           <Clock size={16} className="text-gray-400" />
-          {/* Mostrando o tempo decorrido novamente */}
           <span>{timeAgo}</span>
         </div>
         <div className="flex items-center space-x-2">
