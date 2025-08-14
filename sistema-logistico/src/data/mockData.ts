@@ -209,7 +209,7 @@ export const mockCalls: SupportCall[] = [
     location: "R. da Consolação, 800 - São Paulo, SP",
     description: "Pneu furado, preciso de apoio urgente",
     urgency: "URGENTE",
-    status: "ABERTO",
+    status: "CONCLUIDO",
   },
   {
     id: "c2",
@@ -225,6 +225,21 @@ export const mockCalls: SupportCall[] = [
     urgency: "MEDIA",
     status: "ABERTO",
   },
+
+  {
+    id: "c3",
+    solicitante: {
+      id: "s3",
+      name: "DIONES CESAR DOS SANTOS",
+      avatar: "https://i.pravatar.cc/150?u=ana",
+      initials: "AC",
+    },
+    timestamp: new Date().getTime() - 8 * 60000,
+    location: "R. Augusta, 500 - São Paulo, SP",
+    description: "Mercadoria muito pesada, preciso de ajuda para carregar",
+    urgency: "ALTA",
+    status: "ABERTO",
+  },
   {
     id: "c3",
     solicitante: {
@@ -238,6 +253,36 @@ export const mockCalls: SupportCall[] = [
     description: "Problema na van, não consegue ligar",
     urgency: "ALTA",
     status: "EM ANDAMENTO",
+    assignedTo: "d4",
+  },
+  {
+    id: "c4",
+    solicitante: {
+      id: "s4",
+      name: "WILLIAN SANDI RIBEIRO",
+      avatar: "https://i.pravatar.cc/150?u=pedro",
+      initials: "PA",
+    },
+    timestamp: new Date().getTime() - 60 * 60000,
+    location: "Av. Paulista, 1000 - São Paulo, SP",
+    description: "Problema na van, não consegue ligar",
+    urgency: "URGENTE",
+    status: "ABERTO",
+    assignedTo: "d4",
+  },
+  {
+    id: "c5",
+    solicitante: {
+      id: "s5",
+      name: "JOSE ARTUR DE ALMEIDA NETO",
+      avatar: "https://i.pravatar.cc/150?u=pedro",
+      initials: "PA",
+    },
+    timestamp: new Date().getTime() - 60 * 60000,
+    location: "Av. Paulista, 1000 - São Paulo, SP",
+    description: "Problema na van, não consegue ligar",
+    urgency: "BAIXA",
+    status: "ABERTO",
     assignedTo: "d4",
   },
 ];

@@ -1,4 +1,4 @@
-export type UrgencyLevel = "URGENTE" | "ALTA" | "MEDIA";
+export type UrgencyLevel = "URGENTE" | "ALTA" | "MEDIA" | "BAIXA";
 
 export type CallStatus = "ABERTO" | "EM ANDAMENTO" | "CONCLUIDO";
 

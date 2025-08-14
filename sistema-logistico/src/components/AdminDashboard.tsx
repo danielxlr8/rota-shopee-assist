@@ -1,23 +1,23 @@
 import { useState } from "react";
 import { mockCalls, mockDrivers } from "../data/mockData";
-import type { SupportCall, Driver } from "../types/logistics";
+import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import { AlertTriangle, Clock, CheckCircle, Users } from "lucide-react";
 import { CallCard, DriverCard, SummaryCard, KanbanColumn } from "./UI";
 
 export const AdminDashboard = () => {
   const [calls] = useState<SupportCall[]>(mockCalls);
   const [drivers] = useState<Driver[]>(mockDrivers);
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
+    "TODOS"
+  );
 
-  // A função agora aceita um 'driverId' (string) para corresponder à definição do componente.
   const handleAcionarDriver = (driverId: string) => {
-    // Encontra o objeto completo do motorista usando o ID.
     const driver = drivers.find((d) => d.id === driverId);
-
     if (driver && driver.phone) {
       const message = encodeURIComponent(
         `Olá ${driver.name}, temos um chamado de apoio para você. Por favor, responda para mais detalhes.`
       );
-      const whatsappUrl = `https://wa.me/55${driver.phone}?text=${message}`; // Adicionado '55' para o código do Brasil
+      const whatsappUrl = `https://wa.me/55${driver.phone}?text=${message}`;
       window.open(whatsappUrl, "_blank");
       console.log(`Acionando ${driver.name} via WhatsApp.`);
     } else {
@@ -30,6 +30,34 @@ export const AdminDashboard = () => {
   const inProgressCalls = calls.filter((c) => c.status === "EM ANDAMENTO");
   const concludedCalls = calls.filter((c) => c.status === "CONCLUIDO");
   const availableDrivers = drivers.filter((d) => d.status === "DISPONIVEL");
+
+  const filteredOpenCalls =
+    urgencyFilter === "TODOS"
+      ? openCalls
+      : openCalls.filter((call) => call.urgency === urgencyFilter);
+
+  // O componente com os botões de filtro
+  const filterControls = (
+    <div className="flex space-x-1">
+      {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
+        (level) => (
+          <button
+            key={level}
+            onClick={() => setUrgencyFilter(level)}
+            className={`px-2 py-0.5 text-xs rounded-md font-semibold transition-colors ${
+              urgencyFilter === level
+                ? "bg-orange-600 text-white"
+                : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+            }`}
+          >
+            {level === "TODOS"
+              ? "Todos"
+              : level.charAt(0) + level.slice(1).toLowerCase()}
+          </button>
+        )
+      )}
+    </div>
+  );
 
   return (
     <div className="bg-orange-50 min-h-screen p-6 space-y-6">
@@ -76,10 +104,11 @@ export const AdminDashboard = () => {
       <main className="flex flex-col lg:flex-row gap-6 overflow-x-auto pb-4">
         <KanbanColumn
           title="Chamados Abertos"
-          count={openCalls.length}
+          count={filteredOpenCalls.length}
           colorClass="#F59E0B"
+          headerControls={filterControls}
         >
-          {openCalls.map((call) => (
+          {filteredOpenCalls.map((call) => (
             <CallCard key={call.id} call={call} />
           ))}
         </KanbanColumn>
@@ -106,7 +135,6 @@ export const AdminDashboard = () => {
           count={availableDrivers.length}
           colorClass="#8B5CF6"
         >
-          {/* O componente DriverCard chamará a função com o ID, que agora é o esperado. */}
           {availableDrivers.map((driver) => (
             <DriverCard
               key={driver.id}

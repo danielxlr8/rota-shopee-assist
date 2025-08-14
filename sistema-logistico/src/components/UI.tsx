@@ -6,10 +6,11 @@ import type {
   Driver,
 } from "../types/logistics";
 import { Clock, MapPin, Send } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+// A importação da 'date-fns' será temporariamente ignorada
+// import { formatDistanceToNow } from 'date-fns';
+// import { ptBR } from 'date-fns/locale';
 
-// Componente Avatar
+// ... (Outros componentes como AvatarComponent, etc. continuam iguais)
 export const AvatarComponent = ({
   user,
 }: {
@@ -26,13 +27,12 @@ export const AvatarComponent = ({
     />
   </div>
 );
-
-// Componente UrgencyBadge
 export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
   const urgencyClasses = {
     URGENTE: "bg-red-100 text-red-800 border-red-500",
-    ALTA: "bg-yellow-100 text-yellow-800 border-yellow-500",
-    MEDIA: "bg-blue-100 text-blue-800 border-blue-500",
+    ALTA: "bg-orange-100 text-orange-800 border-orange-500",
+    MEDIA: "bg-yellow-100 text-yellow-800 border-yellow-500",
+    BAIXA: "bg-blue-100 text-blue-800 border-blue-500",
   };
   return (
     <span
@@ -42,8 +42,6 @@ export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
     </span>
   );
 };
-
-// Componente StatusBadge
 export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   const statusInfo = {
     DISPONIVEL: { text: "Disponível", class: "bg-green-100 text-green-800" },
@@ -60,7 +58,7 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   );
 };
 
-// Componente CallCard
+// ===== CALLCARD MODIFICADO PARA DEPURAÇÃO =====
 export const CallCard = ({
   call,
   onAction,
@@ -70,10 +68,8 @@ export const CallCard = ({
   onAction?: (id: string) => void;
   actionText?: string;
 }) => {
-  const timeAgo = formatDistanceToNow(new Date(call.timestamp), {
-    addSuffix: true,
-    locale: ptBR,
-  });
+  // A formatação de data complexa foi temporariamente desativada.
+  // const timeAgo = formatDistanceToNow(new Date(call.timestamp), { addSuffix: true, locale: ptBR });
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
@@ -90,7 +86,8 @@ export const CallCard = ({
       <div className="text-sm text-gray-600 space-y-2">
         <div className="flex items-center space-x-2">
           <Clock size={16} className="text-gray-400" />
-          <span>{timeAgo}</span>
+          {/* Em vez de 'timeAgo', mostramos uma data simples para o teste. */}
+          <span>{new Date(call.timestamp).toLocaleTimeString()}</span>
         </div>
         <div className="flex items-center space-x-2">
           <MapPin size={16} className="text-gray-400" />
@@ -112,9 +109,6 @@ export const CallCard = ({
     </div>
   );
 };
-
-// Componente DriverCard
-// A função 'onAction' espera um 'id' (string), e o botão passa o 'driver.id'.
 export const DriverCard = ({
   driver,
   onAction,
@@ -141,8 +135,6 @@ export const DriverCard = ({
     </div>
   </div>
 );
-
-// Componente SummaryCard
 export const SummaryCard = ({
   title,
   value,
@@ -175,30 +167,35 @@ export const SummaryCard = ({
     </div>
   </div>
 );
-
-// Componente KanbanColumn
 export const KanbanColumn = ({
   title,
   count,
   children,
   colorClass,
+  headerControls,
 }: {
   title: string;
   count: number;
   children: React.ReactNode;
   colorClass: string;
+  headerControls?: React.ReactNode;
 }) => (
   <div className="bg-gray-50 rounded-lg p-4 flex-1 min-w-[300px]">
-    <div className="flex items-center mb-4">
-      <div
-        className="w-2 h-2 rounded-full mr-2"
-        style={{ backgroundColor: colorClass }}
-      ></div>
-      <h3 className="font-bold text-gray-800">{title}</h3>
-      <span className="ml-2 bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">
-        {count}
-      </span>
+    <div className="flex justify-between items-center mb-4">
+      <div className="flex items-center">
+        <div
+          className="w-2 h-2 rounded-full mr-2"
+          style={{ backgroundColor: colorClass }}
+        ></div>
+        <h3 className="font-bold text-gray-800">{title}</h3>
+        <span className="ml-2 bg-gray-200 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">
+          {count}
+        </span>
+      </div>
+      {headerControls}
     </div>
-    <div className="space-y-4">{children}</div>
+    <div className="space-y-4 h-[calc(100vh-22rem)] overflow-y-auto pr-2">
+      {children}
+    </div>
   </div>
 );
