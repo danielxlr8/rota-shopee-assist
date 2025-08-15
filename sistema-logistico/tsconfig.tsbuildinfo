@@ -1,0 +1,1 @@
+{"root":["./vite.config.ts","./src/app.tsx","./src/firebase.ts","./src/main.tsx","./src/vite-env.d.ts","./src/components/admindashboard.tsx","./src/components/authpage.tsx","./src/components/driverinterface.tsx","./src/components/ui.tsx","./src/data/mockdata.ts","./src/types/logistics.ts"],"errors":true,"version":"5.8.3"}
