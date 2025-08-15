@@ -5,12 +5,11 @@ import type {
   SupportCall,
   Driver,
 } from "../types/logistics";
-import { Clock, MapPin, Send } from "lucide-react";
+import { Clock, MapPin, Send, Phone, Globe, Info, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-// CORREÇÃO: Usando um caminho de importação mais específico para a localidade.
 import { ptBR } from "date-fns/locale/pt-BR";
 
-// ... (o resto do seu ficheiro continua igual)
+// Componente Avatar
 export const AvatarComponent = ({
   user,
 }: {
@@ -27,6 +26,8 @@ export const AvatarComponent = ({
     />
   </div>
 );
+
+// Componente UrgencyBadge
 export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
   const urgencyClasses = {
     URGENTE: "bg-red-100 text-red-800 border-red-500",
@@ -42,6 +43,8 @@ export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
     </span>
   );
 };
+
+// Componente StatusBadge
 export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   const statusInfo = {
     DISPONIVEL: { text: "Disponível", class: "bg-green-100 text-green-800" },
@@ -57,6 +60,8 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
     </span>
   );
 };
+
+// Componente CallCard
 export const CallCard = ({
   call,
   onAction,
@@ -70,7 +75,6 @@ export const CallCard = ({
     addSuffix: true,
     locale: ptBR,
   });
-
   return (
     <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
       <div className="flex justify-between items-start">
@@ -108,32 +112,8 @@ export const CallCard = ({
     </div>
   );
 };
-export const DriverCard = ({
-  driver,
-  onAction,
-}: {
-  driver: Driver;
-  onAction: (id: string) => void;
-}) => (
-  <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between">
-    <div className="flex items-center space-x-3">
-      <AvatarComponent user={driver} />
-      <div>
-        <p className="font-bold text-gray-800">{driver.name}</p>
-        <p className="text-sm text-gray-500">{driver.location}</p>
-      </div>
-    </div>
-    <div className="flex flex-col items-end space-y-2">
-      <StatusBadge status={driver.status} />
-      <button
-        onClick={() => onAction(driver.id)}
-        className="bg-blue-500 text-white text-sm font-semibold py-1 px-3 rounded-md hover:bg-blue-600 transition-colors"
-      >
-        Acionar
-      </button>
-    </div>
-  </div>
-);
+
+// Componente SummaryCard
 export const SummaryCard = ({
   title,
   value,
@@ -166,6 +146,8 @@ export const SummaryCard = ({
     </div>
   </div>
 );
+
+// Componente KanbanColumn
 export const KanbanColumn = ({
   title,
   count,
@@ -198,3 +180,112 @@ export const KanbanColumn = ({
     </div>
   </div>
 );
+
+// Componente DriverCard com ícone de informação
+export const DriverCard = ({
+  driver,
+  onAction,
+  onInfoClick,
+}: {
+  driver: Driver;
+  onAction: (id: string) => void;
+  onInfoClick: () => void;
+}) => (
+  <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 flex items-center justify-between">
+    <div className="flex items-center space-x-3">
+      <AvatarComponent user={driver} />
+      <div>
+        <div className="flex items-center space-x-2">
+          <p className="font-bold text-gray-800">{driver.name}</p>
+          <button
+            onClick={onInfoClick}
+            className="text-gray-400 hover:text-blue-600"
+          >
+            <Info size={16} />
+          </button>
+        </div>
+        <p className="text-sm text-gray-500">{driver.location}</p>
+      </div>
+    </div>
+    <div className="flex flex-col items-end space-y-2">
+      <StatusBadge status={driver.status} />
+      <button
+        onClick={() => onAction(driver.id)}
+        className="bg-blue-500 text-white text-sm font-semibold py-1 px-3 rounded-md hover:bg-blue-600 transition-colors"
+      >
+        Acionar
+      </button>
+    </div>
+  </div>
+);
+
+// Novo Componente: Modal de Informações do Motorista
+export const DriverInfoModal = ({
+  driver,
+  call,
+  onClose,
+}: {
+  driver: Driver | null;
+  call: SupportCall | null;
+  onClose: () => void;
+}) => {
+  if (!driver) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">
+            Informações do Motorista
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-full hover:bg-gray-200"
+          >
+            <X size={24} className="text-gray-600" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center space-x-3">
+            <AvatarComponent user={driver} />
+            <div>
+              <p className="font-bold text-lg">{driver.name}</p>
+              <p className="text-sm text-gray-500">{driver.region}</p>
+            </div>
+          </div>
+          <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Contato</h3>
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Phone size={16} />
+              <span>{driver.phone}</span>
+            </div>
+          </div>
+          {call && (
+            <div className="border-t pt-4">
+              <h3 className="font-semibold text-gray-700 mb-2">
+                Chamado Ativo
+              </h3>
+              <div className="space-y-1 text-sm text-gray-600">
+                <p>
+                  <span className="font-medium">Status:</span> {call.status}
+                </p>
+                <p>
+                  <span className="font-medium">Local:</span> {call.location}
+                </p>
+                <p>
+                  <span className="font-medium">Descrição:</span>{" "}
+                  {call.description}
+                </p>
+              </div>
+            </div>
+          )}
+          {!call && (
+            <div className="border-t pt-4 text-sm text-gray-500">
+              Este motorista não tem um chamado ativo no momento.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
