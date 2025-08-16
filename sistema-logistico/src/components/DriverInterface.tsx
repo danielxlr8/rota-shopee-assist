@@ -1,30 +1,40 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
 import {
   Clock,
-  ThumbsUp,
   AlertTriangle,
   X,
   MapPin,
   Package,
   Building,
   Globe,
-  Sparkles,
   LoaderCircle,
   Zap,
+  CheckCircle,
+  HelpCircle,
+  Truck,
+  Phone,
+  XCircle,
+  Camera,
+  User,
+  KeyRound,
 } from "lucide-react";
-import { CallCard } from "./UI";
-
-interface DriverInterfaceProps {
-  driver: Driver;
-  calls: SupportCall[];
-  updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
-  addNewCall: (
-    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">,
-    driver: Driver
-  ) => void;
-  updateDriver: (id: string, updates: Partial<Omit<Driver, "id">>) => void;
-}
+// Importações do Firebase
+import { auth, db, storage } from "../firebase";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  or,
+  Timestamp,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { updatePassword } from "firebase/auth";
 
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
@@ -33,32 +43,318 @@ const hubs = [
   "LM Hub_PR_Cascavel",
 ];
 
-export const DriverInterface = ({
-  driver,
-  calls,
-  updateCall,
-  addNewCall,
-  updateDriver,
-}: DriverInterfaceProps) => {
+// Componente para o cartão de histórico
+const DriverCallHistoryCard = ({
+  call,
+  currentDriver,
+  allDrivers,
+  onCancelSupport,
+}: {
+  call: SupportCall;
+  currentDriver: Driver;
+  allDrivers: Driver[];
+  onCancelSupport: (callId: string) => void;
+}) => {
+  const isRequester = call.solicitante.id === currentDriver.id;
+  const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
+  const otherParty = allDrivers.find((d) => d.id === otherPartyId);
+  let statusText = "Status desconhecido",
+    statusColor = "bg-gray-200",
+    icon = <HelpCircle size={20} />,
+    title = "Chamado";
+
+  if (isRequester) {
+    title = "Pedido de Apoio";
+    if (call.status === "ABERTO") {
+      statusText = "Aguardando Apoio";
+      statusColor = "bg-yellow-200 text-yellow-800";
+      icon = <HelpCircle size={20} className="text-yellow-500" />;
+    } else {
+      statusText = `Recebendo Apoio`;
+      statusColor = "bg-blue-200 text-blue-800";
+      icon = (
+        <Truck size={20} className="text-blue-500 transform -scale-x-100" />
+      );
+    }
+  } else {
+    title = `Apoio a ${call.solicitante.name}`;
+    statusText = "Prestando Apoio";
+    statusColor = "bg-green-200 text-green-800";
+    icon = <Truck size={20} className="text-green-500" />;
+  }
+  if (call.status === "CONCLUIDO") {
+    statusText = "Concluído";
+    statusColor = "bg-gray-200 text-gray-800";
+  }
+
+  const handleWhatsAppClick = () => {
+    const contactPhone = otherParty?.phone;
+    if (!contactPhone) {
+      alert("O outro motorista não tem um telefone cadastrado.");
+      return;
+    }
+    const message = encodeURIComponent(
+      `Olá ${otherParty?.name}, sou o ${currentDriver.name} referente ao chamado de apoio.`
+    );
+    window.open(`https://wa.me/55${contactPhone}?text=${message}`, "_blank");
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          {icon}
+          <div>
+            <p className="font-bold text-gray-800">{title}</p>
+            <p className="text-sm text-gray-500">{call.description}</p>
+          </div>
+        </div>
+        <div
+          className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColor} self-end sm:self-center`}
+        >
+          {statusText}
+        </div>
+      </div>
+      {(call.status === "EM ANDAMENTO" ||
+        call.status === "AGUARDANDO_APROVACAO" ||
+        call.status === "APROVADO") && (
+        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
+          {otherParty && (
+            <button
+              onClick={handleWhatsAppClick}
+              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              <Phone size={14} /> Contatar
+            </button>
+          )}
+          {!isRequester && (
+            <button
+              onClick={() => onCancelSupport(call.id)}
+              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+            >
+              <XCircle size={14} /> Cancelar Apoio
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Componente para a lista de chamados abertos
+const OpenCallCard = ({
+  call,
+  currentDriverName,
+  onAccept,
+}: {
+  call: SupportCall;
+  currentDriverName: string;
+  onAccept: (callId: string) => void;
+}) => {
+  const requesterPhone = call.solicitante.phone || "";
+  const handleWhatsAppClick = () => {
+    if (!requesterPhone) {
+      alert(
+        "O motorista solicitante não possui um número de telefone cadastrado."
+      );
+      return;
+    }
+    const message = encodeURIComponent(
+      `Olá ${call.solicitante.name}, me chamo ${currentDriverName} e aceitei seu chamado e serei seu apoio`
+    );
+    window.open(`https://wa.me/55${requesterPhone}?text=${message}`, "_blank");
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <p className="font-bold text-gray-800">
+            Apoio para {call.solicitante.name}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
+        </div>
+        <div className="flex items-center gap-2 self-end sm:self-center">
+          <button
+            onClick={handleWhatsAppClick}
+            className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+          >
+            <Phone size={16} />
+          </button>
+          <button
+            onClick={() => onAccept(call.id)}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700"
+          >
+            Aceitar Apoio
+          </button>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t text-xs text-gray-600 space-y-1">
+        <p>
+          <span className="font-semibold">Local:</span> {call.location}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export const DriverInterface = () => {
+  const [driver, setDriver] = useState<Driver | null>(null);
+  const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
+  const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
+  const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const [profileName, setProfileName] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
   const [activeTab, setActiveTab] = useState<
-    "availability" | "support" | "activeCalls"
+    "availability" | "support" | "activeCalls" | "profile"
   >("availability");
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [location, setLocation] = useState("");
   const [isLocating, setIsLocating] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<
+    "all" | "requester" | "provider" | "inProgress"
+  >("all");
 
-  const myActiveCalls = calls.filter(
-    (c) =>
-      c.assignedTo === driver.id &&
-      (c.status === "EM ANDAMENTO" ||
-        c.status === "AGUARDANDO_APROVACAO" ||
-        c.status === "APROVADO")
-  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const userId = auth.currentUser?.uid;
+
+  useEffect(() => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    const driverDocRef = doc(db, "drivers", userId);
+    const unsubscribeDriver = onSnapshot(driverDocRef, (doc) => {
+      if (doc.exists()) {
+        const driverData = { id: doc.id, ...doc.data() } as Driver;
+        setDriver(driverData);
+        setProfileName(driverData.name);
+        setProfilePhone(driverData.phone || "");
+      } else {
+        console.log("Documento do motorista não encontrado!");
+      }
+      setLoading(false);
+    });
+
+    const allDriversQuery = query(collection(db, "drivers"));
+    const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
+      const driversData = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as Driver)
+      );
+      setAllDrivers(driversData);
+    });
+
+    const myCallsQuery = query(
+      collection(db, "supportCalls"),
+      or(
+        where("solicitante.id", "==", userId),
+        where("assignedTo", "==", userId)
+      )
+    );
+    const unsubscribeMyCalls = onSnapshot(myCallsQuery, (snapshot) => {
+      const callsData = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
+      );
+      callsData.sort((a, b) => {
+        const timeA =
+          a.timestamp instanceof Timestamp
+            ? a.timestamp.toMillis()
+            : (a.timestamp as any)?.seconds * 1000 || 0;
+        const timeB =
+          b.timestamp instanceof Timestamp
+            ? b.timestamp.toMillis()
+            : (b.timestamp as any)?.seconds * 1000 || 0;
+        return timeB - timeA;
+      });
+      setAllMyCalls(callsData);
+    });
+
+    const openCallsQuery = query(
+      collection(db, "supportCalls"),
+      where("status", "==", "ABERTO")
+    );
+    const unsubscribeOpenCalls = onSnapshot(openCallsQuery, (snapshot) => {
+      const openCallsData = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
+      );
+      setOpenSupportCalls(
+        openCallsData.filter((call) => call.solicitante.id !== userId)
+      );
+    });
+
+    return () => {
+      unsubscribeDriver();
+      unsubscribeMyCalls();
+      unsubscribeOpenCalls();
+      unsubscribeAllDrivers();
+    };
+  }, [userId]);
+
+  const updateDriver = async (
+    driverId: string,
+    updates: Partial<Omit<Driver, "id">>
+  ) => {
+    if (!driverId) return;
+    const driverDocRef = doc(db, "drivers", driverId);
+    await updateDoc(driverDocRef, updates);
+  };
+
+  const updateCall = async (
+    id: string,
+    updates: Partial<Omit<SupportCall, "id">>
+  ) => {
+    const callDocRef = doc(db, "supportCalls", id);
+    await updateDoc(callDocRef, updates as any);
+  };
+
+  const addNewCall = async (newCall: Partial<SupportCall>) => {
+    if (!driver) return;
+    const callToAdd = {
+      ...newCall,
+      timestamp: serverTimestamp(),
+      solicitante: {
+        id: driver.id,
+        name: driver.name,
+        avatar: driver.avatar,
+        initials: driver.initials,
+        phone: driver.phone,
+      },
+    };
+    await addDoc(collection(db, "supportCalls"), callToAdd as any);
+  };
 
   const handleAvailabilityChange = (isAvailable: boolean) => {
+    if (!userId) return;
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-    updateDriver(driver.id, { status: newStatus });
+    updateDriver(userId, { status: newStatus });
+  };
+
+  const handleAcceptCall = async (callId: string) => {
+    if (!userId) return;
+    await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
+    await updateDriver(userId, { status: "EM_ROTA" });
+  };
+
+  const handleCancelSupport = async (callId: string) => {
+    if (!userId) return;
+    await updateCall(callId, {
+      assignedTo: null,
+      status: "ABERTO",
+    });
+    await updateDriver(userId, { status: "DISPONIVEL" });
   };
 
   const handleRequestApproval = (callId: string) => {
@@ -70,10 +366,11 @@ export const DriverInterface = ({
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocalização não é suportada pelo seu navegador.");
+      setModalError("Geolocalização não é suportada pelo seu navegador.");
       return;
     }
     setIsLocating(true);
+    setModalError("");
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -83,9 +380,7 @@ export const DriverInterface = ({
         setIsLocating(false);
       },
       () => {
-        alert(
-          "Não foi possível obter a sua localização. Por favor, verifique as permissões."
-        );
+        setModalError("Não foi possível obter a sua localização.");
         setIsLocating(false);
       }
     );
@@ -93,121 +388,247 @@ export const DriverInterface = ({
 
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
+    setModalError("");
+
     const formData = new FormData(e.currentTarget);
+    const vehicleType = formData.get("vehicleType") as string;
+    const isBulky = formData.get("isBulky") === "on";
+
     const informalDescription = `Preciso de apoio de transferência. Estou no hub ${formData.get(
       "hub"
     )}. Minha localização atual é ${location}. Tenho ${formData.get(
       "packageCount"
-    )} pacotes para a região de ${formData.get("deliveryRegion")}.`;
+    )} pacotes para a região de ${formData.get("deliveryRegion")}. 
+    Veículo necessário: ${vehicleType}. ${
+      isBulky ? "Contém pacote volumoso." : ""
+    }`;
 
     try {
-      const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
-        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte.
-        2. Classificar a urgência do problema como 'URGENTE', 'ALTA' ou 'MEDIA'.
-        
-        Descrição do motorista: "${informalDescription}"
-        
-        Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional", "urgency": "sua classificação de urgência"}`;
-
-      let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+      const prompt = `Aja como um assistente de logística...`;
       const payload = {
-        contents: chatHistory,
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              description: { type: "STRING" },
-              urgency: { type: "STRING", enum: ["URGENTE", "ALTA", "MEDIA"] },
-            },
-            required: ["description", "urgency"],
-          },
-        },
+        /* ... */
       };
-      const apiKey = "";
+      const apiKey = "SUA_CHAVE_DE_API_AQUI";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
       const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        /* ... */
       });
 
-      if (!response.ok) throw new Error("Falha na resposta da API.");
-
+      if (!response.ok)
+        throw new Error(`${response.statusText} (${response.status})`);
       const result = await response.json();
-      const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
+      const textPart = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textPart)
+        throw new Error("Não foi possível processar a resposta da IA.");
+      const parsedJson = JSON.parse(textPart);
+      if (!parsedJson.description || !parsedJson.urgency)
+        throw new Error("A resposta da IA está incompleta.");
 
-      addNewCall(
-        {
-          description: parsedJson.description,
-          urgency: parsedJson.urgency as UrgencyLevel,
-          location: location,
-          status: "ABERTO",
-        },
-        driver
-      );
-
-      alert("Solicitação de apoio enviada com sucesso!");
+      const newCallData = {
+        description: parsedJson.description,
+        urgency: parsedJson.urgency as UrgencyLevel,
+        location: location,
+        status: "ABERTO" as const,
+        assignedTo: null,
+        vehicleType: vehicleType,
+        isBulky: isBulky,
+      };
+      await addNewCall(newCallData as any);
       setIsSupportModalOpen(false);
-    } catch (error) {
-      console.error("Erro ao criar chamado:", error);
-      alert("Não foi possível criar o chamado. Tente novamente.");
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error("Erro detalhado ao criar chamado:", error);
+      if (error.message.includes("Failed to fetch")) {
+        setModalError(
+          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta e configurada para localhost."
+        );
+      } else {
+        setModalError(`Erro: ${error.message}`);
+      }
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
+
+  const handleAvatarUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (!event.target.files || event.target.files.length === 0 || !userId) {
+      return;
+    }
+    console.log("Iniciando upload da imagem...");
+    const file = event.target.files[0];
+    const storageRef = ref(storage, `avatars/${userId}/${file.name}`);
+
+    setIsUploading(true);
+    try {
+      console.log("Enviando imagem para o Firebase Storage...");
+      await uploadBytes(storageRef, file);
+      console.log("Imagem enviada com sucesso. Obtendo URL de download...");
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log("URL de download obtida:", downloadURL);
+      await updateDriver(userId, { avatar: downloadURL });
+      console.log("Perfil do motorista atualizado com o novo avatar.");
+    } catch (error) {
+      console.error("Erro detalhado ao fazer upload da imagem:", error);
+      alert(
+        "Não foi possível carregar a imagem. Verifique as regras do Firebase Storage e a sua ligação à Internet."
+      );
+    } finally {
+      setIsUploading(false);
+      console.log("Processo de upload finalizado.");
+    }
+  };
+
+  const handleProfileUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!userId) return;
+
+    try {
+      await updateDriver(userId, {
+        name: profileName,
+        phone: profilePhone,
+      });
+      alert("Perfil atualizado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao atualizar perfil:", error);
+      alert("Não foi possível atualizar o perfil.");
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("As senhas não coincidem.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await updatePassword(user, newPassword);
+        setPasswordSuccess("Senha alterada com sucesso!");
+        setNewPassword("");
+        setConfirmPassword("");
+      } catch (error: any) {
+        console.error("Erro ao alterar a senha:", error);
+        setPasswordError(
+          "Erro ao alterar a senha. Tente fazer logout e login novamente para continuar."
+        );
+      }
+    }
+  };
+
+  const filteredCalls = useMemo(() => {
+    if (historyFilter === "requester")
+      return allMyCalls.filter((call) => call.solicitante.id === userId);
+    if (historyFilter === "provider")
+      return allMyCalls.filter((call) => call.assignedTo === userId);
+    if (historyFilter === "inProgress")
+      return allMyCalls.filter((call) =>
+        ["EM ANDAMENTO", "AGUARDANDO_APROVACAO", "APROVADO"].includes(
+          call.status
+        )
+      );
+    return allMyCalls;
+  }, [allMyCalls, historyFilter, userId]);
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Carregando...
+      </div>
+    );
+  if (!driver)
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Perfil não encontrado.
+      </div>
+    );
 
   const renderContent = () => {
     switch (activeTab) {
       case "availability":
         return (
-          <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
-            <h3 className="text-lg font-bold text-gray-800">
-              Estou disponível para apoio?
-            </h3>
-            <div className="flex items-center justify-center space-x-4">
-              {/* Botão SIM */}
-              <button
-                onClick={() => handleAvailabilityChange(true)}
-                className={`w-24 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                  driver.status === "DISPONIVEL"
-                    ? "bg-green-600 text-white shadow-md"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-              >
-                Sim
-              </button>
-              {/* Botão NÃO */}
-              <button
-                onClick={() => handleAvailabilityChange(false)}
-                className={`w-24 py-2 text-sm font-semibold rounded-lg transition-colors ${
-                  driver.status !== "DISPONIVEL"
-                    ? "bg-red-600 text-white shadow-md"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-              >
-                Não
-              </button>
+          <>
+            <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+              <h3 className="text-lg font-bold">
+                Estou disponível para apoio?
+              </h3>
+              <div className="flex items-center justify-center space-x-4">
+                <button
+                  onClick={() => handleAvailabilityChange(true)}
+                  className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                    driver.status === "DISPONIVEL"
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-200"
+                  }`}
+                >
+                  Sim
+                </button>
+                <button
+                  onClick={() => handleAvailabilityChange(false)}
+                  className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                    driver.status !== "DISPONIVEL"
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-200"
+                  }`}
+                >
+                  Não
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">
+                Use estes botões para informar o seu status.
+              </p>
             </div>
-            <p className="text-xs text-gray-400">
-              Use estes botões para informar o seu status ao administrador.
-            </p>
-          </div>
+            {driver.status === "DISPONIVEL" && (
+              <div className="mt-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">
+                  Chamados de Apoio Disponíveis
+                </h3>
+                {openSupportCalls.length > 0 ? (
+                  <div className="space-y-4">
+                    {openSupportCalls.map((call) => (
+                      <OpenCallCard
+                        key={call.id}
+                        call={call}
+                        currentDriverName={driver.name}
+                        onAccept={handleAcceptCall}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-gray-500 pt-4">
+                    Nenhum chamado de apoio aberto.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         );
       case "support":
         return (
           <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
             <div className="flex items-center space-x-2">
               <AlertTriangle className="text-red-500" />
-              <h3 className="text-lg font-bold text-gray-800">
+              <h3 className="text-lg font-bold">
                 Solicitar Apoio de Transferência
               </h3>
             </div>
             <button
-              onClick={() => setIsSupportModalOpen(true)}
-              className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:scale-105 transform transition-transform"
+              onClick={() => {
+                setModalError("");
+                setIsSupportModalOpen(true);
+              }}
+              className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg"
             >
               PRECISO DE APOIO
             </button>
@@ -217,49 +638,188 @@ export const DriverInterface = ({
         return (
           <div className="mt-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">
-              Meus Chamados Ativos
+              Histórico de Chamados
             </h3>
-            {myActiveCalls.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mb-4 border-b pb-2">
+              <button
+                onClick={() => setHistoryFilter("all")}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  historyFilter === "all"
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setHistoryFilter("inProgress")}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  historyFilter === "inProgress"
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
+                Em Andamento
+              </button>
+              <button
+                onClick={() => setHistoryFilter("requester")}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  historyFilter === "requester"
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
+                Meus Pedidos
+              </button>
+              <button
+                onClick={() => setHistoryFilter("provider")}
+                className={`px-3 py-1 text-sm rounded-full ${
+                  historyFilter === "provider"
+                    ? "bg-orange-600 text-white"
+                    : "bg-gray-200"
+                }`}
+              >
+                Meus Apoios
+              </button>
+            </div>
+            {filteredCalls.length > 0 ? (
               <div className="space-y-4">
-                {myActiveCalls.map((call) => (
-                  <div
+                {filteredCalls.map((call) => (
+                  <DriverCallHistoryCard
                     key={call.id}
-                    className="bg-white p-4 rounded-lg shadow-md"
-                  >
-                    <CallCard call={call} />
-                    {call.status === "EM ANDAMENTO" && (
-                      <button
-                        onClick={() => handleRequestApproval(call.id)}
-                        className="mt-4 w-full flex justify-center items-center space-x-2 bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600"
-                      >
-                        <Clock size={16} />
-                        <span>Finalizar Transferência e Pedir Aprovação</span>
-                      </button>
-                    )}
-                    {call.status === "AGUARDANDO_APROVACAO" && (
-                      <div className="mt-4 p-3 text-center bg-blue-100 text-blue-800 rounded-lg text-sm font-semibold">
-                        Aguardando aprovação do admin...
-                      </div>
-                    )}
-                    {call.status === "APROVADO" && (
-                      <button
-                        onClick={() =>
-                          updateCall(call.id, { status: "CONCLUIDO" })
-                        }
-                        className="mt-4 w-full flex justify-center items-center space-x-2 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600"
-                      >
-                        <ThumbsUp size={16} />
-                        <span>Transferência Aprovada! Concluir Chamado</span>
-                      </button>
-                    )}
-                  </div>
+                    call={call}
+                    currentDriver={driver}
+                    allDrivers={allDrivers}
+                    onCancelSupport={handleCancelSupport}
+                  />
                 ))}
               </div>
             ) : (
-              <p className="text-center text-gray-500">
-                Você não tem nenhum chamado ativo.
+              <p className="text-center text-gray-500 pt-4">
+                Nenhum chamado encontrado.
               </p>
             )}
+          </div>
+        );
+      case "profile":
+        return (
+          <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
+            <h3 className="text-lg font-bold text-gray-800">Editar Perfil</h3>
+            <form onSubmit={handleProfileUpdate} className="space-y-4">
+              <div className="relative w-24 h-24 mx-auto group">
+                <img
+                  src={driver.avatar}
+                  alt={`Avatar de ${driver.name}`}
+                  className="w-full h-full rounded-full object-cover border-4 border-gray-200"
+                />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                  accept="image/png, image/jpeg"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center rounded-full transition-opacity"
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <LoaderCircle className="animate-spin text-white" />
+                  ) : (
+                    <Camera className="text-white opacity-0 group-hover:opacity-100" />
+                  )}
+                </button>
+              </div>
+              <div>
+                <label
+                  htmlFor="profileName"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Nome Completo
+                </label>
+                <input
+                  type="text"
+                  id="profileName"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border rounded-md"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="profilePhone"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Telefone
+                </label>
+                <input
+                  type="tel"
+                  id="profilePhone"
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border rounded-md"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-2 px-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700"
+              >
+                Salvar Alterações
+              </button>
+            </form>
+
+            <div className="border-t pt-6">
+              <h4 className="text-md font-bold text-gray-800 mb-4">
+                Alterar Senha
+              </h4>
+              <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="newPassword"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Nova Senha
+                  </label>
+                  <input
+                    type="password"
+                    id="newPassword"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border rounded-md"
+                    placeholder="Mínimo de 6 caracteres"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Confirmar Nova Senha
+                  </label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                {passwordError && (
+                  <p className="text-sm text-red-600">{passwordError}</p>
+                )}
+                {passwordSuccess && (
+                  <p className="text-sm text-green-600">{passwordSuccess}</p>
+                )}
+                <button
+                  type="submit"
+                  className="w-full py-2 px-4 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-800"
+                >
+                  Trocar Senha
+                </button>
+              </form>
+            </div>
           </div>
         );
     }
@@ -270,20 +830,17 @@ export const DriverInterface = ({
       <div className="bg-gray-100 min-h-screen p-4 md:p-6 space-y-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-3 mb-6">
-            <img
-              src={driver.avatar}
-              alt={`Avatar de ${driver.name}`}
-              className="w-24 h-24 rounded-full mx-auto border-4 border-gray-200"
-            />
             <h2 className="text-2xl font-bold text-gray-800">{driver.name}</h2>
+            <p className="text-sm text-gray-500 font-medium">
+              {driver.region || "Região não definida"}
+            </p>
             <p className="text-gray-500">Sistema de Apoio Logístico</p>
           </div>
-
           <div className="bg-white rounded-lg shadow-md">
             <div className="flex border-b">
               <button
                 onClick={() => setActiveTab("availability")}
-                className={`flex-1 p-4 text-sm font-semibold flex items-center justify-center space-x-2 ${
+                className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center space-x-2 ${
                   activeTab === "availability"
                     ? "border-b-2 border-orange-600 text-orange-600"
                     : "text-gray-500"
@@ -294,7 +851,7 @@ export const DriverInterface = ({
               </button>
               <button
                 onClick={() => setActiveTab("support")}
-                className={`flex-1 p-4 text-sm font-semibold flex items-center justify-center space-x-2 ${
+                className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center space-x-2 ${
                   activeTab === "support"
                     ? "border-b-2 border-orange-600 text-orange-600"
                     : "text-gray-500"
@@ -305,7 +862,7 @@ export const DriverInterface = ({
               </button>
               <button
                 onClick={() => setActiveTab("activeCalls")}
-                className={`flex-1 p-4 text-sm font-semibold flex items-center justify-center space-x-2 ${
+                className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center space-x-2 ${
                   activeTab === "activeCalls"
                     ? "border-b-2 border-orange-600 text-orange-600"
                     : "text-gray-500"
@@ -314,8 +871,24 @@ export const DriverInterface = ({
                 <Clock size={16} />
                 <span>Meus Chamados</span>
               </button>
+              <button
+                onClick={() => setActiveTab("profile")}
+                className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center space-x-2 ${
+                  activeTab === "profile"
+                    ? "border-b-2 border-orange-600 text-orange-600"
+                    : "text-gray-500"
+                }`}
+              >
+                <User size={16} />
+                <span>Meu Perfil</span>
+              </button>
             </div>
-            <div className="p-4">{renderContent()}</div>
+            <div
+              className="p-4 transition-opacity duration-300"
+              key={activeTab}
+            >
+              {renderContent()}
+            </div>
           </div>
         </div>
       </div>
@@ -431,13 +1004,57 @@ export const DriverInterface = ({
                   />
                 </div>
               </div>
+              <div>
+                <label
+                  htmlFor="vehicleType"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Tipo de Veículo Necessário
+                </label>
+                <div className="relative">
+                  <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    id="vehicleType"
+                    name="vehicleType"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+                    required
+                  >
+                    <option value="">Selecione o veículo...</option>
+                    <option value="moto">Moto</option>
+                    <option value="carro passeio">Carro Passeio</option>
+                    <option value="carro utilitario">Carro Utilitário</option>
+                    <option value="van">Van</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="isBulky"
+                  name="isBulky"
+                  type="checkbox"
+                  className="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                />
+                <label
+                  htmlFor="isBulky"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Contém pacote volumoso
+                </label>
+              </div>
+
+              {modalError && (
+                <p className="text-sm text-center text-red-600 bg-red-100 p-2 rounded-md">
+                  {modalError}
+                </p>
+              )}
+
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors disabled:bg-orange-300"
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors disabled:bg-orange-300"
                 >
-                  {isLoading ? (
+                  {isSubmitting ? (
                     <LoaderCircle className="animate-spin" />
                   ) : (
                     "Enviar Solicitação"
@@ -445,6 +1062,24 @@ export const DriverInterface = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md text-center">
+            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Sucesso!</h2>
+            <p className="text-gray-600 mb-6">
+              Apoio solicitado com sucesso, aguarde o contato de um Driver ou
+              Monitor.
+            </p>
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-2 px-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

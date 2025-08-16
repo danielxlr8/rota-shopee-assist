@@ -2,6 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // 1. Adicione esta importação
 
 // A configuração do seu projeto Firebase
 const firebaseConfig = {
@@ -20,3 +21,4 @@ const app = initializeApp(firebaseConfig);
 // Exporte os serviços que vamos usar na aplicação
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app); // 2. Adicione esta linha para inicializar e exportar o Storage

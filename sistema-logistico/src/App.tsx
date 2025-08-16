@@ -3,17 +3,16 @@ import { LogOut } from "lucide-react";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
 import { AuthPage } from "./components/AuthPage";
-import { mockCalls, mockDrivers } from "./data/mockData";
-import type { Driver, SupportCall } from "./types/logistics";
+// Remova a importação dos dados mockados e dos tipos, pois não são mais necessários aqui
+// import { mockCalls, mockDrivers } from "./data/mockData";
+// import type { Driver, SupportCall } from "./types/logistics";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
 export default function App() {
-  const [calls, setCalls] = useState<SupportCall[]>(mockCalls);
-  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
-
+  // O estado agora é focado apenas na autenticação e no papel do usuário
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<"admin" | "driver" | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,33 +20,13 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // A lógica para buscar o papel do usuário continua a mesma
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
-
-        let driverProfile = drivers.find((d) => d.id === user.uid);
 
         if (userDoc.exists()) {
           const userData = userDoc.data();
           setUserRole(userData.role);
-
-          // Se o motorista não existir na nossa lista de estado, cria-o
-          if (!driverProfile && userData.role === "driver") {
-            const newDriverProfile: Driver = {
-              id: user.uid,
-              name: user.displayName || userData.name,
-              phone: userData.phone || "N/A",
-              avatar:
-                user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-              initials: (user.displayName ||
-                userData.name ||
-                "D")[0].toUpperCase(),
-              location: "Localização Padrão",
-              status: "DISPONIVEL",
-              region: userData.region || "N/A",
-              accountStatus: "approved", // Assume que se está logado, está aprovado
-            };
-            setDrivers((prev) => [...prev, newDriverProfile]);
-          }
         }
         setAuthUser(user);
       } else {
@@ -57,7 +36,7 @@ export default function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []); // Executa apenas uma vez
+  }, []);
 
   const handleLogout = () => {
     signOut(auth).catch((error) =>
@@ -65,45 +44,8 @@ export default function App() {
     );
   };
 
-  const updateCall = (
-    callId: string,
-    updates: Partial<Omit<SupportCall, "id">>
-  ) => {
-    setCalls((prevCalls) =>
-      prevCalls.map((call) =>
-        call.id === callId ? { ...call, ...updates } : call
-      )
-    );
-  };
-
-  const updateDriver = (
-    driverId: string,
-    updates: Partial<Omit<Driver, "id">>
-  ) => {
-    setDrivers((prevDrivers) =>
-      prevDrivers.map((driver) =>
-        driver.id === driverId ? { ...driver, ...updates } : driver
-      )
-    );
-  };
-
-  const addNewCall = (
-    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">,
-    driver: Driver
-  ) => {
-    const callToAdd: SupportCall = {
-      ...newCall,
-      id: `c${Date.now()}`,
-      timestamp: Date.now(),
-      solicitante: {
-        id: driver.id,
-        name: driver.name,
-        avatar: driver.avatar,
-        initials: driver.initials,
-      },
-    };
-    setCalls((prevCalls) => [callToAdd, ...prevCalls]);
-  };
+  // As funções de update (updateCall, updateDriver, etc.) foram removidas
+  // porque cada componente cuidará de suas próprias atualizações.
 
   if (loading) {
     return (
@@ -116,8 +58,6 @@ export default function App() {
   if (!authUser) {
     return <AuthPage />;
   }
-
-  const currentUserDriver = drivers.find((d) => d.id === authUser.uid);
 
   return (
     <div className="bg-gray-50 text-gray-800 min-h-screen">
@@ -146,22 +86,11 @@ export default function App() {
       </header>
 
       <main>
-        {userRole === "admin" && (
-          <AdminDashboard
-            calls={calls}
-            drivers={drivers}
-            updateCall={updateCall}
-          />
-        )}
-        {userRole === "driver" && currentUserDriver && (
-          <DriverInterface
-            driver={currentUserDriver}
-            calls={calls}
-            updateCall={updateCall}
-            addNewCall={addNewCall}
-            updateDriver={updateDriver}
-          />
-        )}
+        {/* Renderiza o AdminDashboard sem passar props de dados */}
+        {userRole === "admin" && <AdminDashboard />}
+
+        {/* Renderiza o DriverInterface sem passar props de dados */}
+        {userRole === "driver" && <DriverInterface />}
       </main>
     </div>
   );
