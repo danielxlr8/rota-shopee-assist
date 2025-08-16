@@ -5,9 +5,10 @@ import type {
   SupportCall,
   Driver,
 } from "../types/logistics";
-import { Clock, MapPin, Send, Phone, Globe, Info, X } from "lucide-react";
+import { Clock, MapPin, Send, Phone, Info, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
+import { Timestamp } from "firebase/firestore"; // Importar o tipo Timestamp
 
 // Componente Avatar
 export const AvatarComponent = ({
@@ -61,7 +62,7 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   );
 };
 
-// Componente CallCard
+// --- COMPONENTE CALLCARD ATUALIZADO ---
 export const CallCard = ({
   call,
   onAction,
@@ -71,10 +72,28 @@ export const CallCard = ({
   onAction?: (id: string) => void;
   actionText?: string;
 }) => {
-  const timeAgo = formatDistanceToNow(new Date(call.timestamp), {
-    addSuffix: true,
-    locale: ptBR,
-  });
+  // Função para formatar o tempo de forma segura
+  const formatTimestamp = (timestamp: any): string => {
+    if (!timestamp) return "Horário indisponível";
+    // Verifica se o timestamp é um objeto do Firebase e converte-o
+    if (timestamp instanceof Timestamp) {
+      return formatDistanceToNow(timestamp.toDate(), {
+        addSuffix: true,
+        locale: ptBR,
+      });
+    }
+    // Se já for um número (timestamp do JS), cria uma nova data
+    if (typeof timestamp === "number") {
+      return formatDistanceToNow(new Date(timestamp), {
+        addSuffix: true,
+        locale: ptBR,
+      });
+    }
+    return "Data inválida";
+  };
+
+  const timeAgo = formatTimestamp(call.timestamp);
+
   return (
     <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
       <div className="flex justify-between items-start">
@@ -154,14 +173,16 @@ export const KanbanColumn = ({
   children,
   colorClass,
   headerControls,
+  className,
 }: {
   title: string;
   count: number;
   children: React.ReactNode;
   colorClass: string;
   headerControls?: React.ReactNode;
+  className?: string;
 }) => (
-  <div className="bg-gray-50 rounded-lg p-4 flex-1 min-w-[300px]">
+  <div className={`p-4 ${className}`}>
     <div className="flex justify-between items-center mb-4">
       <div className="flex items-center">
         <div
