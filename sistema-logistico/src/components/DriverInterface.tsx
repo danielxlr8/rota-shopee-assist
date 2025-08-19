@@ -44,7 +44,6 @@ const hubs = [
 
 // Componente para renderizar a descrição com links clicáveis e quebras de linha
 const RenderDescription = ({ text }: { text: string }) => {
-  // Regex para encontrar URLs no texto
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
 
@@ -133,7 +132,6 @@ const DriverCallHistoryCard = ({
           {icon}
           <div>
             <p className="font-bold text-gray-800">{title}</p>
-            {/* CORREÇÃO: Usa o novo componente para renderizar a descrição */}
             <RenderDescription text={call.description} />
           </div>
         </div>
@@ -200,7 +198,6 @@ const OpenCallCard = ({
           <p className="font-bold text-gray-800">
             Apoio para {call.solicitante.name}
           </p>
-          {/* CORREÇÃO: Usa o novo componente para renderizar a descrição */}
           <RenderDescription text={call.description} />
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
@@ -227,8 +224,15 @@ const OpenCallCard = ({
   );
 };
 
-export const DriverInterface = () => {
-  const [driver, setDriver] = useState<Driver | null>(null);
+// --- CORREÇÃO: O componente agora aceita a prop 'driver' vinda do App.tsx ---
+interface DriverInterfaceProps {
+  driver: Driver | null;
+}
+
+export const DriverInterface = ({
+  driver: initialDriver,
+}: DriverInterfaceProps) => {
+  const [driver, setDriver] = useState<Driver | null>(initialDriver);
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
@@ -260,23 +264,20 @@ export const DriverInterface = () => {
   const userId = auth.currentUser?.uid;
 
   useEffect(() => {
+    setDriver(initialDriver);
+    if (initialDriver) {
+      setProfileName(initialDriver.name);
+      setProfilePhone(initialDriver.phone || "");
+    }
+  }, [initialDriver]);
+
+  useEffect(() => {
     if (!userId) {
       setLoading(false);
       return;
     }
 
-    const driverDocRef = doc(db, "drivers", userId);
-    const unsubscribeDriver = onSnapshot(driverDocRef, (doc) => {
-      if (doc.exists()) {
-        const driverData = { id: doc.id, ...doc.data() } as Driver;
-        setDriver(driverData);
-        setProfileName(driverData.name);
-        setProfilePhone(driverData.phone || "");
-      } else {
-        console.log("Documento do motorista não encontrado!");
-      }
-      setLoading(false);
-    });
+    setLoading(true);
 
     const allDriversQuery = query(collection(db, "drivers"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
@@ -322,10 +323,10 @@ export const DriverInterface = () => {
       setOpenSupportCalls(
         openCallsData.filter((call) => call.solicitante.id !== userId)
       );
+      setLoading(false);
     });
 
     return () => {
-      unsubscribeDriver();
       unsubscribeMyCalls();
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
@@ -423,7 +424,6 @@ export const DriverInterface = () => {
     const vehicleType = formData.get("vehicleType") as string;
     const isBulky = formData.get("isBulky") === "on";
 
-    // --- ALTERAÇÃO AQUI ---
     const bulkyText = isBulky ? "Sim" : "Não";
     const informalDescription = `
 **Hub de Origem:** ${hub}
@@ -433,7 +433,6 @@ export const DriverInterface = () => {
 **Veículo Necessário:** ${vehicleType}
 **Localização do Motorista:** ${location}
     `;
-    // --- FIM DA ALTERAÇÃO ---
 
     try {
       const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
