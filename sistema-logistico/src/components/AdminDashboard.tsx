@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -9,7 +9,6 @@ import {
   RotateCcw,
   MapPin,
 } from "lucide-react";
-// Importações de bibliotecas e componentes auxiliares
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { Timestamp } from "firebase/firestore";
@@ -22,9 +21,8 @@ import {
   DriverInfoModal,
 } from "./UI";
 
-// --- COMPONENTES MODIFICADOS E NOVOS ---
+// --- COMPONENTES AUXILIARES ---
 
-// Modal de Confirmação para Exclusão
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -43,20 +41,20 @@ const ConfirmationModal = ({
       <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
         <h2 className="text-xl font-bold text-gray-800">Confirmar Exclusão</h2>
         <p className="text-gray-600 my-4">
-          Tem a certeza de que deseja excluir a solicitação de{" "}
+          Tem certeza de que deseja excluir a solicitação de{" "}
           <strong>{call.solicitante.name}</strong>? Esta ação pode ser
           revertida.
         </p>
         <div className="flex justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 rounded-lg font-semibold"
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg"
+            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
           >
             Excluir
           </button>
@@ -66,7 +64,6 @@ const ConfirmationModal = ({
   );
 };
 
-// CORREÇÃO: CallCard redefinido para ajustar a posição da lixeira e o layout
 const CallCard = ({
   call,
   onDelete,
@@ -99,7 +96,7 @@ const CallCard = ({
               <p className="font-bold text-gray-800">{call.solicitante.name}</p>
               <button
                 onClick={() => onDelete(call)}
-                className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600"
+                className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600 transition-colors"
                 title="Excluir Solicitação"
               >
                 <Trash2 size={14} />
@@ -127,18 +124,59 @@ const CallCard = ({
   );
 };
 
+// --- Componentes para Layout Redimensionável ---
+
+// ALTERAÇÃO: Divisor com novo estilo e ícone SVG personalizado
+const ResizableHandle = ({
+  onMouseDown,
+  isResizing,
+}: {
+  onMouseDown: React.MouseEventHandler<HTMLDivElement>;
+  isResizing: boolean;
+}) => (
+  <div
+    className="w-2 h-full cursor-col-resize flex items-center justify-center group"
+    onMouseDown={onMouseDown}
+  >
+    <div
+      className={`w-0.5 h-full transition-colors ${
+        isResizing ? "bg-orange-500" : "bg-gray-300 group-hover:bg-orange-400"
+      }`}
+    ></div>
+  </div>
+);
+
+const ResizablePanel = ({
+  children,
+  width,
+}: {
+  children: React.ReactNode;
+  width: number;
+}) => {
+  return (
+    <div
+      style={{ flex: `0 0 ${width}px` }}
+      className="h-full overflow-hidden flex flex-col"
+    >
+      {children}
+    </div>
+  );
+};
+
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
 interface AdminDashboardProps {
   calls: SupportCall[];
   drivers: Driver[];
   updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
+  onDeleteCall: (id: string) => void;
 }
 
 export const AdminDashboard = ({
   calls,
   drivers,
   updateCall,
+  onDeleteCall,
 }: AdminDashboardProps) => {
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
@@ -147,12 +185,70 @@ export const AdminDashboard = ({
     "kanban" | "approvals" | "excluded"
   >("kanban");
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
-
   const [callToDelete, setCallToDelete] = useState<SupportCall | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
+
+  const [columnWidths, setColumnWidths] = useState([350, 350, 350]);
+  const resizingIndexRef = useRef<number | null>(null);
+  const startCursorXRef = useRef<number>(0);
+  const startWidthsRef = useRef<number[]>([]);
+
+  const onMouseDown = useCallback(
+    (index: number, event: React.MouseEvent) => {
+      resizingIndexRef.current = index;
+      startCursorXRef.current = event.clientX;
+      startWidthsRef.current = columnWidths;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [columnWidths]
+  );
+
+  useEffect(() => {
+    const onMouseMove = (event: MouseEvent) => {
+      if (resizingIndexRef.current === null) return;
+
+      const delta = event.clientX - startCursorXRef.current;
+      const index = resizingIndexRef.current;
+
+      const newWidths = [...startWidthsRef.current];
+      const minWidth = 280;
+      const maxWidth = 600;
+
+      const currentWidth = startWidthsRef.current[index];
+      const nextWidth = startWidthsRef.current[index + 1];
+
+      const newCurrentWidth = currentWidth + delta;
+      const newNextWidth = nextWidth - delta;
+
+      if (
+        newCurrentWidth >= minWidth &&
+        newCurrentWidth <= maxWidth &&
+        newNextWidth >= minWidth &&
+        newNextWidth <= maxWidth
+      ) {
+        newWidths[index] = newCurrentWidth;
+        newWidths[index + 1] = newNextWidth;
+        setColumnWidths(newWidths);
+      }
+    };
+
+    const onMouseUp = () => {
+      resizingIndexRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
@@ -163,7 +259,9 @@ export const AdminDashboard = ({
       const whatsappUrl = `https://wa.me/55${driver.phone}?text=${message}`;
       window.open(whatsappUrl, "_blank");
     } else {
-      alert("Não foi possível acionar o motorista.");
+      console.error(
+        "Não foi possível acionar o motorista. Telefone não encontrado."
+      );
     }
   };
 
@@ -174,9 +272,7 @@ export const AdminDashboard = ({
 
   const confirmDelete = () => {
     if (callToDelete) {
-      // A função 'updateCall' recebida como prop é responsável por
-      // atualizar o status do chamado para "EXCLUIDO" no Firestore.
-      updateCall(callToDelete.id, { status: "EXCLUIDO" });
+      onDeleteCall(callToDelete.id);
     }
     setIsDeleteModalOpen(false);
     setCallToDelete(null);
@@ -188,7 +284,6 @@ export const AdminDashboard = ({
 
   const activeCalls = calls.filter((c) => c.status !== "EXCLUIDO");
   const excludedCalls = calls.filter((c) => c.status === "EXCLUIDO");
-
   const openCalls = activeCalls.filter((c) => c.status === "ABERTO");
   const inProgressCalls = activeCalls.filter(
     (c) => c.status === "EM ANDAMENTO"
@@ -206,13 +301,13 @@ export const AdminDashboard = ({
       : openCalls.filter((call) => call.urgency === urgencyFilter);
 
   const filterControls = (
-    <div className="flex space-x-1">
+    <div className="flex flex-wrap gap-1">
       {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
         (level) => (
           <button
             key={level}
             onClick={() => setUrgencyFilter(level)}
-            className={`px-2 py-0.5 text-xs rounded-md font-semibold ${
+            className={`px-2 py-0.5 text-xs rounded-md font-semibold transition-colors ${
               urgencyFilter === level
                 ? "bg-orange-600 text-white"
                 : "bg-gray-300 text-gray-700 hover:bg-gray-400"
@@ -236,18 +331,22 @@ export const AdminDashboard = ({
     : null;
 
   return (
-    <div className="bg-orange-50 min-h-screen">
+    <div className="bg-orange-50 min-h-screen font-sans">
       <header className="p-6">
-        <h1 className="text-2xl font-bold text-gray-800">
-          Sistema de Apoio Logístico
-        </h1>
-        <p className="text-gray-500">Painel Administrativo - SPX Shopee</p>
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Sistema de Apoio Logístico
+            </h1>
+            <p className="text-gray-500">Painel Administrativo - SPX Shopee</p>
+          </div>
+        </div>
       </header>
       <nav className="px-6 border-b border-gray-200">
         <div className="flex space-x-4">
           <button
             onClick={() => setAdminView("kanban")}
-            className={`py-2 px-1 text-sm font-semibold ${
+            className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "kanban"
                 ? "border-b-2 border-orange-600 text-orange-600"
                 : "text-gray-500 hover:text-gray-700"
@@ -257,7 +356,7 @@ export const AdminDashboard = ({
           </button>
           <button
             onClick={() => setAdminView("approvals")}
-            className={`py-2 px-1 text-sm font-semibold relative ${
+            className={`py-2 px-1 text-sm font-semibold relative transition-colors ${
               adminView === "approvals"
                 ? "border-b-2 border-orange-600 text-orange-600"
                 : "text-gray-500 hover:text-gray-700"
@@ -272,7 +371,7 @@ export const AdminDashboard = ({
           </button>
           <button
             onClick={() => setAdminView("excluded")}
-            className={`py-2 px-1 text-sm font-semibold ${
+            className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "excluded"
                 ? "border-b-2 border-orange-600 text-orange-600"
                 : "text-gray-500 hover:text-gray-700"
@@ -315,53 +414,68 @@ export const AdminDashboard = ({
               colorClass="#8B5CF6"
             />
           </div>
-          {/* CORREÇÃO: Layout principal ajustado para evitar sobreposição */}
+
           <main className="grid grid-cols-1 xl:grid-cols-4 gap-6">
             <div className="xl:col-span-3 overflow-x-auto">
-              <div className="flex gap-6 pb-4 min-w-[1200px]">
-                <KanbanColumn
-                  className="flex-1"
-                  title="Chamados Abertos"
-                  count={filteredOpenCalls.length}
-                  colorClass="#F59E0B"
-                  headerControls={filterControls}
-                >
-                  {filteredOpenCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                    />
-                  ))}
-                </KanbanColumn>
-                <KanbanColumn
-                  className="flex-1"
-                  title="Em Andamento"
-                  count={inProgressCalls.length}
-                  colorClass="#3B82F6"
-                >
-                  {inProgressCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                    />
-                  ))}
-                </KanbanColumn>
-                <KanbanColumn
-                  className="flex-1"
-                  title="Concluídos"
-                  count={concludedCalls.length}
-                  colorClass="#10B981"
-                >
-                  {concludedCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                    />
-                  ))}
-                </KanbanColumn>
+              <div className="flex w-full h-full">
+                <ResizablePanel width={columnWidths[0]}>
+                  <KanbanColumn
+                    title="Chamados Abertos"
+                    count={filteredOpenCalls.length}
+                    colorClass="#F59E0B"
+                    headerControls={filterControls}
+                  >
+                    {filteredOpenCalls.map((call) => (
+                      <CallCard
+                        key={call.id}
+                        call={call}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                  </KanbanColumn>
+                </ResizablePanel>
+
+                <ResizableHandle
+                  onMouseDown={(e) => onMouseDown(0, e)}
+                  isResizing={resizingIndexRef.current === 0}
+                />
+
+                <ResizablePanel width={columnWidths[1]}>
+                  <KanbanColumn
+                    title="Em Andamento"
+                    count={inProgressCalls.length}
+                    colorClass="#3B82F6"
+                  >
+                    {inProgressCalls.map((call) => (
+                      <CallCard
+                        key={call.id}
+                        call={call}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                  </KanbanColumn>
+                </ResizablePanel>
+
+                <ResizableHandle
+                  onMouseDown={(e) => onMouseDown(1, e)}
+                  isResizing={resizingIndexRef.current === 1}
+                />
+
+                <ResizablePanel width={columnWidths[2]}>
+                  <KanbanColumn
+                    title="Concluídos"
+                    count={concludedCalls.length}
+                    colorClass="#10B981"
+                  >
+                    {concludedCalls.map((call) => (
+                      <CallCard
+                        key={call.id}
+                        call={call}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                  </KanbanColumn>
+                </ResizablePanel>
               </div>
             </div>
             <div className="xl:col-span-1">
@@ -370,14 +484,16 @@ export const AdminDashboard = ({
                 count={availableDrivers.length}
                 colorClass="#8B5CF6"
               >
-                {availableDrivers.map((driver) => (
-                  <DriverCard
-                    key={driver.id}
-                    driver={driver}
-                    onAction={handleAcionarDriver}
-                    onInfoClick={() => setInfoModalDriver(driver)}
-                  />
-                ))}
+                {drivers
+                  .filter((d) => d.status === "DISPONIVEL")
+                  .map((driver) => (
+                    <DriverCard
+                      key={driver.id}
+                      driver={driver}
+                      onAction={handleAcionarDriver}
+                      onInfoClick={() => setInfoModalDriver(driver)}
+                    />
+                  ))}
               </KanbanColumn>
             </div>
           </main>
@@ -389,7 +505,7 @@ export const AdminDashboard = ({
           <h2 className="text-xl font-bold text-gray-800 mb-4">
             Solicitações Excluídas
           </h2>
-          <div className="flex gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
             <input
               type="text"
               placeholder="Filtrar por nome..."
@@ -429,7 +545,7 @@ export const AdminDashboard = ({
                   </div>
                   <button
                     onClick={() => handleRestore(call.id)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+                    className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
                   >
                     <RotateCcw size={14} /> Restaurar
                   </button>
@@ -446,7 +562,6 @@ export const AdminDashboard = ({
           onClose={() => setInfoModalDriver(null)}
         />
       )}
-
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
