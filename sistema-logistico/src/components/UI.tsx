@@ -47,12 +47,23 @@ export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
 
 // Componente StatusBadge
 export const StatusBadge = ({ status }: { status: DriverStatus }) => {
-  const statusInfo = {
+  // CORREÇÃO: Adicionados todos os status possíveis para corresponder ao tipo DriverStatus.
+  const statusInfo: Record<DriverStatus, { text: string; class: string }> = {
     DISPONIVEL: { text: "Disponível", class: "bg-green-100 text-green-800" },
     INDISPONIVEL: { text: "Indisponível", class: "bg-gray-100 text-gray-800" },
     EM_ROTA: { text: "Em Rota", class: "bg-yellow-100 text-yellow-800" },
+    PAUSADO: { text: "Pausado", class: "bg-orange-100 text-orange-800" },
+    OFFLINE: { text: "Offline", class: "bg-red-100 text-red-800" },
+    EM_ATENDIMENTO: {
+      text: "Em Atendimento",
+      class: "bg-blue-100 text-blue-800",
+    },
   };
-  const { text, class: className } = statusInfo[status];
+  const info = statusInfo[status];
+  if (!info) {
+    return null; // Retorna nulo se o status for inesperado
+  }
+  const { text, class: className } = info;
   return (
     <span
       className={`px-3 py-1 text-sm font-semibold rounded-full ${className}`}

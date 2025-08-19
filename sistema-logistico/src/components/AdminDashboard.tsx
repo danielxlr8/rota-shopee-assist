@@ -431,7 +431,6 @@ export const AdminDashboard = () => {
   );
 };
 
-// --- COMPONENTE APPROVALVIEW ATUALIZADO ---
 const ApprovalView = ({
   pendingCalls,
   onApprove,

@@ -34,10 +34,10 @@ export const mockDrivers: Driver[] = driverData.map((driver, index) => ({
 
 export const mockCalls: SupportCall[] = [
   {
-    id: "1419969",
+    id: "c1",
     solicitante: {
-      id: "1419969",
-      name: "teste",
+      id: "s1",
+      name: "Carlos Oliveira",
       avatar: "https://i.pravatar.cc/150?u=carlos",
       initials: "CO",
     },
