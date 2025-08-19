@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
 import {
   Clock,
@@ -17,7 +17,6 @@ import {
   XCircle,
   Camera,
   User,
-  KeyRound,
 } from "lucide-react";
 // Importações do Firebase
 import { auth, db, storage } from "../firebase";
@@ -272,11 +271,11 @@ export const DriverInterface = () => {
         const timeA =
           a.timestamp instanceof Timestamp
             ? a.timestamp.toMillis()
-            : (a.timestamp as any)?.seconds * 1000 || 0;
+            : new Date(a.timestamp as string).getTime();
         const timeB =
           b.timestamp instanceof Timestamp
             ? b.timestamp.toMillis()
-            : (b.timestamp as any)?.seconds * 1000 || 0;
+            : new Date(b.timestamp as string).getTime();
         return timeB - timeA;
       });
       setAllMyCalls(callsData);
@@ -320,7 +319,9 @@ export const DriverInterface = () => {
     await updateDoc(callDocRef, updates as any);
   };
 
-  const addNewCall = async (newCall: Partial<SupportCall>) => {
+  const addNewCall = async (
+    newCall: Partial<Omit<SupportCall, "id" | "timestamp" | "solicitante">>
+  ) => {
     if (!driver) return;
     const callToAdd = {
       ...newCall,
@@ -350,18 +351,12 @@ export const DriverInterface = () => {
 
   const handleCancelSupport = async (callId: string) => {
     if (!userId) return;
+    // CORREÇÃO: Trocar 'null' por 'undefined' para remover o campo no Firestore.
     await updateCall(callId, {
-      assignedTo: null,
+      assignedTo: undefined,
       status: "ABERTO",
     });
     await updateDriver(userId, { status: "DISPONIVEL" });
-  };
-
-  const handleRequestApproval = (callId: string) => {
-    updateCall(callId, {
-      status: "AGUARDANDO_APROVACAO",
-      description: "Transferência de pacotes finalizada. Aguardando aprovação.",
-    });
   };
 
   const handleGetLocation = () => {
@@ -405,14 +400,35 @@ export const DriverInterface = () => {
     }`;
 
     try {
-      const prompt = `Aja como um assistente de logística...`;
+      // CORREÇÃO: Usar a variável 'informalDescription' para construir o prompt.
+      const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
+        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte.
+        2. Classificar a urgência do problema como 'URGENTE', 'ALTA' ou 'MEDIA'.
+        
+        Descrição do motorista: "${informalDescription}"
+        
+        Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional", "urgency": "sua classificação de urgência"}`;
+
       const payload = {
-        /* ... */
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              description: { type: "STRING" },
+              urgency: { type: "STRING", enum: ["URGENTE", "ALTA", "MEDIA"] },
+            },
+            required: ["description", "urgency"],
+          },
+        },
       };
-      const apiKey = "SUA_CHAVE_DE_API_AQUI";
+      const apiKey = ""; // A chave de API será injetada pelo ambiente
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {
-        /* ... */
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok)
@@ -430,18 +446,17 @@ export const DriverInterface = () => {
         urgency: parsedJson.urgency as UrgencyLevel,
         location: location,
         status: "ABERTO" as const,
-        assignedTo: null,
         vehicleType: vehicleType,
         isBulky: isBulky,
       };
-      await addNewCall(newCallData as any);
+      await addNewCall(newCallData);
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
     } catch (error: any) {
       console.error("Erro detalhado ao criar chamado:", error);
       if (error.message.includes("Failed to fetch")) {
         setModalError(
-          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta e configurada para localhost."
+          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta."
         );
       } else {
         setModalError(`Erro: ${error.message}`);
@@ -457,27 +472,19 @@ export const DriverInterface = () => {
     if (!event.target.files || event.target.files.length === 0 || !userId) {
       return;
     }
-    console.log("Iniciando upload da imagem...");
     const file = event.target.files[0];
     const storageRef = ref(storage, `avatars/${userId}/${file.name}`);
 
     setIsUploading(true);
     try {
-      console.log("Enviando imagem para o Firebase Storage...");
       await uploadBytes(storageRef, file);
-      console.log("Imagem enviada com sucesso. Obtendo URL de download...");
       const downloadURL = await getDownloadURL(storageRef);
-      console.log("URL de download obtida:", downloadURL);
       await updateDriver(userId, { avatar: downloadURL });
-      console.log("Perfil do motorista atualizado com o novo avatar.");
     } catch (error) {
-      console.error("Erro detalhado ao fazer upload da imagem:", error);
-      alert(
-        "Não foi possível carregar a imagem. Verifique as regras do Firebase Storage e a sua ligação à Internet."
-      );
+      console.error("Erro ao fazer upload da imagem:", error);
+      alert("Não foi possível carregar a imagem. Tente novamente.");
     } finally {
       setIsUploading(false);
-      console.log("Processo de upload finalizado.");
     }
   };
 

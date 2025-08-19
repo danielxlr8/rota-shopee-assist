@@ -1,97 +1,126 @@
 import { useState, useEffect } from "react";
-import { LogOut } from "lucide-react";
-import { AdminDashboard } from "./components/AdminDashboard";
-import { DriverInterface } from "./components/DriverInterface";
-import { AuthPage } from "./components/AuthPage";
-// Remova a importação dos dados mockados e dos tipos, pois não são mais necessários aqui
-// import { mockCalls, mockDrivers } from "./data/mockData";
-// import type { Driver, SupportCall } from "./types/logistics";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import type { User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import type { User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { AuthPage } from "./components/AuthPage";
+import { AdminDashboard } from "./components/AdminDashboard";
+import { DriverInterface } from "./components/DriverInterface";
+import { mockCalls, mockDrivers } from "./data/mockData";
+import type { SupportCall, Driver } from "./types/logistics";
 
-export default function App() {
-  // O estado agora é focado apenas na autenticação e no papel do usuário
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<"admin" | "driver" | null>(null);
+// Define a estrutura para os dados do usuário armazenados no Firestore
+interface UserData {
+  uid: string;
+  name: string;
+  email: string;
+  role: "admin" | "driver";
+}
+
+function App() {
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // A lógica para buscar o papel do usuário continua a mesma
-        const userDocRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
+  // Estados para os dados da aplicação (iniciados com dados mockados como fallback)
+  const [calls, setCalls] = useState<SupportCall[]>(mockCalls);
+  const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
 
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUserRole(userData.role);
+  // Efeito para observar o estado de autenticação do Firebase
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        // Se o usuário estiver logado, busca seus dados no Firestore
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          setUser(currentUser);
+          setUserData(userDocSnap.data() as UserData);
+        } else {
+          // Se não encontrar os dados do usuário, desloga para evitar erros
+          console.error("Documento do usuário não encontrado no Firestore!");
+          signOut(auth);
         }
-        setAuthUser(user);
       } else {
-        setAuthUser(null);
-        setUserRole(null);
+        // Se não houver usuário, reseta os estados
+        setUser(null);
+        setUserData(null);
       }
       setLoading(false);
     });
+
+    // Limpa o observador ao desmontar o componente para evitar memory leaks
     return () => unsubscribe();
   }, []);
 
-  const handleLogout = () => {
-    signOut(auth).catch((error) =>
-      console.error("Erro ao fazer logout:", error)
-    );
+  // Efeito para buscar dados em tempo real (chamados e motoristas)
+  useEffect(() => {
+    // Apenas busca os dados se o usuário for um administrador
+    if (userData?.role === "admin") {
+      const callsCollection = collection(db, "supportCalls");
+      const driversCollection = collection(db, "drivers");
+
+      const unsubCalls = onSnapshot(callsCollection, (snapshot) => {
+        const callsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SupportCall));
+        setCalls(callsData);
+      });
+
+      const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
+        const driversData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Driver));
+        setDrivers(driversData);
+      });
+
+      // Limpa os observadores ao desmontar ou quando o usuário não for mais admin
+      return () => {
+        unsubCalls();
+        unsubDrivers();
+      };
+    }
+  }, [userData]); // Re-executa este efeito sempre que o userData mudar
+
+  // Função para atualizar um chamado (será passada como prop para o AdminDashboard)
+  const handleUpdateCall = (id: string, updates: Partial<SupportCall>) => {
+    // Aqui você implementaria a lógica para atualizar o documento no Firestore
+    console.log(`Atualizando chamado ${id} com:`, updates);
   };
 
-  // As funções de update (updateCall, updateDriver, etc.) foram removidas
-  // porque cada componente cuidará de suas próprias atualizações.
-
+  // Enquanto verifica a autenticação, exibe uma tela de carregamento
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-orange-50">
-        A carregar...
+      <div className="flex items-center justify-center min-h-screen">
+        <p>A carregar...</p>
       </div>
     );
   }
 
-  if (!authUser) {
+  // Se não houver usuário logado, renderiza a página de autenticação
+  if (!user) {
     return <AuthPage />;
   }
 
-  return (
-    <div className="bg-gray-50 text-gray-800 min-h-screen">
-      <header className="bg-orange-600 shadow-md p-2 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center space-x-2">
-          <img
-            src="/shopee-logo.png"
-            alt="Logótipo da Shopee"
-            className="h-8 object-contain"
-          />
-          <span className="font-bold text-xl text-white">SPX</span>
+  // Após o login, renderiza o painel correto com base na função do usuário
+  switch (userData?.role) {
+    case "admin":
+      // CORREÇÃO: Passa as props necessárias para o AdminDashboard
+      return (
+        <AdminDashboard
+          calls={calls}
+          drivers={drivers}
+          updateCall={handleUpdateCall}
+        />
+      );
+    case "driver":
+      return <DriverInterface />;
+    default:
+      // Caso os dados do usuário ainda não tenham sido carregados ou a função seja inválida
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+            <p>A verificar permissões...</p>
+            <button onClick={() => signOut(auth)} className="ml-4 p-2 bg-red-500 text-white rounded">Sair</button>
         </div>
-        <div className="flex items-center space-x-4">
-          <span className="text-white text-sm hidden sm:block">
-            Bem-vindo, {authUser.displayName || authUser.email}
-          </span>
-          <button
-            onClick={handleLogout}
-            className="flex items-center space-x-2 py-2 px-4 rounded-md text-sm font-semibold bg-white text-orange-600 hover:bg-gray-200 transition-colors"
-            title="Sair"
-          >
-            <LogOut size={16} />
-            <span>Sair</span>
-          </button>
-        </div>
-      </header>
-
-      <main>
-        {/* Renderiza o AdminDashboard sem passar props de dados */}
-        {userRole === "admin" && <AdminDashboard />}
-
-        {/* Renderiza o DriverInterface sem passar props de dados */}
-        {userRole === "driver" && <DriverInterface />}
-      </main>
-    </div>
-  );
+      );
+  }
 }
+
+export default App;
