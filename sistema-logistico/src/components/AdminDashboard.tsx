@@ -1,123 +1,158 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState } from "react";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
   Clock,
   CheckCircle,
   Users,
-  Check,
-  X,
-  Search,
-  ChevronDown,
-  Settings,
+  Trash2,
+  RotateCcw,
+  MapPin,
 } from "lucide-react";
+// Importações de bibliotecas e componentes auxiliares
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale/pt-BR";
+import { Timestamp } from "firebase/firestore";
 import {
-  CallCard,
+  AvatarComponent,
+  UrgencyBadge,
   DriverCard,
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
 } from "./UI";
-import { db } from "../firebase";
-import {
-  collection,
-  onSnapshot,
-  query,
-  doc,
-  updateDoc,
-} from "firebase/firestore";
 
-interface ColumnVisibility {
-  inProgress: boolean;
-  concluded: boolean;
-  availableDrivers: boolean;
+// --- COMPONENTES MODIFICADOS E NOVOS ---
+
+// Modal de Confirmação para Exclusão
+const ConfirmationModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  call,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  call: SupportCall | null;
+}) => {
+  if (!isOpen || !call) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+        <h2 className="text-xl font-bold text-gray-800">Confirmar Exclusão</h2>
+        <p className="text-gray-600 my-4">
+          Tem a certeza de que deseja excluir a solicitação de{" "}
+          <strong>{call.solicitante.name}</strong>? Esta ação pode ser
+          revertida.
+        </p>
+        <div className="flex justify-end gap-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 rounded-lg font-semibold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg"
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// CORREÇÃO: CallCard redefinido para ajustar a posição da lixeira e o layout
+const CallCard = ({
+  call,
+  onDelete,
+}: {
+  call: SupportCall;
+  onDelete: (call: SupportCall) => void;
+}) => {
+  const formatTimestamp = (timestamp: any): string => {
+    if (!timestamp) return "Horário indisponível";
+    let date;
+    if (timestamp instanceof Timestamp) {
+      date = timestamp.toDate();
+    } else if (typeof timestamp === "object" && timestamp.seconds) {
+      date = new Timestamp(timestamp.seconds, timestamp.nanoseconds).toDate();
+    } else {
+      date = new Date(timestamp);
+    }
+    if (isNaN(date.getTime())) return "Data inválida";
+    return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
+  };
+  const timeAgo = formatTimestamp(call.timestamp);
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
+      <div className="flex justify-between items-start">
+        <div className="flex items-center space-x-3">
+          <AvatarComponent user={call.solicitante} />
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-bold text-gray-800">{call.solicitante.name}</p>
+              <button
+                onClick={() => onDelete(call)}
+                className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600"
+                title="Excluir Solicitação"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500">Solicitante</p>
+          </div>
+        </div>
+        <UrgencyBadge urgency={call.urgency} />
+      </div>
+      <div className="text-sm text-gray-600 space-y-2">
+        <div className="flex items-center space-x-2">
+          <Clock size={16} className="text-gray-400" />
+          <span>{timeAgo}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <MapPin size={16} className="text-gray-400" />
+          <span>{call.location}</span>
+        </div>
+      </div>
+      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
+        {call.description}
+      </p>
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL DO PAINEL ---
+
+interface AdminDashboardProps {
+  calls: SupportCall[];
+  drivers: Driver[];
+  updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
 }
 
-export const AdminDashboard = () => {
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [calls, setCalls] = useState<SupportCall[]>([]);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [hubFilter, setHubFilter] = useState<string>("TODOS");
-
+export const AdminDashboard = ({
+  calls,
+  drivers,
+  updateCall,
+}: AdminDashboardProps) => {
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
-  const [adminView, setAdminView] = useState<"kanban" | "approvals">("kanban");
+  const [adminView, setAdminView] = useState<
+    "kanban" | "approvals" | "excluded"
+  >("kanban");
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
-  const [isUrgencyDropdownOpen, setIsUrgencyDropdownOpen] = useState(false);
 
-  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility>({
-    inProgress: true,
-    concluded: true,
-    availableDrivers: true,
-  });
+  const [callToDelete, setCallToDelete] = useState<SupportCall | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  useEffect(() => {
-    const driversQuery = query(collection(db, "drivers"));
-    const unsubscribeDrivers = onSnapshot(driversQuery, (snapshot) => {
-      const driversData = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() } as Driver)
-      );
-      setDrivers(driversData);
-    });
-
-    const callsQuery = query(collection(db, "supportCalls"));
-    const unsubscribeCalls = onSnapshot(callsQuery, (snapshot) => {
-      const callsData = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
-      );
-      setCalls(callsData);
-    });
-
-    return () => {
-      unsubscribeDrivers();
-      unsubscribeCalls();
-    };
-  }, []);
-
-  const allHubs = useMemo(() => {
-    const hubs = drivers.map((d) => d.region).filter(Boolean);
-    return ["TODOS", ...Array.from(new Set(hubs))];
-  }, [drivers]);
-
-  const filteredData = useMemo(() => {
-    const lowercasedSearch = searchTerm.toLowerCase();
-
-    let filteredDrivers = drivers.filter((driver) => {
-      const matchesHub = hubFilter === "TODOS" || driver.region === hubFilter;
-      const matchesSearch = driver.name
-        .toLowerCase()
-        .includes(lowercasedSearch);
-      return matchesHub && matchesSearch;
-    });
-
-    let filteredCalls = calls.filter((call) => {
-      const driverOfCall = drivers.find((d) => d.id === call.solicitante.id);
-      const matchesHub =
-        hubFilter === "TODOS" ||
-        (driverOfCall && driverOfCall.region === hubFilter);
-      const matchesSearch = call.solicitante.name
-        .toLowerCase()
-        .includes(lowercasedSearch);
-      return matchesHub && matchesSearch;
-    });
-
-    return { drivers: filteredDrivers, calls: filteredCalls };
-  }, [drivers, calls, searchTerm, hubFilter]);
-
-  const updateCall = async (
-    id: string,
-    updates: Partial<Omit<SupportCall, "id">>
-  ) => {
-    const callDocRef = doc(db, "supportCalls", id);
-    await updateDoc(callDocRef, updates);
-  };
-
-  const handleApprove = (callId: string) =>
-    updateCall(callId, { status: "APROVADO" });
-  const handleReject = (callId: string) =>
-    updateCall(callId, { status: "EM ANDAMENTO" });
+  const [excludedNameFilter, setExcludedNameFilter] = useState("");
+  const [excludedHubFilter, setExcludedHubFilter] = useState("");
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
@@ -128,72 +163,66 @@ export const AdminDashboard = () => {
       const whatsappUrl = `https://wa.me/55${driver.phone}?text=${message}`;
       window.open(whatsappUrl, "_blank");
     } else {
-      console.error(
-        "Não foi possível acionar o motorista. Telefone não encontrado."
-      );
+      alert("Não foi possível acionar o motorista.");
     }
   };
 
-  const openCalls = filteredData.calls.filter((c) => c.status === "ABERTO");
-  const inProgressCalls = filteredData.calls.filter(
+  const handleDeleteClick = (call: SupportCall) => {
+    setCallToDelete(call);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (callToDelete) {
+      // A função 'updateCall' recebida como prop é responsável por
+      // atualizar o status do chamado para "EXCLUIDO" no Firestore.
+      updateCall(callToDelete.id, { status: "EXCLUIDO" });
+    }
+    setIsDeleteModalOpen(false);
+    setCallToDelete(null);
+  };
+
+  const handleRestore = (callId: string) => {
+    updateCall(callId, { status: "ABERTO" });
+  };
+
+  const activeCalls = calls.filter((c) => c.status !== "EXCLUIDO");
+  const excludedCalls = calls.filter((c) => c.status === "EXCLUIDO");
+
+  const openCalls = activeCalls.filter((c) => c.status === "ABERTO");
+  const inProgressCalls = activeCalls.filter(
     (c) => c.status === "EM ANDAMENTO"
   );
-  const concludedCalls = filteredData.calls.filter(
+  const concludedCalls = activeCalls.filter(
     (c) => c.status === "CONCLUIDO" || c.status === "APROVADO"
   );
-  const pendingApprovalCalls = filteredData.calls.filter(
+  const pendingApprovalCalls = activeCalls.filter(
     (c) => c.status === "AGUARDANDO_APROVACAO"
   );
-  const availableDrivers = filteredData.drivers.filter(
-    (d) => d.status === "DISPONIVEL"
-  );
-
-  const openCallsWithUrgency =
+  const availableDrivers = drivers.filter((d) => d.status === "DISPONIVEL");
+  const filteredOpenCalls =
     urgencyFilter === "TODOS"
       ? openCalls
       : openCalls.filter((call) => call.urgency === urgencyFilter);
 
   const filterControls = (
-    <div className="relative w-full">
-      <button
-        onClick={() => setIsUrgencyDropdownOpen(!isUrgencyDropdownOpen)}
-        className="w-full flex justify-between items-center bg-white border border-gray-300 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-semibold text-left"
-      >
-        <span>
-          {urgencyFilter === "TODOS"
-            ? "Todos os Níveis"
-            : urgencyFilter.charAt(0) + urgencyFilter.slice(1).toLowerCase()}
-        </span>
-        <ChevronDown
-          size={16}
-          className={`transition-transform duration-200 ${
-            isUrgencyDropdownOpen ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-      {isUrgencyDropdownOpen && (
-        <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-20">
-          {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
-            (level) => (
-              <button
-                key={level}
-                onClick={() => {
-                  setUrgencyFilter(level);
-                  setIsUrgencyDropdownOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                  urgencyFilter === level
-                    ? "bg-orange-500 text-white"
-                    : "hover:bg-orange-100"
-                }`}
-              >
-                {level === "TODOS"
-                  ? "Todos os Níveis"
-                  : level.charAt(0) + level.slice(1).toLowerCase()}
-              </button>
-            )
-          )}
-        </div>
+    <div className="flex space-x-1">
+      {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
+        (level) => (
+          <button
+            key={level}
+            onClick={() => setUrgencyFilter(level)}
+            className={`px-2 py-0.5 text-xs rounded-md font-semibold ${
+              urgencyFilter === level
+                ? "bg-orange-600 text-white"
+                : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+            }`}
+          >
+            {level === "TODOS"
+              ? "Todos"
+              : level.charAt(0) + level.slice(1).toLowerCase()}
+          </button>
+        )
       )}
     </div>
   );
@@ -241,9 +270,20 @@ export const AdminDashboard = () => {
               </span>
             )}
           </button>
+          <button
+            onClick={() => setAdminView("excluded")}
+            className={`py-2 px-1 text-sm font-semibold ${
+              adminView === "excluded"
+                ? "border-b-2 border-orange-600 text-orange-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Solicitações Excluídas
+          </button>
         </div>
       </nav>
-      {adminView === "kanban" ? (
+
+      {adminView === "kanban" && (
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <SummaryCard
@@ -275,126 +315,57 @@ export const AdminDashboard = () => {
               colorClass="#8B5CF6"
             />
           </div>
-
-          <div className="flex flex-col md:flex-row gap-4 items-center p-4 bg-white rounded-lg shadow">
-            <div className="relative flex-grow w-full md:w-auto">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                size={20}
-              />
-              <input
-                type="text"
-                placeholder="Pesquisar por nome..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-            <div className="relative w-full md:w-auto">
-              <select
-                value={hubFilter}
-                onChange={(e) => setHubFilter(e.target.value)}
-                className="w-full appearance-none bg-gray-100 border-gray-300 border rounded-lg py-2 px-4 pr-8 focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                {allHubs.map((hub) => (
-                  <option key={hub} value={hub}>
-                    {hub === "TODOS" ? "Todos os Hubs" : hub}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
-                size={20}
-              />
-            </div>
-            <div className="relative group">
-              <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200">
-                <Settings size={20} className="text-gray-600" />
-              </button>
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity p-2 space-y-1">
-                <label className="flex items-center space-x-2 p-1 hover:bg-gray-100 rounded-md">
-                  <input
-                    type="checkbox"
-                    checked={columnVisibility.inProgress}
-                    onChange={() =>
-                      setColumnVisibility((prev) => ({
-                        ...prev,
-                        inProgress: !prev.inProgress,
-                      }))
-                    }
-                  />
-                  <span>Em Andamento</span>
-                </label>
-                <label className="flex items-center space-x-2 p-1 hover:bg-gray-100 rounded-md">
-                  <input
-                    type="checkbox"
-                    checked={columnVisibility.concluded}
-                    onChange={() =>
-                      setColumnVisibility((prev) => ({
-                        ...prev,
-                        concluded: !prev.concluded,
-                      }))
-                    }
-                  />
-                  <span>Concluídos</span>
-                </label>
-                <label className="flex items-center space-x-2 p-1 hover:bg-gray-100 rounded-md">
-                  <input
-                    type="checkbox"
-                    checked={columnVisibility.availableDrivers}
-                    onChange={() =>
-                      setColumnVisibility((prev) => ({
-                        ...prev,
-                        availableDrivers: !prev.availableDrivers,
-                      }))
-                    }
-                  />
-                  <span>Motoristas</span>
-                </label>
+          {/* CORREÇÃO: Layout principal ajustado para evitar sobreposição */}
+          <main className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+            <div className="xl:col-span-3 overflow-x-auto">
+              <div className="flex gap-6 pb-4 min-w-[1200px]">
+                <KanbanColumn
+                  className="flex-1"
+                  title="Chamados Abertos"
+                  count={filteredOpenCalls.length}
+                  colorClass="#F59E0B"
+                  headerControls={filterControls}
+                >
+                  {filteredOpenCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                    />
+                  ))}
+                </KanbanColumn>
+                <KanbanColumn
+                  className="flex-1"
+                  title="Em Andamento"
+                  count={inProgressCalls.length}
+                  colorClass="#3B82F6"
+                >
+                  {inProgressCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                    />
+                  ))}
+                </KanbanColumn>
+                <KanbanColumn
+                  className="flex-1"
+                  title="Concluídos"
+                  count={concludedCalls.length}
+                  colorClass="#10B981"
+                >
+                  {concludedCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                    />
+                  ))}
+                </KanbanColumn>
               </div>
             </div>
-          </div>
-
-          <main className="flex flex-col lg:flex-row gap-6 overflow-x-auto pb-4">
-            <KanbanColumn
-              className="bg-orange-100 rounded-lg flex-1 min-w-[300px]"
-              title="Chamados Abertos"
-              count={openCallsWithUrgency.length}
-              colorClass="#F59E0B"
-            >
-              <div className="mb-4">{filterControls}</div>
-              {openCallsWithUrgency.map((call) => (
-                <CallCard key={call.id} call={call} />
-              ))}
-            </KanbanColumn>
-
-            {columnVisibility.inProgress && (
+            <div className="xl:col-span-1">
               <KanbanColumn
-                className="bg-blue-100 rounded-lg flex-1 min-w-[300px]"
-                title="Em Andamento"
-                count={inProgressCalls.length}
-                colorClass="#3B82F6"
-              >
-                {inProgressCalls.map((call) => (
-                  <CallCard key={call.id} call={call} />
-                ))}
-              </KanbanColumn>
-            )}
-            {columnVisibility.concluded && (
-              <KanbanColumn
-                className="bg-green-100 rounded-lg flex-1 min-w-[300px]"
-                title="Concluídos"
-                count={concludedCalls.length}
-                colorClass="#10B981"
-              >
-                {concludedCalls.map((call) => (
-                  <CallCard key={call.id} call={call} />
-                ))}
-              </KanbanColumn>
-            )}
-            {columnVisibility.availableDrivers && (
-              <KanbanColumn
-                className="bg-violet-100 rounded-lg flex-1 min-w-[300px]"
                 title="Motoristas Disponíveis"
                 count={availableDrivers.length}
                 colorClass="#8B5CF6"
@@ -408,18 +379,66 @@ export const AdminDashboard = () => {
                   />
                 ))}
               </KanbanColumn>
-            )}
+            </div>
           </main>
         </div>
-      ) : (
-        <ApprovalView
-          pendingCalls={pendingApprovalCalls}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          allHubs={allHubs}
-          drivers={drivers}
-        />
       )}
+
+      {adminView === "excluded" && (
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            Solicitações Excluídas
+          </h2>
+          <div className="flex gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="Filtrar por nome..."
+              value={excludedNameFilter}
+              onChange={(e) => setExcludedNameFilter(e.target.value)}
+              className="p-2 border rounded-lg w-full"
+            />
+            <input
+              type="text"
+              placeholder="Filtrar por hub..."
+              value={excludedHubFilter}
+              onChange={(e) => setExcludedHubFilter(e.target.value)}
+              className="p-2 border rounded-lg w-full"
+            />
+          </div>
+          <div className="space-y-4">
+            {excludedCalls
+              .filter((call) =>
+                call.solicitante.name
+                  .toLowerCase()
+                  .includes(excludedNameFilter.toLowerCase())
+              )
+              .filter(
+                (call) =>
+                  call.hub
+                    ?.toLowerCase()
+                    .includes(excludedHubFilter.toLowerCase()) ?? true
+              )
+              .map((call) => (
+                <div
+                  key={call.id}
+                  className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
+                >
+                  <div>
+                    <p className="font-bold">{call.solicitante.name}</p>
+                    <p className="text-sm text-gray-500">{call.description}</p>
+                  </div>
+                  <button
+                    onClick={() => handleRestore(call.id)}
+                    className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+                  >
+                    <RotateCcw size={14} /> Restaurar
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {infoModalDriver && (
         <DriverInfoModal
           driver={infoModalDriver}
@@ -427,140 +446,13 @@ export const AdminDashboard = () => {
           onClose={() => setInfoModalDriver(null)}
         />
       )}
-    </div>
-  );
-};
 
-const ApprovalView = ({
-  pendingCalls,
-  onApprove,
-  onReject,
-  allHubs,
-  drivers,
-}: {
-  pendingCalls: SupportCall[];
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  allHubs: string[];
-  drivers: Driver[];
-}) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [hubFilter, setHubFilter] = useState("TODOS");
-
-  const filteredCalls = useMemo(() => {
-    return pendingCalls.filter((call) => {
-      const driverOfCall = drivers.find((d) => d.id === call.solicitante.id);
-      const matchesHub =
-        hubFilter === "TODOS" ||
-        (driverOfCall && driverOfCall.region === hubFilter);
-      const matchesSearch = call.solicitante.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      return matchesHub && matchesSearch;
-    });
-  }, [pendingCalls, searchTerm, hubFilter, drivers]);
-
-  return (
-    <div className="p-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800 flex-shrink-0">
-          Transferências Aguardando Aprovação
-        </h2>
-        <div className="flex-grow w-full flex flex-col md:flex-row gap-4 items-center">
-          <div className="relative w-full">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              placeholder="Pesquisar por nome..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-          <div className="relative w-full md:w-64">
-            <select
-              value={hubFilter}
-              onChange={(e) => setHubFilter(e.target.value)}
-              className="w-full appearance-none bg-gray-100 border-gray-300 border rounded-lg py-2 px-4 pr-8 focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              {allHubs.map((hub) => (
-                <option key={hub} value={hub}>
-                  {hub === "TODOS" ? "Filtrar por Hub" : hub}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
-              size={20}
-            />
-          </div>
-        </div>
-      </div>
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Solicitante
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Descrição
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ações
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredCalls.length > 0 ? (
-              filteredCalls.map((call) => (
-                <tr key={call.id}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center">
-                      <img
-                        className="h-10 w-10 rounded-full"
-                        src={call.solicitante.avatar}
-                        alt=""
-                      />
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {call.solicitante.name}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    Transferência de pacotes finalizada. Aguardando aprovação.
-                  </td>
-                  <td className="px-6 py-4 space-x-2">
-                    <button
-                      onClick={() => onApprove(call.id)}
-                      className="text-green-600 hover:text-green-900 p-2 rounded-full hover:bg-green-100"
-                    >
-                      <Check size={20} />
-                    </button>
-                    <button
-                      onClick={() => onReject(call.id)}
-                      className="text-red-600 hover:text-red-900 p-2 rounded-full hover:bg-red-100"
-                    >
-                      <X size={20} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={3} className="px-6 py-4 text-center text-gray-500">
-                  Nenhuma solicitação encontrada.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        call={callToDelete}
+      />
     </div>
   );
 };

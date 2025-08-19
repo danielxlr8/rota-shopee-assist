@@ -42,6 +42,34 @@ const hubs = [
   "LM Hub_PR_Cascavel",
 ];
 
+// Componente para renderizar a descrição com links clicáveis e quebras de linha
+const RenderDescription = ({ text }: { text: string }) => {
+  // Regex para encontrar URLs no texto
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return (
+    <p className="text-sm text-gray-500" style={{ whiteSpace: "pre-wrap" }}>
+      {parts.map((part, index) => {
+        if (part.match(urlRegex)) {
+          return (
+            <a
+              key={index}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              {part}
+            </a>
+          );
+        }
+        return part;
+      })}
+    </p>
+  );
+};
+
 // Componente para o cartão de histórico
 const DriverCallHistoryCard = ({
   call,
@@ -105,7 +133,8 @@ const DriverCallHistoryCard = ({
           {icon}
           <div>
             <p className="font-bold text-gray-800">{title}</p>
-            <p className="text-sm text-gray-500">{call.description}</p>
+            {/* CORREÇÃO: Usa o novo componente para renderizar a descrição */}
+            <RenderDescription text={call.description} />
           </div>
         </div>
         <div
@@ -171,7 +200,8 @@ const OpenCallCard = ({
           <p className="font-bold text-gray-800">
             Apoio para {call.solicitante.name}
           </p>
-          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
+          {/* CORREÇÃO: Usa o novo componente para renderizar a descrição */}
+          <RenderDescription text={call.description} />
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
           <button
@@ -351,7 +381,6 @@ export const DriverInterface = () => {
 
   const handleCancelSupport = async (callId: string) => {
     if (!userId) return;
-    // CORREÇÃO: Trocar 'null' por 'undefined' para remover o campo no Firestore.
     await updateCall(callId, {
       assignedTo: undefined,
       status: "ABERTO",
@@ -369,9 +398,10 @@ export const DriverInterface = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setLocation(
-          `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`
-        );
+        const googleMapsLink = `https://www.google.com/maps?q=${latitude.toFixed(
+          4
+        )},${longitude.toFixed(4)}`;
+        setLocation(googleMapsLink);
         setIsLocating(false);
       },
       () => {
@@ -387,22 +417,27 @@ export const DriverInterface = () => {
     setModalError("");
 
     const formData = new FormData(e.currentTarget);
+    const hub = formData.get("hub") as string;
+    const packageCount = formData.get("packageCount") as string;
+    const deliveryRegion = formData.get("deliveryRegion") as string;
     const vehicleType = formData.get("vehicleType") as string;
     const isBulky = formData.get("isBulky") === "on";
 
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${formData.get(
-      "hub"
-    )}. Minha localização atual é ${location}. Tenho ${formData.get(
-      "packageCount"
-    )} pacotes para a região de ${formData.get("deliveryRegion")}. 
-    Veículo necessário: ${vehicleType}. ${
-      isBulky ? "Contém pacote volumoso." : ""
-    }`;
+    // --- ALTERAÇÃO AQUI ---
+    const bulkyText = isBulky ? "Sim" : "Não";
+    const informalDescription = `
+**Hub de Origem:** ${hub}
+**Destino da Carga:** ${deliveryRegion}
+**Total de Pacotes:** ${packageCount}
+**Contém Volumosos:** ${bulkyText}
+**Veículo Necessário:** ${vehicleType}
+**Localização do Motorista:** ${location}
+    `;
+    // --- FIM DA ALTERAÇÃO ---
 
     try {
-      // CORREÇÃO: Usar a variável 'informalDescription' para construir o prompt.
       const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
-        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte.
+        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte, mantendo a estrutura de tópicos e todas as informações essenciais, incluindo o link do Google Maps. Remova qualquer texto redundante.
         2. Classificar a urgência do problema como 'URGENTE', 'ALTA' ou 'MEDIA'.
         
         Descrição do motorista: "${informalDescription}"
@@ -423,7 +458,8 @@ export const DriverInterface = () => {
           },
         },
       };
-      const apiKey = ""; // A chave de API será injetada pelo ambiente
+      // CORREÇÃO: Adicionada a sua chave de API
+      const apiKey = "AIzaSyAXV3wmwo0eMgx3Q3CuE0o2WfROU50jaaU";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {
         method: "POST",

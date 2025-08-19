@@ -12,13 +12,14 @@ export type DriverStatus =
   | "OFFLINE"
   | "EM_ATENDIMENTO";
 
-// CORREÇÃO: Adicionados todos os status usados na aplicação.
+// CORREÇÃO: Adicionados todos os status usados na aplicação, incluindo EXCLUIDO.
 export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
   | "CONCLUIDO"
   | "AGUARDANDO_APROVACAO"
-  | "APROVADO";
+  | "APROVADO"
+  | "EXCLUIDO"; // <-- NOVO STATUS ADICIONADO
 
 // Define a estrutura para um chamado de suporte.
 export interface SupportCall {
@@ -28,17 +29,17 @@ export interface SupportCall {
     name: string;
     avatar: string;
     initials: string;
-    phone?: string; // CORREÇÃO: Adicionada propriedade opcional 'phone'.
+    phone?: string;
   };
-  // CORREÇÃO: O timestamp pode ser uma string ou um objeto do Firebase.
   timestamp: Timestamp | { seconds: number; nanoseconds: number } | string;
   urgency: UrgencyLevel;
   location: string;
   description: string;
-  status: CallStatus; // CORREÇÃO: Usa o novo tipo CallStatus.
-  assignedTo?: string; // CORREÇÃO: Adicionada propriedade opcional 'assignedTo'.
+  status: CallStatus;
+  assignedTo?: string;
   vehicleType?: string;
   isBulky?: boolean;
+  hub?: string; // Adicionado para permitir a filtragem por hub
 }
 
 // Define a estrutura para um motorista.
