@@ -17,6 +17,7 @@ import {
   XCircle,
   Camera,
   User,
+  Search, // Importar o ícone de busca
 } from "lucide-react";
 // Importações do Firebase
 import { auth, db, storage } from "../firebase";
@@ -31,6 +32,8 @@ import {
   where,
   or,
   Timestamp,
+  getDocs,
+  writeBatch,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { updatePassword } from "firebase/auth";
@@ -41,6 +44,96 @@ const hubs = [
   "LM Hub_PR_Foz do Iguaçu",
   "LM Hub_PR_Cascavel",
 ];
+
+const vehicleTypes = ["Moto", "Carro Passeio", "Carro Utilitário", "Van"];
+
+// --- NOVO: Componente de Busca Reutilizável (ComboBox) ---
+const SearchableComboBox = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filteredOptions = options.filter((option) =>
+    option.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [wrapperRef]);
+
+  const handleSelect = (option: string) => {
+    onChange(option);
+    setSearchTerm(option);
+    setIsOpen(false);
+  };
+
+  const displayValue = isOpen ? searchTerm : value;
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div className="relative">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          size={18}
+        />
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={displayValue}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+      {isOpen && (
+        <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option, index) => (
+              <li
+                key={index}
+                onClick={() => handleSelect(option)}
+                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+              >
+                {option}
+              </li>
+            ))
+          ) : (
+            <li className="px-4 py-2 text-gray-500">
+              Nenhuma opção encontrada.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 // Componente para renderizar a descrição com links clicáveis e quebras de linha
 const RenderDescription = ({ text }: { text: string }) => {
@@ -224,7 +317,6 @@ const OpenCallCard = ({
   );
 };
 
-// --- CORREÇÃO: O componente agora aceita a prop 'driver' vinda do App.tsx ---
 interface DriverInterfaceProps {
   driver: Driver | null;
 }
@@ -252,7 +344,12 @@ export const DriverInterface = ({
   >("availability");
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // Estados para o formulário de suporte
   const [location, setLocation] = useState("");
+  const [selectedHub, setSelectedHub] = useState("");
+  const [selectedVehicle, setSelectedVehicle] = useState("");
+
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -354,6 +451,20 @@ export const DriverInterface = ({
     newCall: Partial<Omit<SupportCall, "id" | "timestamp" | "solicitante">>
   ) => {
     if (!driver) return;
+
+    // Lógica para apagar chamado anterior se existir
+    const q = query(
+      collection(db, "supportCalls"),
+      where("solicitante.id", "==", driver.id),
+      where("status", "==", "ABERTO")
+    );
+    const existingCallsSnapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    existingCallsSnapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+
     const callToAdd = {
       ...newCall,
       timestamp: serverTimestamp(),
@@ -418,19 +529,17 @@ export const DriverInterface = ({
     setModalError("");
 
     const formData = new FormData(e.currentTarget);
-    const hub = formData.get("hub") as string;
     const packageCount = formData.get("packageCount") as string;
     const deliveryRegion = formData.get("deliveryRegion") as string;
-    const vehicleType = formData.get("vehicleType") as string;
     const isBulky = formData.get("isBulky") === "on";
 
     const bulkyText = isBulky ? "Sim" : "Não";
     const informalDescription = `
-**Hub de Origem:** ${hub}
+**Hub de Origem:** ${selectedHub}
 **Destino da Carga:** ${deliveryRegion}
 **Total de Pacotes:** ${packageCount}
 **Contém Volumosos:** ${bulkyText}
-**Veículo Necessário:** ${vehicleType}
+**Veículo Necessário:** ${selectedVehicle}
 **Localização do Motorista:** ${location}
     `;
 
@@ -457,9 +566,9 @@ export const DriverInterface = ({
           },
         },
       };
-      // CORREÇÃO: Adicionada a sua chave de API
-      const apiKey = "AIzaSyAXV3wmwo0eMgx3Q3CuE0o2WfROU50jaaU";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+      const apiKey = ""; // Sua chave de API aqui
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -481,8 +590,9 @@ export const DriverInterface = ({
         urgency: parsedJson.urgency as UrgencyLevel,
         location: location,
         status: "ABERTO" as const,
-        vehicleType: vehicleType,
+        vehicleType: selectedVehicle,
         isBulky: isBulky,
+        hub: selectedHub,
       };
       await addNewCall(newCallData);
       setIsSupportModalOpen(false);
@@ -956,22 +1066,12 @@ export const DriverInterface = ({
                 >
                   Selecione o seu Hub
                 </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    id="hub"
-                    name="hub"
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
-                    required
-                  >
-                    <option value="">Selecione...</option>
-                    {hubs.map((hub) => (
-                      <option key={hub} value={hub}>
-                        {hub}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableComboBox
+                  options={hubs}
+                  value={selectedHub}
+                  onChange={setSelectedHub}
+                  placeholder="Digite ou selecione um hub..."
+                />
               </div>
               <div>
                 <label
@@ -1053,21 +1153,12 @@ export const DriverInterface = ({
                 >
                   Tipo de Veículo Necessário
                 </label>
-                <div className="relative">
-                  <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    id="vehicleType"
-                    name="vehicleType"
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
-                    required
-                  >
-                    <option value="">Selecione o veículo...</option>
-                    <option value="moto">Moto</option>
-                    <option value="carro passeio">Carro Passeio</option>
-                    <option value="carro utilitario">Carro Utilitário</option>
-                    <option value="van">Van</option>
-                  </select>
-                </div>
+                <SearchableComboBox
+                  options={vehicleTypes}
+                  value={selectedVehicle}
+                  onChange={setSelectedVehicle}
+                  placeholder="Digite ou selecione um veículo..."
+                />
               </div>
               <div className="flex items-center space-x-2">
                 <input

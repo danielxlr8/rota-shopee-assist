@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -8,8 +14,12 @@ import {
   Trash2,
   RotateCcw,
   MapPin,
+  ArrowRight,
+  ArrowLeft,
+  X,
+  Search,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -21,30 +31,121 @@ import {
   DriverInfoModal,
 } from "./UI";
 
+// --- Componente de Busca Reutilizável (ComboBox) ---
+const SearchableComboBox = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filteredOptions = options.filter((option) =>
+    option.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [wrapperRef]);
+
+  const handleSelect = (option: string) => {
+    onChange(option);
+    setSearchTerm(option);
+    setIsOpen(false);
+  };
+
+  const displayValue = isOpen ? searchTerm : value;
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div className="relative">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          size={18}
+        />
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={displayValue}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            onChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+      {isOpen && (
+        <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option, index) => (
+              <li
+                key={index}
+                onClick={() => handleSelect(option)}
+                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+              >
+                {option}
+              </li>
+            ))
+          ) : (
+            <li className="px-4 py-2 text-gray-500">
+              Nenhuma opção encontrada.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 // --- COMPONENTES AUXILIARES ---
 
+// Modal de Confirmação Reutilizável
 const ConfirmationModal = ({
   isOpen,
   onClose,
   onConfirm,
-  call,
+  title,
+  children,
+  confirmText,
+  confirmColor = "bg-red-600",
 }: {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  call: SupportCall | null;
+  title: string;
+  children: React.ReactNode;
+  confirmText: string;
+  confirmColor?: string;
 }) => {
-  if (!isOpen || !call) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold text-gray-800">Confirmar Exclusão</h2>
-        <p className="text-gray-600 my-4">
-          Tem certeza de que deseja excluir a solicitação de{" "}
-          <strong>{call.solicitante.name}</strong>? Esta ação pode ser
-          revertida.
-        </p>
+        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+        <div className="text-gray-600 my-4">{children}</div>
         <div className="flex justify-end gap-4">
           <button
             onClick={onClose}
@@ -54,10 +155,113 @@ const ConfirmationModal = ({
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+            className={`px-4 py-2 text-white font-semibold rounded-lg transition-colors ${confirmColor} hover:opacity-90`}
           >
-            Excluir
+            {confirmText}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Modal para Detalhes e Ações do Chamado
+const CallDetailsModal = ({
+  call,
+  onClose,
+  onUpdateStatus,
+}: {
+  call: SupportCall | null;
+  onClose: () => void;
+  onUpdateStatus: (
+    id: string,
+    updates: Partial<Omit<SupportCall, "id">>
+  ) => void;
+}) => {
+  if (!call) return null;
+
+  const getStatusColor = (status: SupportCall["status"]) => {
+    switch (status) {
+      case "ABERTO":
+        return "text-yellow-600";
+      case "EM ANDAMENTO":
+        return "text-blue-600";
+      case "CONCLUIDO":
+        return "text-green-600";
+      default:
+        return "text-gray-600";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
+        >
+          <X size={24} />
+        </button>
+        <h2 className="text-xl font-bold text-gray-800 mb-4">
+          Detalhes do Chamado
+        </h2>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <AvatarComponent user={call.solicitante} />
+            <div>
+              <p className="font-bold">{call.solicitante.name}</p>
+              <p className="text-sm text-gray-500">Solicitante</p>
+            </div>
+          </div>
+          <p className={`font-bold text-sm ${getStatusColor(call.status)}`}>
+            {call.status.replace("_", " ")}
+          </p>
+          <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
+            {call.description}
+          </p>
+        </div>
+
+        <div className="mt-6 pt-4 border-t flex justify-between items-center">
+          <p className="text-sm text-gray-500">Mover para:</p>
+          <div className="flex gap-2">
+            {call.status === "EM ANDAMENTO" && (
+              <button
+                onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                <ArrowLeft size={16} /> Aberto
+              </button>
+            )}
+            {call.status === "CONCLUIDO" && (
+              <button
+                onClick={() =>
+                  onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
+                }
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                <ArrowLeft size={16} /> Em Andamento
+              </button>
+            )}
+            {call.status === "ABERTO" && (
+              <button
+                onClick={() =>
+                  onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
+                }
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Em Andamento <ArrowRight size={16} />
+              </button>
+            )}
+            {call.status === "EM ANDAMENTO" && (
+              <button
+                onClick={() => onUpdateStatus(call.id, { status: "CONCLUIDO" })}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+              >
+                Concluído <ArrowRight size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -67,27 +271,29 @@ const ConfirmationModal = ({
 const CallCard = ({
   call,
   onDelete,
+  onClick,
 }: {
   call: SupportCall;
   onDelete: (call: SupportCall) => void;
+  onClick: (call: SupportCall) => void;
 }) => {
   const formatTimestamp = (timestamp: any): string => {
     if (!timestamp) return "Horário indisponível";
     let date;
-    if (timestamp instanceof Timestamp) {
-      date = timestamp.toDate();
-    } else if (typeof timestamp === "object" && timestamp.seconds) {
+    if (timestamp instanceof Timestamp) date = timestamp.toDate();
+    else if (typeof timestamp === "object" && timestamp.seconds)
       date = new Timestamp(timestamp.seconds, timestamp.nanoseconds).toDate();
-    } else {
-      date = new Date(timestamp);
-    }
+    else date = new Date(timestamp);
     if (isNaN(date.getTime())) return "Data inválida";
     return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
   };
   const timeAgo = formatTimestamp(call.timestamp);
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3">
+    <div
+      className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3 hover:shadow-lg transition-shadow cursor-pointer"
+      onClick={() => onClick(call)}
+    >
       <div className="flex justify-between items-start">
         <div className="flex items-center space-x-3">
           <AvatarComponent user={call.solicitante} />
@@ -95,7 +301,10 @@ const CallCard = ({
             <div className="flex items-center gap-2">
               <p className="font-bold text-gray-800">{call.solicitante.name}</p>
               <button
-                onClick={() => onDelete(call)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(call);
+                }}
                 className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600 transition-colors"
                 title="Excluir Solicitação"
               >
@@ -125,8 +334,6 @@ const CallCard = ({
 };
 
 // --- Componentes para Layout Redimensionável ---
-
-// ALTERAÇÃO: Divisor com novo estilo e ícone SVG personalizado
 const ResizableHandle = ({
   onMouseDown,
   isResizing,
@@ -135,7 +342,7 @@ const ResizableHandle = ({
   isResizing: boolean;
 }) => (
   <div
-    className="w-2 h-full cursor-col-resize flex items-center justify-center group"
+    className="w-2 h-full cursor-ew-resize flex items-center justify-center group"
     onMouseDown={onMouseDown}
   >
     <div
@@ -149,14 +356,16 @@ const ResizableHandle = ({
 const ResizablePanel = ({
   children,
   width,
+  className,
 }: {
   children: React.ReactNode;
   width: number;
+  className?: string;
 }) => {
   return (
     <div
       style={{ flex: `0 0 ${width}px` }}
-      className="h-full overflow-hidden flex flex-col"
+      className={`h-full overflow-hidden flex flex-col rounded-lg p-2 ${className}`}
     >
       {children}
     </div>
@@ -170,6 +379,8 @@ interface AdminDashboardProps {
   drivers: Driver[];
   updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
   onDeleteCall: (id: string) => void;
+  onDeletePermanently: (id: string) => void;
+  onDeleteAllExcluded: () => void;
 }
 
 export const AdminDashboard = ({
@@ -177,6 +388,8 @@ export const AdminDashboard = ({
   drivers,
   updateCall,
   onDeleteCall,
+  onDeletePermanently,
+  onDeleteAllExcluded,
 }: AdminDashboardProps) => {
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
@@ -185,10 +398,13 @@ export const AdminDashboard = ({
     "kanban" | "approvals" | "excluded"
   >("kanban");
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
-  const [callToDelete, setCallToDelete] = useState<SupportCall | null>(null);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
+  const [confirmationType, setConfirmationType] = useState<
+    "soft-delete" | "permanent-delete" | "clear-all" | null
+  >(null);
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
+  const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
 
   const [columnWidths, setColumnWidths] = useState([350, 350, 350]);
   const resizingIndexRef = useRef<number | null>(null);
@@ -200,7 +416,7 @@ export const AdminDashboard = ({
       resizingIndexRef.current = index;
       startCursorXRef.current = event.clientX;
       startWidthsRef.current = columnWidths;
-      document.body.style.cursor = "col-resize";
+      document.body.style.cursor = "ew-resize";
       document.body.style.userSelect = "none";
     },
     [columnWidths]
@@ -209,20 +425,15 @@ export const AdminDashboard = ({
   useEffect(() => {
     const onMouseMove = (event: MouseEvent) => {
       if (resizingIndexRef.current === null) return;
-
       const delta = event.clientX - startCursorXRef.current;
       const index = resizingIndexRef.current;
-
       const newWidths = [...startWidthsRef.current];
       const minWidth = 280;
       const maxWidth = 600;
-
       const currentWidth = startWidthsRef.current[index];
       const nextWidth = startWidthsRef.current[index + 1];
-
       const newCurrentWidth = currentWidth + delta;
       const newNextWidth = nextWidth - delta;
-
       if (
         newCurrentWidth >= minWidth &&
         newCurrentWidth <= maxWidth &&
@@ -234,16 +445,13 @@ export const AdminDashboard = ({
         setColumnWidths(newWidths);
       }
     };
-
     const onMouseUp = () => {
       resizingIndexRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
@@ -252,30 +460,42 @@ export const AdminDashboard = ({
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
-    if (driver && driver.phone) {
+    if (driver?.phone) {
       const message = encodeURIComponent(
         `Olá ${driver.name}, temos um chamado de apoio para você.`
       );
-      const whatsappUrl = `https://wa.me/55${driver.phone}?text=${message}`;
-      window.open(whatsappUrl, "_blank");
-    } else {
-      console.error(
-        "Não foi possível acionar o motorista. Telefone não encontrado."
-      );
+      window.open(`https://wa.me/55${driver.phone}?text=${message}`, "_blank");
     }
   };
 
   const handleDeleteClick = (call: SupportCall) => {
-    setCallToDelete(call);
-    setIsDeleteModalOpen(true);
+    setCallToConfirm(call);
+    setConfirmationType("soft-delete");
   };
 
-  const confirmDelete = () => {
-    if (callToDelete) {
-      onDeleteCall(callToDelete.id);
+  const handlePermanentDeleteClick = (call: SupportCall) => {
+    setCallToConfirm(call);
+    setConfirmationType("permanent-delete");
+  };
+
+  const handleClearAllClick = () => {
+    setConfirmationType("clear-all");
+  };
+
+  const confirmAction = () => {
+    if (confirmationType === "soft-delete" && callToConfirm) {
+      onDeleteCall(callToConfirm.id);
+    } else if (confirmationType === "permanent-delete" && callToConfirm) {
+      onDeletePermanently(callToConfirm.id);
+    } else if (confirmationType === "clear-all") {
+      onDeleteAllExcluded();
     }
-    setIsDeleteModalOpen(false);
-    setCallToDelete(null);
+    closeModal();
+  };
+
+  const closeModal = () => {
+    setCallToConfirm(null);
+    setConfirmationType(null);
   };
 
   const handleRestore = (callId: string) => {
@@ -329,6 +549,17 @@ export const AdminDashboard = ({
           (c.status === "EM ANDAMENTO" || c.status === "AGUARDANDO_APROVACAO")
       ) || null
     : null;
+
+  // Opções para os filtros de busca
+  const excludedCallNames = useMemo(
+    () => [...new Set(excludedCalls.map((c) => c.solicitante.name))],
+    [excludedCalls]
+  );
+  const excludedCallHubs = useMemo(
+    () =>
+      [...new Set(excludedCalls.map((c) => c.hub).filter(Boolean))] as string[],
+    [excludedCalls]
+  );
 
   return (
     <div className="bg-orange-50 min-h-screen font-sans">
@@ -418,7 +649,10 @@ export const AdminDashboard = ({
           <main className="grid grid-cols-1 xl:grid-cols-4 gap-6">
             <div className="xl:col-span-3 overflow-x-auto">
               <div className="flex w-full h-full">
-                <ResizablePanel width={columnWidths[0]}>
+                <ResizablePanel
+                  width={columnWidths[0]}
+                  className="bg-yellow-50"
+                >
                   <KanbanColumn
                     title="Chamados Abertos"
                     count={filteredOpenCalls.length}
@@ -430,17 +664,16 @@ export const AdminDashboard = ({
                         key={call.id}
                         call={call}
                         onDelete={handleDeleteClick}
+                        onClick={setSelectedCall}
                       />
                     ))}
                   </KanbanColumn>
                 </ResizablePanel>
-
                 <ResizableHandle
                   onMouseDown={(e) => onMouseDown(0, e)}
                   isResizing={resizingIndexRef.current === 0}
                 />
-
-                <ResizablePanel width={columnWidths[1]}>
+                <ResizablePanel width={columnWidths[1]} className="bg-blue-50">
                   <KanbanColumn
                     title="Em Andamento"
                     count={inProgressCalls.length}
@@ -451,17 +684,16 @@ export const AdminDashboard = ({
                         key={call.id}
                         call={call}
                         onDelete={handleDeleteClick}
+                        onClick={setSelectedCall}
                       />
                     ))}
                   </KanbanColumn>
                 </ResizablePanel>
-
                 <ResizableHandle
                   onMouseDown={(e) => onMouseDown(1, e)}
                   isResizing={resizingIndexRef.current === 1}
                 />
-
-                <ResizablePanel width={columnWidths[2]}>
+                <ResizablePanel width={columnWidths[2]} className="bg-green-50">
                   <KanbanColumn
                     title="Concluídos"
                     count={concludedCalls.length}
@@ -472,28 +704,27 @@ export const AdminDashboard = ({
                         key={call.id}
                         call={call}
                         onDelete={handleDeleteClick}
+                        onClick={setSelectedCall}
                       />
                     ))}
                   </KanbanColumn>
                 </ResizablePanel>
               </div>
             </div>
-            <div className="xl:col-span-1">
+            <div className="xl:col-span-1 bg-purple-50 rounded-lg p-2">
               <KanbanColumn
                 title="Motoristas Disponíveis"
                 count={availableDrivers.length}
                 colorClass="#8B5CF6"
               >
-                {drivers
-                  .filter((d) => d.status === "DISPONIVEL")
-                  .map((driver) => (
-                    <DriverCard
-                      key={driver.id}
-                      driver={driver}
-                      onAction={handleAcionarDriver}
-                      onInfoClick={() => setInfoModalDriver(driver)}
-                    />
-                  ))}
+                {availableDrivers.map((driver) => (
+                  <DriverCard
+                    key={driver.id}
+                    driver={driver}
+                    onAction={handleAcionarDriver}
+                    onInfoClick={() => setInfoModalDriver(driver)}
+                  />
+                ))}
               </KanbanColumn>
             </div>
           </main>
@@ -502,55 +733,84 @@ export const AdminDashboard = ({
 
       {adminView === "excluded" && (
         <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Solicitações Excluídas
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">
+              Solicitações Excluídas
+            </h2>
+            {excludedCalls.length > 0 && (
+              <button
+                onClick={handleClearAllClick}
+                className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                <Trash2 size={14} /> Limpar Tudo
+              </button>
+            )}
+          </div>
           <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <input
-              type="text"
-              placeholder="Filtrar por nome..."
+            <SearchableComboBox
+              options={excludedCallNames}
               value={excludedNameFilter}
-              onChange={(e) => setExcludedNameFilter(e.target.value)}
-              className="p-2 border rounded-lg w-full"
+              onChange={setExcludedNameFilter}
+              placeholder="Filtrar por nome..."
             />
-            <input
-              type="text"
-              placeholder="Filtrar por hub..."
+            <SearchableComboBox
+              options={excludedCallHubs}
               value={excludedHubFilter}
-              onChange={(e) => setExcludedHubFilter(e.target.value)}
-              className="p-2 border rounded-lg w-full"
+              onChange={setExcludedHubFilter}
+              placeholder="Filtrar por hub..."
             />
           </div>
           <div className="space-y-4">
-            {excludedCalls
-              .filter((call) =>
-                call.solicitante.name
-                  .toLowerCase()
-                  .includes(excludedNameFilter.toLowerCase())
-              )
-              .filter(
-                (call) =>
-                  call.hub
-                    ?.toLowerCase()
-                    .includes(excludedHubFilter.toLowerCase()) ?? true
-              )
-              .map((call) => (
-                <div
-                  key={call.id}
-                  className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-bold">{call.solicitante.name}</p>
-                    <p className="text-sm text-gray-500">{call.description}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRestore(call.id)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+            {excludedCalls.length > 0 ? (
+              excludedCalls
+                .filter((call) =>
+                  call.solicitante.name.includes(excludedNameFilter)
+                )
+                .filter((call) =>
+                  excludedHubFilter ? call.hub === excludedHubFilter : true
+                )
+                .map((call) => (
+                  <div
+                    key={call.id}
+                    className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
                   >
-                    <RotateCcw size={14} /> Restaurar
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <p className="font-bold">{call.solicitante.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {call.description}
+                      </p>
+                      {call.deletedAt && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Excluído em:{" "}
+                          {format(
+                            call.deletedAt.toDate(),
+                            "dd/MM/yyyy 'às' HH:mm"
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRestore(call.id)}
+                        className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                      >
+                        <RotateCcw size={14} /> Restaurar
+                      </button>
+                      <button
+                        onClick={() => handlePermanentDeleteClick(call)}
+                        className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                        title="Excluir Permanentemente"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+            ) : (
+              <p className="text-center text-gray-500">
+                Não há solicitações excluídas.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -562,12 +822,60 @@ export const AdminDashboard = ({
           onClose={() => setInfoModalDriver(null)}
         />
       )}
-      <ConfirmationModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={confirmDelete}
-        call={callToDelete}
+
+      <CallDetailsModal
+        call={selectedCall}
+        onClose={() => setSelectedCall(null)}
+        onUpdateStatus={updateCall}
       />
+
+      <ConfirmationModal
+        isOpen={confirmationType === "soft-delete"}
+        onClose={closeModal}
+        onConfirm={confirmAction}
+        title="Confirmar Exclusão"
+        confirmText="Excluir"
+      >
+        <p>
+          Tem certeza de que deseja excluir a solicitação de{" "}
+          <strong>{callToConfirm?.solicitante.name}</strong>? Esta ação pode ser
+          revertida.
+        </p>
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={confirmationType === "permanent-delete"}
+        onClose={closeModal}
+        onConfirm={confirmAction}
+        title="Confirmar Exclusão Permanente"
+        confirmText="Excluir Permanentemente"
+        confirmColor="bg-red-800"
+      >
+        <p>
+          Tem certeza de que deseja excluir permanentemente a solicitação de{" "}
+          <strong>{callToConfirm?.solicitante.name}</strong>?
+        </p>
+        <p className="font-bold text-red-700 mt-2">
+          Esta ação não pode ser desfeita.
+        </p>
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={confirmationType === "clear-all"}
+        onClose={closeModal}
+        onConfirm={confirmAction}
+        title="Limpar Todas as Solicitações"
+        confirmText="Sim, Limpar Tudo"
+        confirmColor="bg-red-800"
+      >
+        <p>
+          Tem certeza de que deseja excluir permanentemente{" "}
+          <strong>todas</strong> as solicitações da lixeira?
+        </p>
+        <p className="font-bold text-red-700 mt-2">
+          Esta ação não pode ser desfeita.
+        </p>
+      </ConfirmationModal>
     </div>
   );
 };
