@@ -12,14 +12,14 @@ export type DriverStatus =
   | "OFFLINE"
   | "EM_ATENDIMENTO";
 
-// CORREÇÃO: Adicionados todos os status usados na aplicação, incluindo EXCLUIDO.
+// Define todos os status usados na aplicação.
 export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
   | "CONCLUIDO"
   | "AGUARDANDO_APROVACAO"
   | "APROVADO"
-  | "EXCLUIDO"; // <-- NOVO STATUS ADICIONADO
+  | "EXCLUIDO";
 
 // Define a estrutura para um chamado de suporte.
 export interface SupportCall {
@@ -39,7 +39,9 @@ export interface SupportCall {
   assignedTo?: string;
   vehicleType?: string;
   isBulky?: boolean;
-  hub?: string; // Adicionado para permitir a filtragem por hub
+  hub?: string;
+  // CORREÇÃO: Adicionada a propriedade opcional 'deletedAt' para corrigir o erro de tipo.
+  deletedAt?: Timestamp;
 }
 
 // Define a estrutura para um motorista.

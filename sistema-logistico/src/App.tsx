@@ -8,13 +8,29 @@ import {
   collection,
   onSnapshot,
   updateDoc,
+  deleteDoc,
+  query,
+  where,
+  getDocs,
+  writeBatch,
+  serverTimestamp,
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
-import type { SupportCall, Driver } from "./types/logistics";
+import type {
+  SupportCall as OriginalSupportCall,
+  Driver,
+} from "./types/logistics";
 
-// --- NOVO: Ícone de Logout ---
+// --- CORREÇÃO DE TIPO ---
+// Adicione a propriedade 'deletedAt' ao seu tipo SupportCall em 'src/types/logistics.ts'
+// para resolver o erro.
+export type SupportCall = OriginalSupportCall & {
+  deletedAt?: any; // Idealmente, o tipo seria Timestamp, mas 'any' evita erros
+};
+
+// --- Ícone de Logout ---
 const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -110,7 +126,6 @@ function App() {
     const callDocRef = doc(db, "supportCalls", id);
     try {
       await updateDoc(callDocRef, updates);
-      console.log(`Chamado ${id} atualizado com sucesso.`);
     } catch (error) {
       console.error("Erro ao atualizar chamado: ", error);
     }
@@ -118,7 +133,43 @@ function App() {
 
   // Função para "deletar" um chamado (soft delete)
   const handleDeleteCall = async (id: string) => {
-    await handleUpdateCall(id, { status: "EXCLUIDO" });
+    // Adiciona a data de exclusão ao mover para a lixeira
+    await handleUpdateCall(id, {
+      status: "EXCLUIDO",
+      deletedAt: serverTimestamp(),
+    });
+  };
+
+  // Função para excluir permanentemente um chamado
+  const handlePermanentDeleteCall = async (id: string) => {
+    const callDocRef = doc(db, "supportCalls", id);
+    try {
+      await deleteDoc(callDocRef);
+      console.log(`Chamado ${id} excluído permanentemente.`);
+    } catch (error) {
+      console.error("Erro ao excluir chamado permanentemente: ", error);
+    }
+  };
+
+  // Função para limpar todos os chamados excluídos
+  const handleDeleteAllExcluded = async () => {
+    const q = query(
+      collection(db, "supportCalls"),
+      where("status", "==", "EXCLUIDO")
+    );
+    const querySnapshot = await getDocs(q);
+
+    const batch = writeBatch(db);
+    querySnapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    try {
+      await batch.commit();
+      console.log("Todos os chamados excluídos foram limpos.");
+    } catch (error) {
+      console.error("Erro ao limpar chamados excluídos: ", error);
+    }
   };
 
   const renderContent = () => {
@@ -142,11 +193,12 @@ function App() {
             drivers={drivers}
             updateCall={handleUpdateCall}
             onDeleteCall={handleDeleteCall}
+            onDeletePermanently={handlePermanentDeleteCall}
+            onDeleteAllExcluded={handleDeleteAllExcluded}
           />
         );
       case "driver":
         const currentDriver = drivers.find((d) => d.id === user.uid);
-        // Passa o driver encontrado para a DriverInterface
         return <DriverInterface driver={currentDriver || null} />;
       default:
         return (
