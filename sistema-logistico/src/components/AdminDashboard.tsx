@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
+import React, { useState, useMemo, useRef } from "react";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -30,6 +24,12 @@ import {
   KanbanColumn,
   DriverInfoModal,
 } from "./UI";
+// IMPORTAÇÃO CORRIGIDA: Importando diretamente da biblioteca com os nomes corretos
+import {
+  Panel as ResizablePanel,
+  PanelGroup as ResizablePanelGroup,
+  PanelResizeHandle as ResizableHandle,
+} from "react-resizable-panels";
 
 // --- Componente de Busca Reutilizável (ComboBox) ---
 const SearchableComboBox = ({
@@ -51,7 +51,7 @@ const SearchableComboBox = ({
     option.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
         wrapperRef.current &&
@@ -333,45 +333,6 @@ const CallCard = ({
   );
 };
 
-// --- Componentes para Layout Redimensionável ---
-const ResizableHandle = ({
-  onMouseDown,
-  isResizing,
-}: {
-  onMouseDown: React.MouseEventHandler<HTMLDivElement>;
-  isResizing: boolean;
-}) => (
-  <div
-    className="w-2 h-full cursor-ew-resize flex items-center justify-center group"
-    onMouseDown={onMouseDown}
-  >
-    <div
-      className={`w-0.5 h-full transition-colors ${
-        isResizing ? "bg-orange-500" : "bg-gray-300 group-hover:bg-orange-400"
-      }`}
-    ></div>
-  </div>
-);
-
-const ResizablePanel = ({
-  children,
-  width,
-  className,
-}: {
-  children: React.ReactNode;
-  width: number;
-  className?: string;
-}) => {
-  return (
-    <div
-      style={{ flex: `0 0 ${width}px` }}
-      className={`h-full overflow-hidden flex flex-col rounded-lg p-2 ${className}`}
-    >
-      {children}
-    </div>
-  );
-};
-
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
 interface AdminDashboardProps {
@@ -405,58 +366,6 @@ export const AdminDashboard = ({
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
-
-  const [columnWidths, setColumnWidths] = useState([350, 350, 350]);
-  const resizingIndexRef = useRef<number | null>(null);
-  const startCursorXRef = useRef<number>(0);
-  const startWidthsRef = useRef<number[]>([]);
-
-  const onMouseDown = useCallback(
-    (index: number, event: React.MouseEvent) => {
-      resizingIndexRef.current = index;
-      startCursorXRef.current = event.clientX;
-      startWidthsRef.current = columnWidths;
-      document.body.style.cursor = "ew-resize";
-      document.body.style.userSelect = "none";
-    },
-    [columnWidths]
-  );
-
-  useEffect(() => {
-    const onMouseMove = (event: MouseEvent) => {
-      if (resizingIndexRef.current === null) return;
-      const delta = event.clientX - startCursorXRef.current;
-      const index = resizingIndexRef.current;
-      const newWidths = [...startWidthsRef.current];
-      const minWidth = 280;
-      const maxWidth = 600;
-      const currentWidth = startWidthsRef.current[index];
-      const nextWidth = startWidthsRef.current[index + 1];
-      const newCurrentWidth = currentWidth + delta;
-      const newNextWidth = nextWidth - delta;
-      if (
-        newCurrentWidth >= minWidth &&
-        newCurrentWidth <= maxWidth &&
-        newNextWidth >= minWidth &&
-        newNextWidth <= maxWidth
-      ) {
-        newWidths[index] = newCurrentWidth;
-        newWidths[index + 1] = newNextWidth;
-        setColumnWidths(newWidths);
-      }
-    };
-    const onMouseUp = () => {
-      resizingIndexRef.current = null;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, []);
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
@@ -550,7 +459,6 @@ export const AdminDashboard = ({
       ) || null
     : null;
 
-  // Opções para os filtros de busca
   const excludedCallNames = useMemo(
     () => [...new Set(excludedCalls.map((c) => c.solicitante.name))],
     [excludedCalls]
@@ -562,7 +470,7 @@ export const AdminDashboard = ({
   );
 
   return (
-    <div className="bg-orange-50 min-h-screen font-sans">
+    <div className="bg-orange-50 min-h-screen font-sans flex flex-col">
       <header className="p-6">
         <div className="flex flex-wrap justify-between items-center gap-4">
           <div>
@@ -614,7 +522,7 @@ export const AdminDashboard = ({
       </nav>
 
       {adminView === "kanban" && (
-        <div className="p-6 space-y-6">
+        <div className="p-6 flex-grow flex flex-col space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <SummaryCard
               title="Chamados Abertos"
@@ -646,88 +554,93 @@ export const AdminDashboard = ({
             />
           </div>
 
-          <main className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            <div className="xl:col-span-3 overflow-x-auto">
-              <div className="flex w-full h-full">
-                <ResizablePanel
-                  width={columnWidths[0]}
-                  className="bg-yellow-50"
+          <ResizablePanelGroup
+            direction="horizontal"
+            className="flex-grow rounded-lg border"
+          >
+            <ResizablePanel defaultSize={25} minSize={15}>
+              <div className="bg-yellow-50 h-full rounded-lg p-2">
+                <KanbanColumn
+                  title="Chamados Abertos"
+                  count={filteredOpenCalls.length}
+                  colorClass="#F59E0B"
+                  headerControls={filterControls}
                 >
-                  <KanbanColumn
-                    title="Chamados Abertos"
-                    count={filteredOpenCalls.length}
-                    colorClass="#F59E0B"
-                    headerControls={filterControls}
-                  >
-                    {filteredOpenCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-                <ResizableHandle
-                  onMouseDown={(e) => onMouseDown(0, e)}
-                  isResizing={resizingIndexRef.current === 0}
-                />
-                <ResizablePanel width={columnWidths[1]} className="bg-blue-50">
-                  <KanbanColumn
-                    title="Em Andamento"
-                    count={inProgressCalls.length}
-                    colorClass="#3B82F6"
-                  >
-                    {inProgressCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-                <ResizableHandle
-                  onMouseDown={(e) => onMouseDown(1, e)}
-                  isResizing={resizingIndexRef.current === 1}
-                />
-                <ResizablePanel width={columnWidths[2]} className="bg-green-50">
-                  <KanbanColumn
-                    title="Concluídos"
-                    count={concludedCalls.length}
-                    colorClass="#10B981"
-                  >
-                    {concludedCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
+                  {filteredOpenCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                      onClick={setSelectedCall}
+                    />
+                  ))}
+                </KanbanColumn>
               </div>
-            </div>
-            <div className="xl:col-span-1 bg-purple-50 rounded-lg p-2">
-              <KanbanColumn
-                title="Motoristas Disponíveis"
-                count={availableDrivers.length}
-                colorClass="#8B5CF6"
-              >
-                {availableDrivers.map((driver) => (
-                  <DriverCard
-                    key={driver.id}
-                    driver={driver}
-                    onAction={handleAcionarDriver}
-                    onInfoClick={() => setInfoModalDriver(driver)}
-                  />
-                ))}
-              </KanbanColumn>
-            </div>
-          </main>
+            </ResizablePanel>
+            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
+              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
+            </ResizableHandle>
+            <ResizablePanel defaultSize={25} minSize={15}>
+              <div className="bg-blue-50 h-full rounded-lg p-2">
+                <KanbanColumn
+                  title="Em Andamento"
+                  count={inProgressCalls.length}
+                  colorClass="#3B82F6"
+                >
+                  {inProgressCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                      onClick={setSelectedCall}
+                    />
+                  ))}
+                </KanbanColumn>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
+              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
+            </ResizableHandle>
+            <ResizablePanel defaultSize={25} minSize={15}>
+              <div className="bg-green-50 h-full rounded-lg p-2">
+                <KanbanColumn
+                  title="Concluídos"
+                  count={concludedCalls.length}
+                  colorClass="#10B981"
+                >
+                  {concludedCalls.map((call) => (
+                    <CallCard
+                      key={call.id}
+                      call={call}
+                      onDelete={handleDeleteClick}
+                      onClick={setSelectedCall}
+                    />
+                  ))}
+                </KanbanColumn>
+              </div>
+            </ResizablePanel>
+            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
+              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
+            </ResizableHandle>
+            <ResizablePanel defaultSize={25} minSize={15}>
+              <div className="bg-purple-50 h-full rounded-lg p-2">
+                <KanbanColumn
+                  title="Motoristas Disponíveis"
+                  count={availableDrivers.length}
+                  colorClass="#8B5CF6"
+                >
+                  {availableDrivers.map((driver) => (
+                    <DriverCard
+                      key={driver.id}
+                      driver={driver}
+                      onAction={handleAcionarDriver}
+                      onInfoClick={() => setInfoModalDriver(driver)}
+                    />
+                  ))}
+                </KanbanColumn>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       )}
 

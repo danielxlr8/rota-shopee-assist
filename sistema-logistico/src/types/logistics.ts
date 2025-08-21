@@ -54,4 +54,6 @@ export interface Driver {
   status: DriverStatus;
   phone: string;
   region: string;
+  hub?: string; // CORREÇÃO: Campo adicionado
+  vehicleType?: string; // CORREÇÃO: Campo adicionado
 }

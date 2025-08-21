@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type { User as FirebaseUser } from "firebase/auth";
@@ -22,12 +22,12 @@ import type {
   SupportCall as OriginalSupportCall,
   Driver,
 } from "./types/logistics";
+import { Toaster } from "@/components/UI/toaster";
+import { useToast } from "@/hooks/use-toast";
 
 // --- CORREÇÃO DE TIPO ---
-// Adicione a propriedade 'deletedAt' ao seu tipo SupportCall em 'src/types/logistics.ts'
-// para resolver o erro.
 export type SupportCall = OriginalSupportCall & {
-  deletedAt?: any; // Idealmente, o tipo seria Timestamp, mas 'any' evita erros
+  deletedAt?: any;
 };
 
 // --- Ícone de Logout ---
@@ -66,6 +66,9 @@ function App() {
   // Estados para os dados da aplicação
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const { toast } = useToast();
+  const previousCallsRef = useRef<SupportCall[]>([]);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   // Efeito para observar o estado de autenticação do Firebase
   useEffect(() => {
@@ -93,7 +96,7 @@ function App() {
 
   // Efeito para buscar dados em tempo real (chamados e motoristas)
   useEffect(() => {
-    if (user) {
+    if (user && userData) {
       const callsCollection = collection(db, "supportCalls");
       const driversCollection = collection(db, "drivers");
 
@@ -101,7 +104,42 @@ function App() {
         const callsData = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
         );
+
+        // Lógica de Notificação
+        if (previousCallsRef.current.length > 0) {
+          const previousOpenCallsIds = new Set(
+            previousCallsRef.current
+              .filter((c) => c.status === "ABERTO")
+              .map((c) => c.id)
+          );
+
+          const newOpenCalls = callsData.filter(
+            (call) =>
+              call.status === "ABERTO" && !previousOpenCallsIds.has(call.id)
+          );
+
+          newOpenCalls.forEach((newCall) => {
+            if (userData.role === "admin") {
+              audioRef.current?.play();
+              toast({
+                title: "Novo Chamado Aberto!",
+                description: `${newCall.solicitante.name} precisa de apoio.`,
+              });
+            } else if (userData.role === "driver") {
+              const currentDriver = drivers.find((d) => d.id === user.uid);
+              if (currentDriver?.status === "DISPONIVEL") {
+                audioRef.current?.play();
+                toast({
+                  title: "Novo Apoio Disponível!",
+                  description: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
+                });
+              }
+            }
+          });
+        }
+
         setCalls(callsData);
+        previousCallsRef.current = callsData;
       });
 
       const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
@@ -116,7 +154,7 @@ function App() {
         unsubDrivers();
       };
     }
-  }, [user]);
+  }, [user, userData, drivers, toast]);
 
   // Função para atualizar um chamado no Firebase
   const handleUpdateCall = async (
@@ -133,7 +171,6 @@ function App() {
 
   // Função para "deletar" um chamado (soft delete)
   const handleDeleteCall = async (id: string) => {
-    // Adiciona a data de exclusão ao mover para a lixeira
     await handleUpdateCall(id, {
       status: "EXCLUIDO",
       deletedAt: serverTimestamp(),
@@ -198,8 +235,7 @@ function App() {
           />
         );
       case "driver":
-        const currentDriver = drivers.find((d) => d.id === user.uid);
-        return <DriverInterface driver={currentDriver || null} />;
+        return <DriverInterface />;
       default:
         return (
           <div className="flex items-center justify-center min-h-screen">
@@ -227,6 +263,8 @@ function App() {
         </header>
       )}
       <main>{renderContent()}</main>
+      <Toaster />
+      <audio ref={audioRef} src="/notification.mp3" preload="auto"></audio>
     </div>
   );
 }
