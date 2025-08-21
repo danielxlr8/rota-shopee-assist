@@ -15,12 +15,15 @@ import {
   Truck,
   Phone,
   XCircle,
-  Camera,
   User,
-  Search, // Importar o ícone de busca
+  LogOut,
+  Eye,
+  EyeOff,
+  Search,
+  Camera, // Ícone para upload de foto
 } from "lucide-react";
 // Importações do Firebase
-import { auth, db, storage } from "../firebase";
+import { auth, db } from "../firebase";
 import {
   doc,
   onSnapshot,
@@ -32,11 +35,14 @@ import {
   where,
   or,
   Timestamp,
-  getDocs,
-  writeBatch,
+  deleteField,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { updatePassword } from "firebase/auth";
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+} from "firebase/storage";
 
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
@@ -45,120 +51,101 @@ const hubs = [
   "LM Hub_PR_Cascavel",
 ];
 
-const vehicleTypes = ["Moto", "Carro Passeio", "Carro Utilitário", "Van"];
+const vehicleTypes = ["moto", "carro passeio", "carro utilitario", "van"];
 
-// --- NOVO: Componente de Busca Reutilizável (ComboBox) ---
-const SearchableComboBox = ({
-  options,
-  value,
-  onChange,
-  placeholder,
+// Card de Cabeçalho do Perfil
+const ProfileHeaderCard = ({
+  driver,
+  onEditClick,
+  isUploading,
+  activeCall,
 }: {
-  options: string[];
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
+  driver: Driver | null;
+  onEditClick: () => void;
+  isUploading: boolean;
+  activeCall: SupportCall | null;
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  if (!driver) return null;
 
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [wrapperRef]);
-
-  const handleSelect = (option: string) => {
-    onChange(option);
-    setSearchTerm(option);
-    setIsOpen(false);
+  const formatPhoneNumberSimple = (phone: string) => {
+    if (!phone) return "";
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 11) return phone;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
-  const displayValue = isOpen ? searchTerm : value;
+  const getStatusInfo = () => {
+    // Caso especial: Motorista solicitou apoio e está aguardando
+    if (
+      activeCall &&
+      activeCall.solicitante.id === driver.id &&
+      activeCall.status === "ABERTO"
+    ) {
+      return { text: "Aguardando Apoio", color: "bg-orange-500" };
+    }
+
+    switch (driver.status) {
+      case "DISPONIVEL":
+        return { text: "Disponível para Apoio", color: "bg-green-500" };
+      case "INDISPONIVEL":
+        return { text: "Indisponível", color: "bg-red-500" };
+      case "EM_ROTA":
+        return { text: "Prestando Apoio", color: "bg-blue-500" };
+      default:
+        return { text: "Offline", color: "bg-gray-500" };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          size={18}
-        />
-        <input
-          type="text"
-          placeholder={placeholder}
-          value={displayValue}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            onChange(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-          }}
-          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-        />
-      </div>
-      {isOpen && (
-        <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, index) => (
-              <li
-                key={index}
-                onClick={() => handleSelect(option)}
-                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+    <div className="relative mb-12">
+      <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-lg shadow-lg p-6 pt-16 text-white text-center">
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 group">
+          <div className="relative w-24 h-24 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center overflow-hidden">
+            {driver.avatar ? (
+              <img
+                src={driver.avatar}
+                alt={driver.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-3xl font-bold text-orange-600">
+                {driver.initials}
+              </span>
+            )}
+            {isUploading ? (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <LoaderCircle className="text-white animate-spin" />
+              </div>
+            ) : (
+              <button
+                onClick={onEditClick}
+                className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
               >
-                {option}
-              </li>
-            ))
-          ) : (
-            <li className="px-4 py-2 text-gray-500">
-              Nenhuma opção encontrada.
-            </li>
-          )}
-        </ul>
-      )}
+                <Camera className="text-white" size={32} />
+              </button>
+            )}
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold">{driver.name}</h2>
+        <div className="text-sm opacity-90 mt-2 space-y-1">
+          <p className="flex items-center justify-center gap-2">
+            <Building size={14} /> {driver.hub || "Hub não definido"}
+          </p>
+          <p className="flex items-center justify-center gap-2">
+            <Phone size={14} />{" "}
+            {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
+          </p>
+        </div>
+        <div className="flex items-center justify-center mt-3">
+          <span
+            className={`w-3 h-3 rounded-full ${statusInfo.color} mr-2`}
+          ></span>
+          <p className="text-sm font-bold">{statusInfo.text}</p>
+        </div>
+      </div>
     </div>
-  );
-};
-
-// Componente para renderizar a descrição com links clicáveis e quebras de linha
-const RenderDescription = ({ text }: { text: string }) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-
-  return (
-    <p className="text-sm text-gray-500" style={{ whiteSpace: "pre-wrap" }}>
-      {parts.map((part, index) => {
-        if (part.match(urlRegex)) {
-          return (
-            <a
-              key={index}
-              href={part}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {part}
-            </a>
-          );
-        }
-        return part;
-      })}
-    </p>
   );
 };
 
@@ -168,11 +155,13 @@ const DriverCallHistoryCard = ({
   currentDriver,
   allDrivers,
   onCancelSupport,
+  onDeleteSupportRequest, // Nova propriedade
 }: {
   call: SupportCall;
   currentDriver: Driver;
   allDrivers: Driver[];
   onCancelSupport: (callId: string) => void;
+  onDeleteSupportRequest: (callId: string) => void; // Nova propriedade
 }) => {
   const isRequester = call.solicitante.id === currentDriver.id;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
@@ -225,7 +214,7 @@ const DriverCallHistoryCard = ({
           {icon}
           <div>
             <p className="font-bold text-gray-800">{title}</p>
-            <RenderDescription text={call.description} />
+            <p className="text-sm text-gray-500">{call.description}</p>
           </div>
         </div>
         <div
@@ -236,7 +225,8 @@ const DriverCallHistoryCard = ({
       </div>
       {(call.status === "EM ANDAMENTO" ||
         call.status === "AGUARDANDO_APROVACAO" ||
-        call.status === "APROVADO") && (
+        call.status === "APROVADO" ||
+        call.status === "ABERTO") && (
         <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
           {otherParty && (
             <button
@@ -254,6 +244,16 @@ const DriverCallHistoryCard = ({
               <XCircle size={14} /> Cancelar Apoio
             </button>
           )}
+          {/* BOTÃO DE CANCELAMENTO PARA O SOLICITANTE */}
+          {isRequester &&
+            (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
+              <button
+                onClick={() => onDeleteSupportRequest(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+              >
+                <XCircle size={14} /> Cancelar Solicitação
+              </button>
+            )}
         </div>
       )}
     </div>
@@ -291,7 +291,7 @@ const OpenCallCard = ({
           <p className="font-bold text-gray-800">
             Apoio para {call.solicitante.name}
           </p>
-          <RenderDescription text={call.description} />
+          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
         </div>
         <div className="flex items-center gap-2 self-end sm:self-center">
           <button
@@ -317,39 +317,19 @@ const OpenCallCard = ({
   );
 };
 
-interface DriverInterfaceProps {
-  driver: Driver | null;
-}
-
-export const DriverInterface = ({
-  driver: initialDriver,
-}: DriverInterfaceProps) => {
-  const [driver, setDriver] = useState<Driver | null>(initialDriver);
+export const DriverInterface = () => {
+  const [driver, setDriver] = useState<Driver | null>(null);
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const [profileName, setProfileName] = useState("");
-  const [profilePhone, setProfilePhone] = useState("");
-
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const [activeTab, setActiveTab] = useState<
     "availability" | "support" | "activeCalls" | "profile"
   >("availability");
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  // Estados para o formulário de suporte
   const [location, setLocation] = useState("");
-  const [selectedHub, setSelectedHub] = useState("");
-  const [selectedVehicle, setSelectedVehicle] = useState("");
-
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -357,16 +337,23 @@ export const DriverInterface = ({
     "all" | "requester" | "provider" | "inProgress"
   >("all");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const userId = auth.currentUser?.uid;
+  // States para a aba de perfil
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [hub, setHub] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    setDriver(initialDriver);
-    if (initialDriver) {
-      setProfileName(initialDriver.name);
-      setProfilePhone(initialDriver.phone || "");
-    }
-  }, [initialDriver]);
+  // States para a pesquisa de Hub e upload
+  const [hubSearch, setHubSearch] = useState("");
+  const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const userId = auth.currentUser?.uid;
 
   useEffect(() => {
     if (!userId) {
@@ -374,7 +361,21 @@ export const DriverInterface = ({
       return;
     }
 
-    setLoading(true);
+    const driverDocRef = doc(db, "drivers", userId);
+    const unsubscribeDriver = onSnapshot(driverDocRef, (doc) => {
+      if (doc.exists()) {
+        const driverData = { id: doc.id, ...doc.data() } as Driver;
+        setDriver(driverData);
+        setName(driverData.name);
+        setPhone(driverData.phone || "");
+        setHub(driverData.hub || "");
+        setHubSearch(driverData.hub || "");
+        setVehicleType(driverData.vehicleType || "");
+      } else {
+        console.log("Documento do motorista não encontrado!");
+      }
+      setLoading(false);
+    });
 
     const allDriversQuery = query(collection(db, "drivers"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
@@ -399,11 +400,11 @@ export const DriverInterface = ({
         const timeA =
           a.timestamp instanceof Timestamp
             ? a.timestamp.toMillis()
-            : new Date(a.timestamp as string).getTime();
+            : (a.timestamp as any)?.seconds * 1000 || 0;
         const timeB =
           b.timestamp instanceof Timestamp
             ? b.timestamp.toMillis()
-            : new Date(b.timestamp as string).getTime();
+            : (b.timestamp as any)?.seconds * 1000 || 0;
         return timeB - timeA;
       });
       setAllMyCalls(callsData);
@@ -420,10 +421,10 @@ export const DriverInterface = ({
       setOpenSupportCalls(
         openCallsData.filter((call) => call.solicitante.id !== userId)
       );
-      setLoading(false);
     });
 
     return () => {
+      unsubscribeDriver();
       unsubscribeMyCalls();
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
@@ -448,23 +449,9 @@ export const DriverInterface = ({
   };
 
   const addNewCall = async (
-    newCall: Partial<Omit<SupportCall, "id" | "timestamp" | "solicitante">>
+    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
   ) => {
     if (!driver) return;
-
-    // Lógica para apagar chamado anterior se existir
-    const q = query(
-      collection(db, "supportCalls"),
-      where("solicitante.id", "==", driver.id),
-      where("status", "==", "ABERTO")
-    );
-    const existingCallsSnapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    existingCallsSnapshot.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
-
     const callToAdd = {
       ...newCall,
       timestamp: serverTimestamp(),
@@ -494,10 +481,81 @@ export const DriverInterface = ({
   const handleCancelSupport = async (callId: string) => {
     if (!userId) return;
     await updateCall(callId, {
-      assignedTo: undefined,
+      assignedTo: deleteField(),
       status: "ABERTO",
-    });
+    } as any);
     await updateDriver(userId, { status: "DISPONIVEL" });
+  };
+
+  // Nova função para o solicitante cancelar o pedido
+  const handleDeleteSupportRequest = async (callId: string) => {
+    if (!userId) return;
+    const callToCancel = allMyCalls.find((c) => c.id === callId);
+
+    // Se outro motorista já aceitou, libera o status dele
+    if (callToCancel && callToCancel.assignedTo) {
+      await updateDriver(callToCancel.assignedTo, { status: "DISPONIVEL" });
+    }
+
+    // Move o chamado para o status de excluído (soft delete)
+    await updateCall(callId, {
+      status: "EXCLUIDO",
+      deletedAt: serverTimestamp(),
+    } as any);
+  };
+
+  const handleUpdateProfile = () => {
+    if (!userId) return;
+
+    // Validação do Telefone
+    if (phone.replace(/\D/g, "").length !== 11) {
+      alert("O telefone deve ter 11 dígitos, incluindo o DDD.");
+      return;
+    }
+
+    // Validação do Hub
+    if (!hubs.includes(hub)) {
+      alert("Hub inválido. Por favor, selecione um Hub válido da lista.");
+      return;
+    }
+
+    updateDriver(userId, {
+      name,
+      phone: phone.replace(/\D/g, ""),
+      hub,
+      vehicleType,
+    });
+    alert("Perfil atualizado com sucesso!");
+  };
+
+  const handleChangePassword = () => {
+    alert("Funcionalidade de alterar senha a ser implementada.");
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+
+    setIsUploading(true);
+    const storage = getStorage(); // Idealmente inicializado no firebase.ts
+    const storageRef = ref(storage, `avatars/${userId}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      "state_changed",
+      (snapshot) => {},
+      (error) => {
+        console.error("Upload failed:", error);
+        alert("Falha ao enviar a imagem.");
+        setIsUploading(false);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          updateDriver(userId, { avatar: downloadURL });
+          setIsUploading(false);
+        });
+      }
+    );
   };
 
   const handleGetLocation = () => {
@@ -510,10 +568,7 @@ export const DriverInterface = ({
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        const googleMapsLink = `https://www.google.com/maps?q=${latitude.toFixed(
-          4
-        )},${longitude.toFixed(4)}`;
-        setLocation(googleMapsLink);
+        setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
         setIsLocating(false);
       },
       () => {
@@ -529,59 +584,47 @@ export const DriverInterface = ({
     setModalError("");
 
     const formData = new FormData(e.currentTarget);
-    const packageCount = formData.get("packageCount") as string;
-    const deliveryRegion = formData.get("deliveryRegion") as string;
+    const vehicleType = formData.get("vehicleType") as string;
     const isBulky = formData.get("isBulky") === "on";
 
-    const bulkyText = isBulky ? "Sim" : "Não";
-    const informalDescription = `
-**Hub de Origem:** ${selectedHub}
-**Destino da Carga:** ${deliveryRegion}
-**Total de Pacotes:** ${packageCount}
-**Contém Volumosos:** ${bulkyText}
-**Veículo Necessário:** ${selectedVehicle}
-**Localização do Motorista:** ${location}
-    `;
+    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${formData.get(
+      "hub"
+    )}. Minha localização atual está disponível neste link: ${location}. Tenho ${formData.get(
+      "packageCount"
+    )} pacotes para a região de ${formData.get("deliveryRegion")}.
+    Veículo necessário: ${vehicleType}. ${
+      isBulky ? "Contém pacote volumoso." : ""
+    }`;
 
     try {
       const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
-        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte, mantendo a estrutura de tópicos e todas as informações essenciais, incluindo o link do Google Maps. Remova qualquer texto redundante.
+        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte.
         2. Classificar a urgência do problema como 'URGENTE', 'ALTA' ou 'MEDIA'.
         
         Descrição do motorista: "${informalDescription}"
         
         Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional", "urgency": "sua classificação de urgência"}`;
 
-      const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              description: { type: "STRING" },
-              urgency: { type: "STRING", enum: ["URGENTE", "ALTA", "MEDIA"] },
-            },
-            required: ["description", "urgency"],
-          },
-        },
-      };
+      const apiKey = "AIzaSyAXV3wmwo0eMgx3Q3CuE0o2WfROU50jaaU";
 
-      const apiKey = ""; // Sua chave de API aqui
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       });
 
       if (!response.ok)
         throw new Error(`${response.statusText} (${response.status})`);
       const result = await response.json();
       const textPart = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
       if (!textPart)
         throw new Error("Não foi possível processar a resposta da IA.");
-      const parsedJson = JSON.parse(textPart);
+
+      const cleanedJsonString = textPart.replace(/```json|```/g, "").trim();
+
+      const parsedJson = JSON.parse(cleanedJsonString);
       if (!parsedJson.description || !parsedJson.urgency)
         throw new Error("A resposta da IA está incompleta.");
 
@@ -590,9 +633,8 @@ export const DriverInterface = ({
         urgency: parsedJson.urgency as UrgencyLevel,
         location: location,
         status: "ABERTO" as const,
-        vehicleType: selectedVehicle,
+        vehicleType: vehicleType,
         isBulky: isBulky,
-        hub: selectedHub,
       };
       await addNewCall(newCallData);
       setIsSupportModalOpen(false);
@@ -601,7 +643,7 @@ export const DriverInterface = ({
       console.error("Erro detalhado ao criar chamado:", error);
       if (error.message.includes("Failed to fetch")) {
         setModalError(
-          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta."
+          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta e configurada para localhost."
         );
       } else {
         setModalError(`Erro: ${error.message}`);
@@ -611,87 +653,48 @@ export const DriverInterface = ({
     }
   };
 
-  const handleAvatarUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    if (!event.target.files || event.target.files.length === 0 || !userId) {
-      return;
-    }
-    const file = event.target.files[0];
-    const storageRef = ref(storage, `avatars/${userId}/${file.name}`);
-
-    setIsUploading(true);
-    try {
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      await updateDriver(userId, { avatar: downloadURL });
-    } catch (error) {
-      console.error("Erro ao fazer upload da imagem:", error);
-      alert("Não foi possível carregar a imagem. Tente novamente.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleProfileUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!userId) return;
-
-    try {
-      await updateDriver(userId, {
-        name: profileName,
-        phone: profilePhone,
-      });
-      alert("Perfil atualizado com sucesso!");
-    } catch (error) {
-      console.error("Erro ao atualizar perfil:", error);
-      alert("Não foi possível atualizar o perfil.");
-    }
-  };
-
-  const handlePasswordUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-
-    if (newPassword.length < 6) {
-      setPasswordError("A nova senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError("As senhas não coincidem.");
-      return;
-    }
-
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await updatePassword(user, newPassword);
-        setPasswordSuccess("Senha alterada com sucesso!");
-        setNewPassword("");
-        setConfirmPassword("");
-      } catch (error: any) {
-        console.error("Erro ao alterar a senha:", error);
-        setPasswordError(
-          "Erro ao alterar a senha. Tente fazer logout e login novamente para continuar."
-        );
-      }
-    }
-  };
-
   const filteredCalls = useMemo(() => {
+    // Filtra para não mostrar chamados excluídos na visão principal
+    const activeCalls = allMyCalls.filter((call) => call.status !== "EXCLUIDO");
+
     if (historyFilter === "requester")
-      return allMyCalls.filter((call) => call.solicitante.id === userId);
+      return activeCalls.filter((call) => call.solicitante.id === userId);
     if (historyFilter === "provider")
-      return allMyCalls.filter((call) => call.assignedTo === userId);
+      return activeCalls.filter((call) => call.assignedTo === userId);
     if (historyFilter === "inProgress")
-      return allMyCalls.filter((call) =>
+      return activeCalls.filter((call) =>
         ["EM ANDAMENTO", "AGUARDANDO_APROVACAO", "APROVADO"].includes(
           call.status
         )
       );
-    return allMyCalls;
+    return activeCalls;
   }, [allMyCalls, historyFilter, userId]);
+
+  const filteredHubs = useMemo(() => {
+    if (!hubSearch) return hubs;
+    return hubs.filter((h) =>
+      h.toLowerCase().includes(hubSearch.toLowerCase())
+    );
+  }, [hubSearch]);
+
+  const formatPhoneNumber = (value: string) => {
+    if (!value) return "";
+    const digits = value.replace(/\D/g, "");
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(
+      7,
+      11
+    )}`;
+  };
+
+  const activeCallForDriver = useMemo(() => {
+    return (
+      allMyCalls.find(
+        (call) => call.solicitante.id === userId && call.status === "ABERTO"
+      ) || null
+    );
+  }, [allMyCalls, userId]);
 
   if (loading)
     return (
@@ -843,6 +846,7 @@ export const DriverInterface = ({
                     currentDriver={driver}
                     allDrivers={allDrivers}
                     onCancelSupport={handleCancelSupport}
+                    onDeleteSupportRequest={handleDeleteSupportRequest}
                   />
                 ))}
               </div>
@@ -855,122 +859,163 @@ export const DriverInterface = ({
         );
       case "profile":
         return (
-          <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-            <h3 className="text-lg font-bold text-gray-800">Editar Perfil</h3>
-            <form onSubmit={handleProfileUpdate} className="space-y-4">
-              <div className="relative w-24 h-24 mx-auto group">
-                <img
-                  src={driver.avatar}
-                  alt={`Avatar de ${driver.name}`}
-                  className="w-full h-full rounded-full object-cover border-4 border-gray-200"
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleAvatarUpload}
-                  className="hidden"
-                  accept="image/png, image/jpeg"
-                />
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <h3 className="text-lg font-semibold mb-4">Editar Perfil</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nome Completo
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full p-2 border rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Telefone (WhatsApp)
+                  </label>
+                  <input
+                    type="text"
+                    value={formatPhoneNumber(phone)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      if (digits.length <= 11) {
+                        setPhone(digits);
+                      }
+                    }}
+                    className="w-full p-2 border rounded-md"
+                    placeholder="(XX) XXXXX-XXXX"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Hub de Atuação
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={hubSearch}
+                      onChange={(e) => {
+                        setHubSearch(e.target.value);
+                        setHub(e.target.value); // Atualiza o hub principal também
+                        setIsHubDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsHubDropdownOpen(true)}
+                      onBlur={() =>
+                        setTimeout(() => setIsHubDropdownOpen(false), 150)
+                      } // Delay to allow click
+                      className="w-full p-2 border rounded-md pr-10"
+                      placeholder="Pesquisar Hub..."
+                    />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    {isHubDropdownOpen && filteredHubs.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredHubs.map((h) => (
+                          <div
+                            key={h}
+                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              setHub(h);
+                              setHubSearch(h);
+                              setIsHubDropdownOpen(false);
+                            }}
+                          >
+                            {h}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Veículo
+                  </label>
+                  <select
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value)}
+                    className="w-full p-2 border rounded-md"
+                  >
+                    <option value="">Selecione seu veículo</option>
+                    {vehicleTypes.map((v) => (
+                      <option key={v} value={v}>
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center rounded-full transition-opacity"
-                  disabled={isUploading}
+                  onClick={handleUpdateProfile}
+                  className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600"
                 >
-                  {isUploading ? (
-                    <LoaderCircle className="animate-spin text-white" />
-                  ) : (
-                    <Camera className="text-white opacity-0 group-hover:opacity-100" />
-                  )}
+                  Salvar Alterações
                 </button>
               </div>
-              <div>
-                <label
-                  htmlFor="profileName"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Nome Completo
-                </label>
-                <input
-                  type="text"
-                  id="profileName"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 border rounded-md"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="profilePhone"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Telefone
-                </label>
-                <input
-                  type="tel"
-                  id="profilePhone"
-                  value={profilePhone}
-                  onChange={(e) => setProfilePhone(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 border rounded-md"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full py-2 px-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700"
-              >
-                Salvar Alterações
-              </button>
-            </form>
+            </div>
 
-            <div className="border-t pt-6">
-              <h4 className="text-md font-bold text-gray-800 mb-4">
-                Alterar Senha
-              </h4>
-              <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="newPassword"
-                    className="block text-sm font-medium text-gray-700"
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <h3 className="text-lg font-semibold mb-4">Alterar Senha</h3>
+              <div className="space-y-4">
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Senha Atual
+                  </label>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full p-2 border rounded-md pr-10"
+                  />
+                  <button
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500"
                   >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nova Senha
                   </label>
                   <input
-                    type="password"
-                    id="newPassword"
+                    type={showPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 border rounded-md"
-                    placeholder="Mínimo de 6 caracteres"
+                    className="w-full p-2 border rounded-md pr-10"
                   />
                 </div>
-                <div>
-                  <label
-                    htmlFor="confirmPassword"
-                    className="block text-sm font-medium text-gray-700"
-                  >
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Confirmar Nova Senha
                   </label>
                   <input
-                    type="password"
-                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 border rounded-md"
+                    className="w-full p-2 border rounded-md pr-10"
                   />
                 </div>
-                {passwordError && (
-                  <p className="text-sm text-red-600">{passwordError}</p>
-                )}
-                {passwordSuccess && (
-                  <p className="text-sm text-green-600">{passwordSuccess}</p>
-                )}
                 <button
-                  type="submit"
-                  className="w-full py-2 px-4 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-800"
+                  onClick={handleChangePassword}
+                  className="w-full bg-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-800"
                 >
-                  Trocar Senha
+                  Alterar Senha
                 </button>
-              </form>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <button
+                onClick={() => auth.signOut()}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600"
+              >
+                <LogOut size={16} />
+                Sair da Conta
+              </button>
             </div>
           </div>
         );
@@ -979,15 +1024,22 @@ export const DriverInterface = ({
 
   return (
     <>
-      <div className="bg-gray-100 min-h-screen p-4 md:p-6 space-y-6">
+      <div className="bg-gray-100 min-h-screen p-4 md:p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-3 mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">{driver.name}</h2>
-            <p className="text-sm text-gray-500 font-medium">
-              {driver.region || "Região não definida"}
-            </p>
-            <p className="text-gray-500">Sistema de Apoio Logístico</p>
-          </div>
+          <ProfileHeaderCard
+            driver={driver}
+            isUploading={isUploading}
+            onEditClick={() => fileInputRef.current?.click()}
+            activeCall={activeCallForDriver}
+          />
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarUpload}
+            className="hidden"
+            accept="image/*"
+          />
+
           <div className="bg-white rounded-lg shadow-md">
             <div className="flex border-b">
               <button
@@ -1023,6 +1075,7 @@ export const DriverInterface = ({
                 <Clock size={16} />
                 <span>Meus Chamados</span>
               </button>
+              {/* ABA DE PERFIL ADICIONADA */}
               <button
                 onClick={() => setActiveTab("profile")}
                 className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center space-x-2 ${
@@ -1035,12 +1088,7 @@ export const DriverInterface = ({
                 <span>Meu Perfil</span>
               </button>
             </div>
-            <div
-              className="p-4 transition-opacity duration-300"
-              key={activeTab}
-            >
-              {renderContent()}
-            </div>
+            <div className="p-4">{renderContent()}</div>
           </div>
         </div>
       </div>
@@ -1066,12 +1114,22 @@ export const DriverInterface = ({
                 >
                   Selecione o seu Hub
                 </label>
-                <SearchableComboBox
-                  options={hubs}
-                  value={selectedHub}
-                  onChange={setSelectedHub}
-                  placeholder="Digite ou selecione um hub..."
-                />
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    id="hub"
+                    name="hub"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    {hubs.map((hub) => (
+                      <option key={hub} value={hub}>
+                        {hub}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label
@@ -1121,6 +1179,7 @@ export const DriverInterface = ({
                     id="packageCount"
                     name="packageCount"
                     type="number"
+                    min="0"
                     placeholder="Ex: 15"
                     className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                     required
@@ -1153,12 +1212,21 @@ export const DriverInterface = ({
                 >
                   Tipo de Veículo Necessário
                 </label>
-                <SearchableComboBox
-                  options={vehicleTypes}
-                  value={selectedVehicle}
-                  onChange={setSelectedVehicle}
-                  placeholder="Digite ou selecione um veículo..."
-                />
+                <div className="relative">
+                  <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    id="vehicleType"
+                    name="vehicleType"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+                    required
+                  >
+                    <option value="">Selecione o veículo...</option>
+                    <option value="moto">Moto</option>
+                    <option value="carro passeio">Carro Passeio</option>
+                    <option value="carro utilitario">Carro Utilitário</option>
+                    <option value="van">Van</option>
+                  </select>
+                </div>
               </div>
               <div className="flex items-center space-x-2">
                 <input
