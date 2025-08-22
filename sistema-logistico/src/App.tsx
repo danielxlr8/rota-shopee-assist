@@ -22,21 +22,21 @@ import type {
   SupportCall as OriginalSupportCall,
   Driver,
 } from "./types/logistics";
-import { Toaster } from "@/components/UI/toaster";
-import { useToast } from "@/hooks/use-toast";
+// --- CORREÇÃO DOS IMPORTS ---
+// Os caminhos foram alterados para usar os ficheiros locais que acabou de copiar.
+import { Toaster } from "./components/ui/toaster";
+import { useToast } from "./hooks/use-toast";
 
-// --- CORREÇÃO DE TIPO ---
 export type SupportCall = OriginalSupportCall & {
   deletedAt?: any;
 };
 
-// --- Ícone de Logout ---
 const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -50,7 +50,6 @@ const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-// Define a estrutura para os dados do usuário armazenados no Firestore
 interface UserData {
   uid: string;
   name: string;
@@ -63,14 +62,12 @@ function App() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Estados para os dados da aplicação
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const { toast } = useToast();
   const previousCallsRef = useRef<SupportCall[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Efeito para observar o estado de autenticação do Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -94,7 +91,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Efeito para buscar dados em tempo real (chamados e motoristas)
   useEffect(() => {
     if (user && userData) {
       const callsCollection = collection(db, "supportCalls");
@@ -105,7 +101,6 @@ function App() {
           (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
         );
 
-        // Lógica de Notificação
         if (previousCallsRef.current.length > 0) {
           const previousOpenCallsIds = new Set(
             previousCallsRef.current
@@ -156,7 +151,6 @@ function App() {
     }
   }, [user, userData, drivers, toast]);
 
-  // Função para atualizar um chamado no Firebase
   const handleUpdateCall = async (
     id: string,
     updates: Partial<Omit<SupportCall, "id">>
@@ -169,7 +163,6 @@ function App() {
     }
   };
 
-  // Função para "deletar" um chamado (soft delete)
   const handleDeleteCall = async (id: string) => {
     await handleUpdateCall(id, {
       status: "EXCLUIDO",
@@ -177,7 +170,6 @@ function App() {
     });
   };
 
-  // Função para excluir permanentemente um chamado
   const handlePermanentDeleteCall = async (id: string) => {
     const callDocRef = doc(db, "supportCalls", id);
     try {
@@ -188,7 +180,6 @@ function App() {
     }
   };
 
-  // Função para limpar todos os chamados excluídos
   const handleDeleteAllExcluded = async () => {
     const q = query(
       collection(db, "supportCalls"),

@@ -15,11 +15,14 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+
+    // --- CORREÇÃO APLICADA AQUI ---
+    // Estas linhas ensinam o TypeScript a entender os caminhos que começam com '@/'
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["../src/*"]
     }
   },
   "include": ["src"],
-  "exclude": ["node_modules"]
+  "references": [{ "path": "./tsconfig.app.json" }]
 }
