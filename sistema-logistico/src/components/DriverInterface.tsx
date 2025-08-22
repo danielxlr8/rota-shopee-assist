@@ -137,6 +137,10 @@ const ProfileHeaderCard = ({
             <Phone size={14} />{" "}
             {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
           </p>
+          {/* --- MELHORIA APLICADA AQUI --- */}
+          <p className="flex items-center justify-center gap-2 capitalize">
+            <Truck size={14} /> {driver.vehicleType || "Veículo não definido"}
+          </p>
         </div>
         <div className="flex items-center justify-center mt-3">
           <span
@@ -418,6 +422,9 @@ export const DriverInterface = () => {
       const openCallsData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
+      // --- CORREÇÃO APLICADA AQUI ---
+      // Adicionado um filtro para que o motorista não veja os seus próprios pedidos
+      // na lista de chamados de apoio disponíveis.
       setOpenSupportCalls(
         openCallsData.filter((call) => call.solicitante.id !== userId)
       );
