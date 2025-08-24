@@ -3,14 +3,11 @@
   "compilerOptions": {
     "outDir": "./out-tsc/app",
     "types": ["node"],
-
-    // --- CORREÇÕES APLICADAS AQUI ---
-    // 1. "composite": true é adicionado porque este ficheiro é referenciado por outro.
     "composite": true,
-    // 2. "noEmit" é definido como false para permitir a compilação,
-    //    o que é uma exigência para projetos referenciados.
     "noEmit": false
   },
-  "files": ["src/main.tsx"],
-  "include": ["src/**/*.d.ts"]
+  // --- CORREÇÃO APLICADA AQUI ---
+  // A propriedade "files" foi removida e "include" foi ajustado
+  // para garantir que todos os arquivos .ts e .tsx na pasta 'src' sejam incluídos.
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"]
 }

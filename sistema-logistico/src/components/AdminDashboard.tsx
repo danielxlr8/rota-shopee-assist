@@ -12,6 +12,9 @@ import {
   ArrowLeft,
   X,
   Search,
+  Check,
+  Building,
+  Truck,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
@@ -19,12 +22,11 @@ import { Timestamp } from "firebase/firestore";
 import {
   AvatarComponent,
   UrgencyBadge,
-  DriverCard,
+  DriverCard, // Este componente será modificado no arquivo UI.tsx
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
 } from "./UI";
-// IMPORTAÇÃO CORRIGIDA: Importando diretamente da biblioteca com os nomes corretos
 import {
   Panel as ResizablePanel,
   PanelGroup as ResizablePanelGroup,
@@ -367,6 +369,16 @@ export const AdminDashboard = ({
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
 
+  // --- STATES PARA O FILTRO DE MOTORISTAS DISPONÍVEIS ---
+  const [driverHubFilter, setDriverHubFilter] =
+    useState<string>("Todos os Hubs");
+  const [driverHubSearch, setDriverHubSearch] = useState<string>("");
+  const [isDriverHubDropdownOpen, setIsDriverHubDropdownOpen] = useState(false);
+  const [
+    selectedDriverHubForConfirmation,
+    setSelectedDriverHubForConfirmation,
+  ] = useState<string>("Todos os Hubs");
+
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
     if (driver?.phone) {
@@ -423,7 +435,25 @@ export const AdminDashboard = ({
   const pendingApprovalCalls = activeCalls.filter(
     (c) => c.status === "AGUARDANDO_APROVACAO"
   );
-  const availableDrivers = drivers.filter((d) => d.status === "DISPONIVEL");
+
+  const availableDriverHubs = useMemo(() => {
+    const hubs = new Set<string>();
+    drivers.forEach((driver) => {
+      if (driver.hub) {
+        hubs.add(driver.hub);
+      }
+    });
+    return ["Todos os Hubs", ...Array.from(hubs)];
+  }, [drivers]);
+
+  const availableDrivers = useMemo(() => {
+    const baseDrivers = drivers.filter((d) => d.status === "DISPONIVEL");
+    if (driverHubFilter === "Todos os Hubs") {
+      return baseDrivers;
+    }
+    return baseDrivers.filter((driver) => driver.hub === driverHubFilter);
+  }, [drivers, driverHubFilter]);
+
   const filteredOpenCalls =
     urgencyFilter === "TODOS"
       ? openCalls
@@ -628,6 +658,62 @@ export const AdminDashboard = ({
                   title="Motoristas Disponíveis"
                   count={availableDrivers.length}
                   colorClass="#8B5CF6"
+                  headerControls={
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="relative flex-grow">
+                        <input
+                          type="text"
+                          value={driverHubSearch}
+                          onChange={(e) => {
+                            setDriverHubSearch(e.target.value);
+                            if (!isDriverHubDropdownOpen)
+                              setIsDriverHubDropdownOpen(true);
+                          }}
+                          onFocus={() => setIsDriverHubDropdownOpen(true)}
+                          onBlur={() =>
+                            setTimeout(
+                              () => setIsDriverHubDropdownOpen(false),
+                              150
+                            )
+                          }
+                          className="w-full p-2 border rounded-md pr-10 text-sm"
+                          placeholder="Filtrar por Hub..."
+                        />
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        {isDriverHubDropdownOpen && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            {availableDriverHubs
+                              .filter((h) =>
+                                h
+                                  .toLowerCase()
+                                  .includes(driverHubSearch.toLowerCase())
+                              )
+                              .map((h) => (
+                                <div
+                                  key={h}
+                                  className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                  onClick={() => {
+                                    setSelectedDriverHubForConfirmation(h);
+                                    setDriverHubSearch(h);
+                                    setIsDriverHubDropdownOpen(false);
+                                  }}
+                                >
+                                  {h}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() =>
+                          setDriverHubFilter(selectedDriverHubForConfirmation)
+                        }
+                        className="p-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-orange-300"
+                      >
+                        <Check size={20} />
+                      </button>
+                    </div>
+                  }
                 >
                   {availableDrivers.map((driver) => (
                     <DriverCard

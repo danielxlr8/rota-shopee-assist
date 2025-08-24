@@ -13,6 +13,8 @@ export default defineConfig({
   },
   // Esta secção dá permissão ao servidor para aceder aos ficheiros da pasta principal
   server: {
+    // Adicionado para permitir o acesso via ngrok
+    allowedHosts: [".ngrok-free.app"],
     fs: {
       allow: [
         // Permite acesso à pasta de trabalho atual (sistema-logistico)
