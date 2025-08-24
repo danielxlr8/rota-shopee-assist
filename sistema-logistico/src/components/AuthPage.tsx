@@ -39,6 +39,12 @@ export const AuthPage = () => {
         // Lógica de verificação movida para dentro do bloco try
         if (role === "driver") {
           const driverId = formData.get("driverId") as string;
+          // Verifica se o campo ID do motorista foi preenchido
+          if (!driverId) {
+            setError("Por favor, insira seu ID de Motorista.");
+            setLoading(false);
+            return;
+          }
           const preApprovedDocRef = doc(
             db,
             "motoristas_pre_aprovados",
@@ -93,15 +99,18 @@ export const AuthPage = () => {
             driverId: formData.get("driverId") as string,
             status: "INDISPONIVEL", // Status inicial
             avatar: `https://i.pravatar.cc/150?u=${user.uid}`,
-            initials: fullName ? fullName[0].toUpperCase() : "D",
+            initials: fullName
+              ? fullName
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+              : "D",
           });
         }
       } catch (err: any) {
         if (err.code === "auth/email-already-in-use") {
           setError("Este e-mail já está em uso.");
-        } else if (error) {
-          // Se o erro foi definido manualmente antes
-          // Mantém o erro já definido (ex: ID inválido)
         } else {
           setError("Ocorreu um erro ao criar a conta.");
         }
@@ -116,7 +125,7 @@ export const AuthPage = () => {
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
         <div className="text-center">
           <img
-            src="/shopee-logo.png"
+            src="/spx-logo.png"
             alt="Logótipo da Shopee"
             className="w-24 h-auto mx-auto mb-4"
           />
