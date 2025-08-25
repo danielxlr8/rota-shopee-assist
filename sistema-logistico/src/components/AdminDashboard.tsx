@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -12,17 +12,16 @@ import {
   ArrowLeft,
   X,
   Search,
-  Check,
   Building,
   Truck,
+  History, // Ícone para a nova aba
 } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { Timestamp } from "firebase/firestore";
 import {
   AvatarComponent,
   UrgencyBadge,
-  DriverCard, // Este componente será modificado no arquivo UI.tsx
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
@@ -32,6 +31,55 @@ import {
   PanelGroup as ResizablePanelGroup,
   PanelResizeHandle as ResizableHandle,
 } from "react-resizable-panels";
+import { toast as sonnerToast } from "sonner";
+import spxLogo from "/spx-logo.png";
+
+// --- NOVO COMPONENTE: EnhancedDriverCard ---
+const EnhancedDriverCard = ({
+  driver,
+  onAction,
+  onInfoClick,
+}: {
+  driver: Driver;
+  onAction: (driverId: string) => void;
+  onInfoClick: (driver: Driver) => void;
+}) => (
+  <div className="bg-white p-3 rounded-lg shadow flex items-center justify-between gap-2">
+    <div className="flex items-center gap-3 flex-1 min-w-0">
+      <AvatarComponent user={driver} onClick={() => onInfoClick(driver)} />
+      <div className="flex-1 min-w-0">
+        <p
+          className="font-bold text-gray-800 cursor-pointer truncate"
+          onClick={() => onInfoClick(driver)}
+          title={driver.name}
+        >
+          {driver.name}
+        </p>
+        <div className="text-xs text-gray-500 flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
+          <div className="flex items-center gap-1 truncate" title={driver.hub}>
+            <Building size={12} />
+            <span className="truncate">{driver.hub || "N/A"}</span>
+          </div>
+          <div className="flex items-center gap-1 capitalize">
+            <Truck size={12} />
+            <span>{driver.vehicleType || "N/A"}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="flex flex-col items-end gap-1">
+      <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+        Disponível
+      </span>
+      <button
+        onClick={() => onAction(driver.id)}
+        className="px-3 py-1 text-xs font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
+      >
+        Acionar
+      </button>
+    </div>
+  </div>
+);
 
 // --- Componente de Busca Reutilizável (ComboBox) ---
 const SearchableComboBox = ({
@@ -123,7 +171,6 @@ const SearchableComboBox = ({
 
 // --- COMPONENTES AUXILIARES ---
 
-// Modal de Confirmação Reutilizável
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -167,7 +214,6 @@ const ConfirmationModal = ({
   );
 };
 
-// Modal para Detalhes e Ações do Chamado
 const CallDetailsModal = ({
   call,
   onClose,
@@ -207,7 +253,6 @@ const CallDetailsModal = ({
         <h2 className="text-xl font-bold text-gray-800 mb-4">
           Detalhes do Chamado
         </h2>
-
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <AvatarComponent user={call.solicitante} />
@@ -223,7 +268,6 @@ const CallDetailsModal = ({
             {call.description}
           </p>
         </div>
-
         <div className="mt-6 pt-4 border-t flex justify-between items-center">
           <p className="text-sm text-gray-500">Mover para:</p>
           <div className="flex gap-2">
@@ -287,7 +331,7 @@ const CallCard = ({
       date = new Timestamp(timestamp.seconds, timestamp.nanoseconds).toDate();
     else date = new Date(timestamp);
     if (isNaN(date.getTime())) return "Data inválida";
-    return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
+    return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
   };
   const timeAgo = formatTimestamp(call.timestamp);
 
@@ -358,7 +402,7 @@ export const AdminDashboard = ({
     "TODOS"
   );
   const [adminView, setAdminView] = useState<
-    "kanban" | "approvals" | "excluded"
+    "kanban" | "approvals" | "excluded" | "history"
   >("kanban");
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
   const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
@@ -368,16 +412,59 @@ export const AdminDashboard = ({
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
+  const notifiedCallIds = useRef(new Set<string>());
 
-  // --- STATES PARA O FILTRO DE MOTORISTAS DISPONÍVEIS ---
+  // States para a aba de Histórico
+  const [historyDateFilter, setHistoryDateFilter] = useState({
+    start: "",
+    end: "",
+  });
+  const [historyHubFilter, setHistoryHubFilter] = useState("Todos");
+
   const [driverHubFilter, setDriverHubFilter] =
     useState<string>("Todos os Hubs");
-  const [driverHubSearch, setDriverHubSearch] = useState<string>("");
-  const [isDriverHubDropdownOpen, setIsDriverHubDropdownOpen] = useState(false);
-  const [
-    selectedDriverHubForConfirmation,
-    setSelectedDriverHubForConfirmation,
-  ] = useState<string>("Todos os Hubs");
+  const [driverVehicleFilter, setDriverVehicleFilter] =
+    useState<string>("Todos os Veículos");
+
+  useEffect(() => {
+    const newOpenCalls = calls.filter(
+      (call) =>
+        call.status === "ABERTO" && !notifiedCallIds.current.has(call.id)
+    );
+
+    if (newOpenCalls.length > 0) {
+      const audio = new Audio("/shopee-ringtone.mp3");
+      audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+
+      newOpenCalls.forEach((newCall) => {
+        sonnerToast.custom(
+          () => (
+            <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+              <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+              <div>
+                <p className="font-bold text-gray-800">Novo Chamado Aberto!</p>
+                <p className="text-sm text-gray-600">
+                  {newCall.solicitante.name} do hub{" "}
+                  {newCall.hub || "desconhecido"} precisa de apoio.
+                </p>
+              </div>
+            </div>
+          ),
+          { duration: 10000 }
+        );
+        notifiedCallIds.current.add(newCall.id);
+      });
+    }
+
+    const openCallIds = new Set(
+      calls.filter((c) => c.status === "ABERTO").map((c) => c.id)
+    );
+    notifiedCallIds.current.forEach((id) => {
+      if (!openCallIds.has(id)) {
+        notifiedCallIds.current.delete(id);
+      }
+    });
+  }, [calls]);
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
@@ -404,13 +491,11 @@ export const AdminDashboard = ({
   };
 
   const confirmAction = () => {
-    if (confirmationType === "soft-delete" && callToConfirm) {
+    if (confirmationType === "soft-delete" && callToConfirm)
       onDeleteCall(callToConfirm.id);
-    } else if (confirmationType === "permanent-delete" && callToConfirm) {
+    else if (confirmationType === "permanent-delete" && callToConfirm)
       onDeletePermanently(callToConfirm.id);
-    } else if (confirmationType === "clear-all") {
-      onDeleteAllExcluded();
-    }
+    else if (confirmationType === "clear-all") onDeleteAllExcluded();
     closeModal();
   };
 
@@ -423,41 +508,117 @@ export const AdminDashboard = ({
     updateCall(callId, { status: "ABERTO" });
   };
 
-  const activeCalls = calls.filter((c) => c.status !== "EXCLUIDO");
-  const excludedCalls = calls.filter((c) => c.status === "EXCLUIDO");
-  const openCalls = activeCalls.filter((c) => c.status === "ABERTO");
-  const inProgressCalls = activeCalls.filter(
-    (c) => c.status === "EM ANDAMENTO"
+  const activeCalls = useMemo(
+    () => calls.filter((c) => c.status !== "EXCLUIDO"),
+    [calls]
   );
-  const concludedCalls = activeCalls.filter(
-    (c) => c.status === "CONCLUIDO" || c.status === "APROVADO"
+  const excludedCalls = useMemo(
+    () => calls.filter((c) => c.status === "EXCLUIDO"),
+    [calls]
   );
-  const pendingApprovalCalls = activeCalls.filter(
-    (c) => c.status === "AGUARDANDO_APROVACAO"
+  const openCalls = useMemo(
+    () => activeCalls.filter((c) => c.status === "ABERTO"),
+    [activeCalls]
+  );
+  const inProgressCalls = useMemo(
+    () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
+    [activeCalls]
+  );
+  const concludedCalls = useMemo(
+    () =>
+      activeCalls.filter(
+        (c) => c.status === "CONCLUIDO" || c.status === "APROVADO"
+      ),
+    [activeCalls]
+  );
+  const pendingApprovalCalls = useMemo(
+    () => activeCalls.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
+    [activeCalls]
   );
 
-  const availableDriverHubs = useMemo(() => {
-    const hubs = new Set<string>();
-    drivers.forEach((driver) => {
-      if (driver.hub) {
-        hubs.add(driver.hub);
-      }
-    });
-    return ["Todos os Hubs", ...Array.from(hubs)];
-  }, [drivers]);
+  const availableDriverHubs = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...Array.from(new Set(drivers.map((d) => d.hub).filter(Boolean))),
+      ].sort(),
+    [drivers]
+  );
+  const allHubs = useMemo(
+    () =>
+      [
+        "Todos",
+        ...Array.from(new Set(calls.map((c) => c.hub).filter(Boolean))),
+      ].sort(),
+    [calls]
+  );
+  const vehicleTypes = useMemo(
+    () =>
+      [
+        "Todos os Veículos",
+        ...Array.from(
+          new Set(drivers.map((d) => d.vehicleType).filter(Boolean))
+        ),
+      ].sort(),
+    [drivers]
+  );
 
   const availableDrivers = useMemo(() => {
-    const baseDrivers = drivers.filter((d) => d.status === "DISPONIVEL");
-    if (driverHubFilter === "Todos os Hubs") {
-      return baseDrivers;
-    }
-    return baseDrivers.filter((driver) => driver.hub === driverHubFilter);
-  }, [drivers, driverHubFilter]);
+    return drivers.filter((d) => {
+      const isAvailable = d.status === "DISPONIVEL";
+      const hubMatch =
+        driverHubFilter === "Todos os Hubs" || d.hub === driverHubFilter;
+      const vehicleMatch =
+        driverVehicleFilter === "Todos os Veículos" ||
+        d.vehicleType === driverVehicleFilter;
+      return isAvailable && hubMatch && vehicleMatch;
+    });
+  }, [drivers, driverHubFilter, driverVehicleFilter]);
 
-  const filteredOpenCalls =
-    urgencyFilter === "TODOS"
-      ? openCalls
-      : openCalls.filter((call) => call.urgency === urgencyFilter);
+  const filteredHistoryCalls = useMemo(() => {
+    return calls
+      .filter((call) => {
+        if (call.status === "EXCLUIDO") return false;
+        if (historyHubFilter !== "Todos" && call.hub !== historyHubFilter)
+          return false;
+
+        const callDate =
+          call.timestamp && typeof (call.timestamp as any).toDate === "function"
+            ? (call.timestamp as Timestamp).toDate()
+            : null;
+        if (!callDate) return true;
+
+        if (historyDateFilter.start) {
+          const startDate = new Date(historyDateFilter.start);
+          if (callDate < startDate) return false;
+        }
+        if (historyDateFilter.end) {
+          const endDate = new Date(historyDateFilter.end);
+          endDate.setHours(23, 59, 59, 999);
+          if (callDate > endDate) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const timeA =
+          a.timestamp && typeof (a.timestamp as any).toDate === "function"
+            ? (a.timestamp as Timestamp).toDate().getTime()
+            : 0;
+        const timeB =
+          b.timestamp && typeof (b.timestamp as any).toDate === "function"
+            ? (b.timestamp as Timestamp).toDate().getTime()
+            : 0;
+        return timeB - timeA;
+      });
+  }, [calls, historyHubFilter, historyDateFilter]);
+
+  const filteredOpenCalls = useMemo(
+    () =>
+      urgencyFilter === "TODOS"
+        ? openCalls
+        : openCalls.filter((call) => call.urgency === urgencyFilter),
+    [openCalls, urgencyFilter]
+  );
 
   const filterControls = (
     <div className="flex flex-wrap gap-1">
@@ -481,6 +642,33 @@ export const AdminDashboard = ({
     </div>
   );
 
+  const driverFilterControls = (
+    <div className="flex flex-col gap-2 w-full">
+      <select
+        value={driverHubFilter}
+        onChange={(e) => setDriverHubFilter(e.target.value)}
+        className="w-full p-2 border rounded-md text-sm bg-white"
+      >
+        {availableDriverHubs.map((hub) => (
+          <option key={hub} value={hub}>
+            {hub}
+          </option>
+        ))}
+      </select>
+      <select
+        value={driverVehicleFilter}
+        onChange={(e) => setDriverVehicleFilter(e.target.value)}
+        className="w-full p-2 border rounded-md text-sm bg-white capitalize"
+      >
+        {vehicleTypes.map((v) => (
+          <option key={v} value={v} className="capitalize">
+            {v}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   const activeCallForDriver = infoModalDriver
     ? calls.find(
         (c) =>
@@ -488,7 +676,6 @@ export const AdminDashboard = ({
           (c.status === "EM ANDAMENTO" || c.status === "AGUARDANDO_APROVACAO")
       ) || null
     : null;
-
   const excludedCallNames = useMemo(
     () => [...new Set(excludedCalls.map((c) => c.solicitante.name))],
     [excludedCalls]
@@ -548,6 +735,16 @@ export const AdminDashboard = ({
           >
             Solicitações Excluídas
           </button>
+          <button
+            onClick={() => setAdminView("history")}
+            className={`py-2 px-1 text-sm font-semibold transition-colors flex items-center gap-2 ${
+              adminView === "history"
+                ? "border-b-2 border-orange-600 text-orange-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <History size={16} /> Histórico
+          </button>
         </div>
       </nav>
 
@@ -583,7 +780,6 @@ export const AdminDashboard = ({
               colorClass="#8B5CF6"
             />
           </div>
-
           <ResizablePanelGroup
             direction="horizontal"
             className="flex-grow rounded-lg border"
@@ -658,65 +854,10 @@ export const AdminDashboard = ({
                   title="Motoristas Disponíveis"
                   count={availableDrivers.length}
                   colorClass="#8B5CF6"
-                  headerControls={
-                    <div className="flex items-center gap-2 w-full">
-                      <div className="relative flex-grow">
-                        <input
-                          type="text"
-                          value={driverHubSearch}
-                          onChange={(e) => {
-                            setDriverHubSearch(e.target.value);
-                            if (!isDriverHubDropdownOpen)
-                              setIsDriverHubDropdownOpen(true);
-                          }}
-                          onFocus={() => setIsDriverHubDropdownOpen(true)}
-                          onBlur={() =>
-                            setTimeout(
-                              () => setIsDriverHubDropdownOpen(false),
-                              150
-                            )
-                          }
-                          className="w-full p-2 border rounded-md pr-10 text-sm"
-                          placeholder="Filtrar por Hub..."
-                        />
-                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        {isDriverHubDropdownOpen && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                            {availableDriverHubs
-                              .filter((h) =>
-                                h
-                                  .toLowerCase()
-                                  .includes(driverHubSearch.toLowerCase())
-                              )
-                              .map((h) => (
-                                <div
-                                  key={h}
-                                  className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
-                                  onClick={() => {
-                                    setSelectedDriverHubForConfirmation(h);
-                                    setDriverHubSearch(h);
-                                    setIsDriverHubDropdownOpen(false);
-                                  }}
-                                >
-                                  {h}
-                                </div>
-                              ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() =>
-                          setDriverHubFilter(selectedDriverHubForConfirmation)
-                        }
-                        className="p-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:bg-orange-300"
-                      >
-                        <Check size={20} />
-                      </button>
-                    </div>
-                  }
+                  headerControls={driverFilterControls}
                 >
                   {availableDrivers.map((driver) => (
-                    <DriverCard
+                    <EnhancedDriverCard
                       key={driver.id}
                       driver={driver}
                       onAction={handleAcionarDriver}
@@ -727,6 +868,121 @@ export const AdminDashboard = ({
               </div>
             </ResizablePanel>
           </ResizablePanelGroup>
+        </div>
+      )}
+
+      {adminView === "history" && (
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            Histórico de Solicitações
+          </h2>
+          <div className="bg-white p-4 rounded-lg shadow-md mb-4 flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Data Início
+              </label>
+              <input
+                type="date"
+                value={historyDateFilter.start}
+                onChange={(e) =>
+                  setHistoryDateFilter((prev) => ({
+                    ...prev,
+                    start: e.target.value,
+                  }))
+                }
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Data Fim
+              </label>
+              <input
+                type="date"
+                value={historyDateFilter.end}
+                onChange={(e) =>
+                  setHistoryDateFilter((prev) => ({
+                    ...prev,
+                    end: e.target.value,
+                  }))
+                }
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Hub</label>
+              <select
+                value={historyHubFilter}
+                onChange={(e) => setHistoryHubFilter(e.target.value)}
+                className="w-full p-2 border rounded-md bg-white"
+              >
+                {allHubs.map((hub) => (
+                  <option key={hub} value={hub}>
+                    {hub}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-500">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3">
+                    Solicitante
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Apoio
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Hub
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Data
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Aprovado Por
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredHistoryCalls.map((call) => {
+                  const assignedDriver = drivers.find(
+                    (d) => d.id === call.assignedTo
+                  );
+                  const callDate =
+                    call.timestamp &&
+                    typeof (call.timestamp as any).toDate === "function"
+                      ? (call.timestamp as Timestamp).toDate()
+                      : null;
+                  return (
+                    <tr
+                      key={call.id}
+                      className="bg-white border-b hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                        {call.solicitante.name}
+                      </td>
+                      <td className="px-6 py-4">
+                        {assignedDriver?.name || "N/A"}
+                      </td>
+                      <td className="px-6 py-4">{call.hub || "N/A"}</td>
+                      <td className="px-6 py-4">{call.status}</td>
+                      <td className="px-6 py-4">
+                        {callDate ? format(callDate, "dd/MM/yy HH:mm") : "N/A"}
+                      </td>
+                      <td className="px-6 py-4">
+                        {(call as any).approvedBy || "N/A"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -768,43 +1024,47 @@ export const AdminDashboard = ({
                 .filter((call) =>
                   excludedHubFilter ? call.hub === excludedHubFilter : true
                 )
-                .map((call) => (
-                  <div
-                    key={call.id}
-                    className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
-                  >
-                    <div>
-                      <p className="font-bold">{call.solicitante.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {call.description}
-                      </p>
-                      {call.deletedAt && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          Excluído em:{" "}
-                          {format(
-                            call.deletedAt.toDate(),
-                            "dd/MM/yyyy 'às' HH:mm"
-                          )}
+                .map((call) => {
+                  const deletedDate =
+                    call.deletedAt &&
+                    typeof (call.deletedAt as any).toDate === "function"
+                      ? (call.deletedAt as Timestamp).toDate()
+                      : null;
+                  return (
+                    <div
+                      key={call.id}
+                      className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-bold">{call.solicitante.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {call.description}
                         </p>
-                      )}
+                        {deletedDate && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Excluído em:{" "}
+                            {format(deletedDate, "dd/MM/yyyy 'às' HH:mm")}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleRestore(call.id)}
+                          className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                        >
+                          <RotateCcw size={14} /> Restaurar
+                        </button>
+                        <button
+                          onClick={() => handlePermanentDeleteClick(call)}
+                          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                          title="Excluir Permanentemente"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleRestore(call.id)}
-                        className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-                      >
-                        <RotateCcw size={14} /> Restaurar
-                      </button>
-                      <button
-                        onClick={() => handlePermanentDeleteClick(call)}
-                        className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                        title="Excluir Permanentemente"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
             ) : (
               <p className="text-center text-gray-500">
                 Não há solicitações excluídas.
@@ -821,13 +1081,11 @@ export const AdminDashboard = ({
           onClose={() => setInfoModalDriver(null)}
         />
       )}
-
       <CallDetailsModal
         call={selectedCall}
         onClose={() => setSelectedCall(null)}
         onUpdateStatus={updateCall}
       />
-
       <ConfirmationModal
         isOpen={confirmationType === "soft-delete"}
         onClose={closeModal}
@@ -841,7 +1099,6 @@ export const AdminDashboard = ({
           revertida.
         </p>
       </ConfirmationModal>
-
       <ConfirmationModal
         isOpen={confirmationType === "permanent-delete"}
         onClose={closeModal}
@@ -858,7 +1115,6 @@ export const AdminDashboard = ({
           Esta ação não pode ser desfeita.
         </p>
       </ConfirmationModal>
-
       <ConfirmationModal
         isOpen={confirmationType === "clear-all"}
         onClose={closeModal}
