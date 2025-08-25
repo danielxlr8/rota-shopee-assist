@@ -45,8 +45,9 @@ import {
   uploadBytesResumable,
   getDownloadURL,
 } from "firebase/storage";
-// Importa o sistema de notificações (toast)
-import { Toaster, toast } from "sonner";
+// --- ALTERAÇÃO AQUI ---
+// Importa o sistema de notificações Sonner e renomeia 'toast' para 'sonnerToast' para clareza
+import { Toaster, toast as sonnerToast } from "sonner";
 // Importa o logótipo
 import spxLogo from "/spx-logo.png";
 
@@ -340,9 +341,17 @@ export const DriverInterface = () => {
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const TABS = ["availability", "support", "activeCalls", "profile"];
-  type TabType = "availability" | "support" | "activeCalls" | "profile";
-  const [activeTab, setActiveTab] = useState<TabType>("availability");
+  const TABS = useMemo(
+    () => [
+      { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
+      { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
+      { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
+      { id: "profile", label: "Perfil", icon: <User size={16} /> },
+    ],
+    []
+  );
+  type TabId = "availability" | "support" | "activeCalls" | "profile";
+  const [activeTab, setActiveTab] = useState<TabId>("availability");
 
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -354,11 +363,8 @@ export const DriverInterface = () => {
     "all" | "requester" | "provider" | "inProgress"
   >("all");
 
-  // States for dynamic fields
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
-
-  // States para a aba de perfil
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [hub, setHub] = useState("");
@@ -367,32 +373,23 @@ export const DriverInterface = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  // States para a pesquisa de Hub e upload
   const [hubSearch, setHubSearch] = useState("");
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isProfileInitialized = useRef(false);
-
-  // States for swipe gesture
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const swipeContainerRef = useRef<HTMLDivElement>(null);
-
-  // --- NOVO ESTADO ---
-  // Estado para controlar o bloqueio de aceitação de chamados
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
-
   const userId = auth.currentUser?.uid;
-
-  // Efeito para notificar sobre novos chamados
   const prevOpenCallsCount = useRef(openSupportCalls.length);
+
   useEffect(() => {
     if (openSupportCalls.length > prevOpenCallsCount.current) {
-      const newCall = openSupportCalls[0]; // Assume que o mais recente está no início
+      const newCall = openSupportCalls[0];
       if (newCall) {
-        toast.custom((t) => (
+        sonnerToast.custom((t) => (
           <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
             <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
             <div>
@@ -541,24 +538,24 @@ export const DriverInterface = () => {
     if (!userId || !driver) return;
 
     if (driver.status === "EM_ROTA") {
-      toast.error("Ação não permitida", {
+      sonnerToast.error("Ação não permitida", {
         description:
           "Você já está prestando um apoio e não pode aceitar outro no momento.",
       });
       return;
     }
 
-    setAcceptingCallId(callId); // Bloqueia outros botões
+    setAcceptingCallId(callId);
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
       await updateDriver(userId, { status: "EM_ROTA" });
     } catch (error) {
       console.error("Erro ao aceitar chamado:", error);
-      toast.error("Erro", {
+      sonnerToast.error("Erro", {
         description: "Não foi possível aceitar o chamado.",
       });
     } finally {
-      setAcceptingCallId(null); // Libera o bloqueio
+      setAcceptingCallId(null);
     }
   };
 
@@ -717,7 +714,6 @@ export const DriverInterface = () => {
       await addNewCall(newCallData);
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
-      // Reset dynamic fields
       setDeliveryRegions([""]);
       setNeededVehicles([""]);
     } catch (error: any) {
@@ -776,7 +772,6 @@ export const DriverInterface = () => {
     );
   }, [allMyCalls, userId]);
 
-  // Handlers for dynamic fields
   const handleAddField = (
     setter: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
@@ -802,9 +797,8 @@ export const DriverInterface = () => {
     });
   };
 
-  // Handlers para o gesto de deslizar
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchEndX.current = 0; // Reset end position
+    touchEndX.current = 0;
     touchStartX.current = e.targetTouches[0].clientX;
   };
 
@@ -814,17 +808,16 @@ export const DriverInterface = () => {
 
   const handleTouchEnd = () => {
     if (touchStartX.current === 0 || touchEndX.current === 0) return;
-    const threshold = 50; // minimum swipe distance
+    const threshold = 50;
     const swipedLeft = touchStartX.current - touchEndX.current > threshold;
     const swipedRight = touchEndX.current - touchStartX.current > threshold;
-    const currentIndex = TABS.indexOf(activeTab);
+    const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
     if (swipedLeft && currentIndex < TABS.length - 1) {
-      setActiveTab(TABS[currentIndex + 1] as TabType);
+      setActiveTab(TABS[currentIndex + 1].id as TabId);
     } else if (swipedRight && currentIndex > 0) {
-      setActiveTab(TABS[currentIndex - 1] as TabType);
+      setActiveTab(TABS[currentIndex - 1].id as TabId);
     }
-    // Reset positions
     touchStartX.current = 0;
     touchEndX.current = 0;
   };
@@ -842,13 +835,13 @@ export const DriverInterface = () => {
       </div>
     );
 
-  const activeTabIndex = TABS.indexOf(activeTab);
+  const activeTabIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
   return (
     <>
       <Toaster richColors position="top-center" />
-      <div className="bg-gray-100 min-h-screen font-sans">
-        <div className="max-w-2xl mx-auto flex flex-col h-screen">
+      <div className="bg-gray-100 min-h-dvh font-sans">
+        <div className="max-w-2xl mx-auto flex flex-col h-full">
           <div className="p-4 md:p-6">
             <ProfileHeaderCard
               driver={driver}
@@ -865,33 +858,28 @@ export const DriverInterface = () => {
             accept="image/*"
           />
 
-          <div className="bg-white rounded-t-lg shadow-md flex-grow flex flex-col overflow-hidden">
+          <div className="bg-white rounded-t-lg shadow-md flex-grow flex flex-col overflow-hidden min-h-0">
             <div className="border-b overflow-x-auto whitespace-nowrap">
               <div className="flex">
-                {TABS.map((tab, index) => (
+                {TABS.map((tab) => (
                   <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab as TabType)}
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as TabId)}
                     className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-300 ${
-                      activeTab === tab
+                      activeTab === tab.id
                         ? "border-b-2 border-orange-600 text-orange-600"
                         : "text-gray-500 hover:bg-gray-100"
                     }`}
                   >
-                    {tab === "availability" && <Zap size={16} />}
-                    {tab === "support" && <AlertTriangle size={16} />}
-                    {tab === "activeCalls" && <Clock size={16} />}
-                    {tab === "profile" && <User size={16} />}
-                    <span className="capitalize">
-                      {tab.replace("activeCalls", "Meus Chamados")}
-                    </span>
+                    {tab.icon}
+                    <span className="capitalize">{tab.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div
-              className="flex-grow overflow-hidden"
+              className="flex-1 overflow-hidden"
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
@@ -902,7 +890,7 @@ export const DriverInterface = () => {
                 style={{ transform: `translateX(-${activeTabIndex * 100}%)` }}
               >
                 {/* Availability Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-6">
                   <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
                     <h3 className="text-lg font-bold">
                       Estou disponível para apoio?
@@ -934,7 +922,7 @@ export const DriverInterface = () => {
                     </p>
                   </div>
                   {driver.status === "DISPONIVEL" && (
-                    <div className="mt-6">
+                    <div>
                       <h3 className="text-lg font-bold text-gray-800 mb-4">
                         Chamados de Apoio Disponíveis
                       </h3>
@@ -981,11 +969,11 @@ export const DriverInterface = () => {
                 </div>
 
                 {/* Active Calls Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-4">
+                  <h3 className="text-lg font-bold text-gray-800">
                     Histórico de Chamados
                   </h3>
-                  <div className="flex flex-wrap gap-2 mb-4 border-b pb-2">
+                  <div className="flex flex-wrap gap-2 border-b pb-2">
                     <button
                       onClick={() => setHistoryFilter("all")}
                       className={`px-3 py-1 text-sm rounded-full ${

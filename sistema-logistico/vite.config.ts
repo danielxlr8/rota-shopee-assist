@@ -9,8 +9,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Adicionado para permitir o acesso via ngrok
-  server: {
-    allowedHosts: [".ngrok-free.app"],
-  },
 });
