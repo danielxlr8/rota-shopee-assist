@@ -45,9 +45,8 @@ import {
   uploadBytesResumable,
   getDownloadURL,
 } from "firebase/storage";
-// --- ALTERAÇÃO AQUI ---
-// Importa o sistema de notificações Sonner e renomeia 'toast' para 'sonnerToast' para clareza
-import { Toaster, toast as sonnerToast } from "sonner";
+// Importa o sistema de notificações Sonner
+import { toast as sonnerToast } from "sonner";
 // Importa o logótipo
 import spxLogo from "/spx-logo.png";
 
@@ -383,26 +382,50 @@ export const DriverInterface = () => {
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
   const userId = auth.currentUser?.uid;
-  const prevOpenCallsCount = useRef(openSupportCalls.length);
+  const notifiedCallIds = useRef(new Set<string>());
 
+  // Efeito para notificações de novos chamados
   useEffect(() => {
-    if (openSupportCalls.length > prevOpenCallsCount.current) {
-      const newCall = openSupportCalls[0];
-      if (newCall) {
-        sonnerToast.custom((t) => (
-          <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-            <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-            <div>
-              <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
-              <p className="text-sm text-gray-600">
-                Um novo chamado de {newCall.solicitante.name} está aberto.
-              </p>
+    // Identifica chamados que são novos desde a última verificação
+    const newCalls = openSupportCalls.filter(
+      (call) => !notifiedCallIds.current.has(call.id)
+    );
+
+    if (newCalls.length > 0) {
+      // Toca um som para as novas notificações
+      const audio = new Audio("/shopee-ringtone.mp3");
+      audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+
+      // Mostra uma notificação para cada novo chamado
+      newCalls.forEach((newCall) => {
+        sonnerToast.custom(
+          () => (
+            <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+              <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+              <div>
+                <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
+                <p className="text-sm text-gray-600">
+                  Um novo chamado de {newCall.solicitante.name} está aberto.
+                </p>
+              </div>
             </div>
-          </div>
-        ));
-      }
+          ),
+          {
+            duration: 10000, // Mantém a notificação por 10 segundos
+          }
+        );
+        // Adiciona o ID do novo chamado ao conjunto para não notificar novamente
+        notifiedCallIds.current.add(newCall.id);
+      });
     }
-    prevOpenCallsCount.current = openSupportCalls.length;
+
+    // Limpa o conjunto, removendo IDs de chamados que não estão mais abertos
+    const openCallIds = new Set(openSupportCalls.map((c) => c.id));
+    notifiedCallIds.current.forEach((id) => {
+      if (!openCallIds.has(id)) {
+        notifiedCallIds.current.delete(id);
+      }
+    });
   }, [openSupportCalls]);
 
   useEffect(() => {
@@ -619,7 +642,7 @@ export const DriverInterface = () => {
 
     uploadTask.on(
       "state_changed",
-      (snapshot) => {},
+      () => {},
       (error) => {
         console.error("Upload failed:", error);
         alert("Falha ao enviar a imagem.");
@@ -839,7 +862,6 @@ export const DriverInterface = () => {
 
   return (
     <>
-      <Toaster richColors position="top-center" />
       <div className="bg-gray-100 min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
           <div className="p-4 md:p-6">

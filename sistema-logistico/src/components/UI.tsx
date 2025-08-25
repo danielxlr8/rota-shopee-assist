@@ -10,15 +10,18 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { Timestamp } from "firebase/firestore"; // Importar o tipo Timestamp
 
-// Componente Avatar
+// --- CORREÇÃO AQUI ---
+// Adicionada a propriedade opcional 'onClick' para tornar o componente clicável
 export const AvatarComponent = ({
   user,
+  onClick,
 }: {
   user: { avatar: string; initials: string; name: string };
+  onClick?: () => void;
 }) => (
-  <div className="relative inline-block">
+  <div className="relative inline-block" onClick={onClick}>
     <img
-      className="h-10 w-10 rounded-full"
+      className={`h-10 w-10 rounded-full ${onClick ? "cursor-pointer" : ""}`}
       src={user.avatar}
       alt={`Avatar de ${user.name}`}
       onError={(e) => {
@@ -47,7 +50,6 @@ export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
 
 // Componente StatusBadge
 export const StatusBadge = ({ status }: { status: DriverStatus }) => {
-  // CORREÇÃO: Adicionados todos os status possíveis para corresponder ao tipo DriverStatus.
   const statusInfo: Record<DriverStatus, { text: string; class: string }> = {
     DISPONIVEL: { text: "Disponível", class: "bg-green-100 text-green-800" },
     INDISPONIVEL: { text: "Indisponível", class: "bg-gray-100 text-gray-800" },
@@ -61,7 +63,7 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   };
   const info = statusInfo[status];
   if (!info) {
-    return null; // Retorna nulo se o status for inesperado
+    return null;
   }
   const { text, class: className } = info;
   return (
@@ -73,7 +75,7 @@ export const StatusBadge = ({ status }: { status: DriverStatus }) => {
   );
 };
 
-// --- COMPONENTE CALLCARD ATUALIZADO ---
+// Componente CallCard
 export const CallCard = ({
   call,
   onAction,
@@ -83,17 +85,14 @@ export const CallCard = ({
   onAction?: (id: string) => void;
   actionText?: string;
 }) => {
-  // Função para formatar o tempo de forma segura
   const formatTimestamp = (timestamp: any): string => {
     if (!timestamp) return "Horário indisponível";
-    // Verifica se o timestamp é um objeto do Firebase e converte-o
     if (timestamp instanceof Timestamp) {
       return formatDistanceToNow(timestamp.toDate(), {
         addSuffix: true,
         locale: ptBR,
       });
     }
-    // Se já for um número (timestamp do JS), cria uma nova data
     if (typeof timestamp === "number") {
       return formatDistanceToNow(new Date(timestamp), {
         addSuffix: true,

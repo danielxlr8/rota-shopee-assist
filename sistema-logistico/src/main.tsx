@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
+import App from "./App"; // CORREÇÃO: Removida a extensão .tsx da importação
 import "./index.css";
 
 // Com as configurações corrigidas, esta importação vai funcionar

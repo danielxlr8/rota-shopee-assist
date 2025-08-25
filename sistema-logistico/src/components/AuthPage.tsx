@@ -121,8 +121,11 @@ export const AuthPage = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-orange-50">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+    <div
+      className="flex items-center justify-center min-h-screen bg-cover bg-center"
+      style={{ backgroundImage: "url('/SP3.jpg')" }}
+    >
+      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md bg-opacity-90 backdrop-blur-sm">
         <div className="text-center">
           <img
             src="/spx-logo.png"
@@ -130,7 +133,7 @@ export const AuthPage = () => {
             className="w-24 h-auto mx-auto mb-4"
           />
           <h1 className="text-2xl font-bold text-gray-800">
-            {isLogin ? "Aceda à sua Conta" : "Crie a sua Conta"}
+            {isLogin ? "Faça seu login" : "Crie a sua Conta"}
           </h1>
           <p className="text-gray-500">
             {isLogin ? "Bem-vindo de volta!" : "Registe-se para começar."}
