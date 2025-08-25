@@ -7,21 +7,16 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      // Esta linha ensina o Vite a entender os caminhos que começam com '@/'
-      "@": path.resolve(__dirname, "../src"),
+      // CORREÇÃO: Apontando o alias '@' para a pasta 'src' DENTRO do projeto atual.
+      "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Esta secção dá permissão ao servidor para aceder aos ficheiros da pasta principal
   server: {
-    // Adicionado para permitir o acesso via ngrok
+    // Mantido para permitir acesso via ngrok ou outras ferramentas
     allowedHosts: [".ngrok-free.app"],
     fs: {
-      allow: [
-        // Permite acesso à pasta de trabalho atual (sistema-logistico)
-        ".",
-        // Permite acesso à pasta do projeto principal, um nível acima
-        "../",
-      ],
+      // Esta configuração não é mais necessária com o alias corrigido, mas pode ser mantida por segurança.
+      allow: ["."],
     },
   },
 });
