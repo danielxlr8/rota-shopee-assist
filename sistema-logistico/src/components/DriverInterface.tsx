@@ -60,6 +60,10 @@ const hubs = [
 
 const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
+// CORREÇÃO: Set de notificações movido para fora do componente.
+// Isso garante que ele persista durante toda a sessão do usuário, mesmo se o componente for remontado.
+const sessionNotifiedCallIds = new Set<string>();
+
 // Card de Cabeçalho do Perfil
 const ProfileHeaderCard = ({
   driver,
@@ -336,7 +340,6 @@ const OpenCallCard = ({
     const message = encodeURIComponent(
       `Olá ${call.solicitante.name}, me chamo ${currentDriverName} e aceitei seu chamado e serei seu apoio`
     );
-    // CORREÇÃO: Corrigido o erro de digitação de 'requESTERPhone' para 'requesterPhone'
     window.open(`https://wa.me/55${requesterPhone}?text=${message}`, "_blank");
   };
 
@@ -433,9 +436,7 @@ export const DriverInterface = () => {
   const swipeContainerRef = useRef<HTMLDivElement>(null);
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
   const userId = auth.currentUser?.uid;
-  const notifiedCallIds = useRef(new Set<string>());
   const [routeIdSearch, setRouteIdSearch] = useState("");
-  const prevOpenSupportCallsRef = useRef<SupportCall[]>([]);
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
 
@@ -466,63 +467,52 @@ export const DriverInterface = () => {
     }
   }, [driver, isProfileComplete]);
 
-  useEffect(() => {
-    const prevCallIds = new Set(
-      prevOpenSupportCallsRef.current.map((c) => c.id)
-    );
-    const newCalls = openSupportCalls.filter(
-      (call) => !prevCallIds.has(call.id)
-    );
+  // CORREÇÃO: Lógica de notificação refatorada para ser mais robusta.
+  // Usamos uma ref para a função de notificação para que o listener do Firebase
+  // sempre tenha acesso aos estados mais recentes (driver, isMuted).
+  const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
 
-    if (newCalls.length > 0 && driver?.status === "DISPONIVEL") {
+  useEffect(() => {
+    triggerNotificationRef.current = (newCall: SupportCall) => {
+      if (
+        driver?.status !== "DISPONIVEL" ||
+        sessionNotifiedCallIds.has(newCall.id)
+      ) {
+        return;
+      }
+
       if (!isMuted) {
         const audio = new Audio("/shopee-ringtone.mp3");
         audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
       }
 
-      newCalls.forEach((newCall) => {
-        if (!notifiedCallIds.current.has(newCall.id)) {
-          sonnerToast.custom(
-            () => (
-              <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-                <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-                <div>
-                  <p className="font-bold text-gray-800">
-                    Novo Apoio Disponível
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Um novo chamado de {newCall.solicitante.name} está aberto.
-                  </p>
-                </div>
-              </div>
-            ),
-            {
-              duration: 10000,
-            }
-          );
-          if (document.hidden && Notification.permission === "granted") {
-            new Notification("Novo Apoio Disponível!", {
-              body: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
-              icon: spxLogo,
-            });
-            if ("vibrate" in navigator) {
-              navigator.vibrate([200, 100, 200]);
-            }
-          }
-          notifiedCallIds.current.add(newCall.id);
+      sonnerToast.custom(
+        () => (
+          <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+            <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+            <div>
+              <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
+              <p className="text-sm text-gray-600">
+                Um novo chamado de {newCall.solicitante.name} está aberto.
+              </p>
+            </div>
+          </div>
+        ),
+        { duration: 10000 }
+      );
+
+      if (document.hidden && Notification.permission === "granted") {
+        new Notification("Novo Apoio Disponível!", {
+          body: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
+          icon: spxLogo,
+        });
+        if ("vibrate" in navigator) {
+          navigator.vibrate([200, 100, 200]);
         }
-      });
-    }
-
-    prevOpenSupportCallsRef.current = openSupportCalls;
-
-    const openCallIds = new Set(openSupportCalls.map((c) => c.id));
-    notifiedCallIds.current.forEach((id) => {
-      if (!openCallIds.has(id)) {
-        notifiedCallIds.current.delete(id);
       }
-    });
-  }, [openSupportCalls, driver?.status, isMuted]);
+      sessionNotifiedCallIds.add(newCall.id);
+    };
+  }, [driver?.status, isMuted]); // Este efeito atualiza a função na ref quando o status ou som mudam.
 
   useEffect(() => {
     if (!userId) {
@@ -595,7 +585,24 @@ export const DriverInterface = () => {
       collection(db, "supportCalls"),
       where("status", "==", "ABERTO")
     );
+    // CORREÇÃO: Listener de chamados abertos agora usa docChanges para notificações
     const unsubscribeOpenCalls = onSnapshot(openCallsQuery, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const callData = {
+          id: change.doc.id,
+          ...change.doc.data(),
+        } as SupportCall;
+        if (callData.solicitante.id !== userId) {
+          if (change.type === "added") {
+            triggerNotificationRef.current(callData);
+          }
+          if (change.type === "removed") {
+            sessionNotifiedCallIds.delete(callData.id);
+          }
+        }
+      });
+
+      // A atualização do estado para a UI continua a mesma
       const openCallsData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
@@ -610,7 +617,7 @@ export const DriverInterface = () => {
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
     };
-  }, [userId]);
+  }, [userId]); // Apenas userId como dependência para configurar os listeners uma vez.
 
   const updateDriver = async (
     driverId: string,
