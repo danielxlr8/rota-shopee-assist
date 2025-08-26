@@ -57,3 +57,9 @@ export interface Driver {
   hub?: string; // CORREÇÃO: Campo adicionado
   vehicleType?: string; // CORREÇÃO: Campo adicionado
 }
+
+export interface SupportCall {
+  id: string;
+  routeId?: string; // Adicione esta linha
+  // ... outras propriedades existentes
+}

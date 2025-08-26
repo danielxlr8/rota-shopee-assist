@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+// Lembre-se de adicionar `approvedBy?: string;` à sua interface SupportCall em `src/types/logistics.ts` para resolver o erro de tipagem.
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -14,11 +15,12 @@ import {
   Search,
   Building,
   Truck,
-  History, // Ícone para a nova aba
+  Ticket,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase";
 import {
   AvatarComponent,
   UrgencyBadge,
@@ -326,10 +328,13 @@ const CallCard = ({
   const formatTimestamp = (timestamp: any): string => {
     if (!timestamp) return "Horário indisponível";
     let date;
-    if (timestamp instanceof Timestamp) date = timestamp.toDate();
-    else if (typeof timestamp === "object" && timestamp.seconds)
-      date = new Timestamp(timestamp.seconds, timestamp.nanoseconds).toDate();
-    else date = new Date(timestamp);
+    if (timestamp instanceof Timestamp) {
+        date = timestamp.toDate();
+    } else if (timestamp && typeof timestamp.seconds === 'number') {
+        date = new Date(timestamp.seconds * 1000);
+    } else {
+        return "Data inválida";
+    }
     if (isNaN(date.getTime())) return "Data inválida";
     return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
   };
@@ -364,6 +369,14 @@ const CallCard = ({
       </div>
       <div className="text-sm text-gray-600 space-y-2">
         <div className="flex items-center space-x-2">
+            <Ticket size={16} className="text-gray-400" />
+            <span>{call.routeId || "N/A"}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+            <Building size={16} className="text-gray-400" />
+            <span>{call.hub || "N/A"}</span>
+        </div>
+        <div className="flex items-center space-x-2">
           <Clock size={16} className="text-gray-400" />
           <span>{timeAgo}</span>
         </div>
@@ -378,6 +391,85 @@ const CallCard = ({
     </div>
   );
 };
+
+const ApprovalCard = ({
+    call,
+    onApprove,
+    onReject,
+    onDelete,
+    drivers,
+  }: {
+    call: SupportCall;
+    onApprove: (call: SupportCall) => void;
+    onReject: (call: SupportCall) => void;
+    onDelete: (call: SupportCall) => void;
+    drivers: Driver[];
+  }) => {
+    const assignedDriver = drivers.find((d) => d.id === call.assignedTo);
+  
+    return (
+      <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center space-x-3">
+            <AvatarComponent user={call.solicitante} />
+            <div>
+              <p className="font-bold text-gray-800">{call.solicitante.name}</p>
+              <p className="text-sm text-gray-500">Solicitante</p>
+            </div>
+          </div>
+          <UrgencyBadge urgency={call.urgency} />
+        </div>
+  
+        {assignedDriver && (
+          <div className="flex items-center gap-3 text-sm text-gray-600">
+            <ArrowRight size={16} className="text-gray-400" />
+            <AvatarComponent user={assignedDriver} />
+            <div>
+              <p className="font-semibold">{assignedDriver.name}</p>
+              <p className="text-xs text-gray-500">Prestador do Apoio</p>
+            </div>
+          </div>
+        )}
+  
+        <div className="text-sm text-gray-600 space-y-2">
+            <div className="flex items-center space-x-2">
+                <Ticket size={16} className="text-gray-400" />
+                <span>{call.routeId || "N/A"}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Building size={16} className="text-gray-400" />
+                <span>{call.hub || "N/A"}</span>
+            </div>
+        </div>
+
+        <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
+          {call.description}
+        </p>
+  
+        <div className="mt-2 pt-2 border-t flex justify-end gap-3">
+          <button
+            onClick={() => onDelete(call)}
+            className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+            title="Excluir Solicitação"
+          >
+            <Trash2 size={16} />
+          </button>
+          <button
+            onClick={() => onReject(call)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+          >
+            <X size={16} /> Rejeitar
+          </button>
+          <button
+            onClick={() => onApprove(call)}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+          >
+            <CheckCircle size={16} /> Aprovar
+          </button>
+        </div>
+      </div>
+    );
+  };
 
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
@@ -413,6 +505,7 @@ export const AdminDashboard = ({
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
   const notifiedCallIds = useRef(new Set<string>());
+  const prevCallsRef = useRef<SupportCall[]>([]); // Ref para guardar o estado anterior
 
   // States para a aba de Histórico
   const [historyDateFilter, setHistoryDateFilter] = useState({
@@ -426,35 +519,50 @@ export const AdminDashboard = ({
   const [driverVehicleFilter, setDriverVehicleFilter] =
     useState<string>("Todos os Veículos");
 
+  const updateDriver = async (driverId: string, updates: Partial<Omit<Driver, "id">>) => {
+    if (!driverId) return;
+    const driverDocRef = doc(db, "drivers", driverId);
+    await updateDoc(driverDocRef, updates);
+  };
+
   useEffect(() => {
-    const newOpenCalls = calls.filter(
-      (call) =>
-        call.status === "ABERTO" && !notifiedCallIds.current.has(call.id)
+    const prevCallsMap = new Map(
+      prevCallsRef.current.map((c) => [c.id, c.status])
     );
+    const newOpenCalls = calls.filter((call) => {
+      const prevStatus = prevCallsMap.get(call.id);
+      return call.status === "ABERTO" && prevStatus !== "ABERTO";
+    });
 
     if (newOpenCalls.length > 0) {
       const audio = new Audio("/shopee-ringtone.mp3");
       audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
 
       newOpenCalls.forEach((newCall) => {
-        sonnerToast.custom(
-          () => (
-            <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-              <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-              <div>
-                <p className="font-bold text-gray-800">Novo Chamado Aberto!</p>
-                <p className="text-sm text-gray-600">
-                  {newCall.solicitante.name} do hub{" "}
-                  {newCall.hub || "desconhecido"} precisa de apoio.
-                </p>
+        if (!notifiedCallIds.current.has(newCall.id)) {
+          sonnerToast.custom(
+            () => (
+              <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+                <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+                <div>
+                  <p className="font-bold text-gray-800">
+                    Novo Chamado Aberto!
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {newCall.solicitante.name} do hub{" "}
+                    {newCall.hub || "desconhecido"} precisa de apoio.
+                  </p>
+                </div>
               </div>
-            </div>
-          ),
-          { duration: 10000 }
-        );
-        notifiedCallIds.current.add(newCall.id);
+            ),
+            { duration: 10000 }
+          );
+          notifiedCallIds.current.add(newCall.id);
+        }
       });
     }
+
+    prevCallsRef.current = calls;
 
     const openCallIds = new Set(
       calls.filter((c) => c.status === "ABERTO").map((c) => c.id)
@@ -465,6 +573,34 @@ export const AdminDashboard = ({
       }
     });
   }, [calls]);
+
+  const handleApprove = async (call: SupportCall) => {
+    try {
+        const updates: Partial<SupportCall> = { status: "CONCLUIDO", approvedBy: "Admin" };
+        await updateCall(call.id, updates);
+
+        if (call.solicitante.id) {
+            await updateDriver(call.solicitante.id, { status: "DISPONIVEL" });
+        }
+        if (call.assignedTo) {
+            await updateDriver(call.assignedTo, { status: "DISPONIVEL" });
+        }
+        sonnerToast.success("Chamado aprovado e concluído com sucesso!");
+    } catch (error) {
+        console.error("Erro ao aprovar chamado:", error);
+        sonnerToast.error("Falha ao aprovar o chamado.");
+    }
+  };
+  
+  const handleReject = async (call: SupportCall) => {
+      try {
+          await updateCall(call.id, { status: "EM ANDAMENTO" });
+          sonnerToast.warning("Aprovação rejeitada. O chamado voltou para 'Em Andamento'.");
+      } catch (error) {
+          console.error("Erro ao rejeitar chamado:", error);
+          sonnerToast.error("Falha ao rejeitar o chamado.");
+      }
+  };
 
   const handleAcionarDriver = (driverId: string) => {
     const driver = drivers.find((d) => d.id === driverId);
@@ -540,25 +676,19 @@ export const AdminDashboard = ({
     () =>
       [
         "Todos os Hubs",
-        ...Array.from(new Set(drivers.map((d) => d.hub).filter(Boolean))),
+        ...new Set(drivers.map((d) => d.hub).filter(Boolean)),
       ].sort(),
     [drivers]
   );
   const allHubs = useMemo(
-    () =>
-      [
-        "Todos",
-        ...Array.from(new Set(calls.map((c) => c.hub).filter(Boolean))),
-      ].sort(),
+    () => ["Todos", ...new Set(calls.map((c) => c.hub).filter(Boolean))].sort(),
     [calls]
   );
   const vehicleTypes = useMemo(
     () =>
       [
         "Todos os Veículos",
-        ...Array.from(
-          new Set(drivers.map((d) => d.vehicleType).filter(Boolean))
-        ),
+        ...new Set(drivers.map((d) => d.vehicleType).filter(Boolean)),
       ].sort(),
     [drivers]
   );
@@ -582,11 +712,13 @@ export const AdminDashboard = ({
         if (historyHubFilter !== "Todos" && call.hub !== historyHubFilter)
           return false;
 
+        const callTimestamp = call.timestamp;
+        if (!callTimestamp) return true;
+
         const callDate =
-          call.timestamp && typeof (call.timestamp as any).toDate === "function"
-            ? (call.timestamp as Timestamp).toDate()
-            : null;
-        if (!callDate) return true;
+          callTimestamp instanceof Timestamp
+            ? callTimestamp.toDate()
+            : new Date((callTimestamp as any).seconds * 1000);
 
         if (historyDateFilter.start) {
           const startDate = new Date(historyDateFilter.start);
@@ -594,20 +726,20 @@ export const AdminDashboard = ({
         }
         if (historyDateFilter.end) {
           const endDate = new Date(historyDateFilter.end);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setHours(23, 59, 59, 999); // Include the whole end day
           if (callDate > endDate) return false;
         }
         return true;
       })
       .sort((a, b) => {
         const timeA =
-          a.timestamp && typeof (a.timestamp as any).toDate === "function"
-            ? (a.timestamp as Timestamp).toDate().getTime()
-            : 0;
+          a.timestamp instanceof Timestamp
+            ? a.timestamp.toMillis()
+            : (a.timestamp as any)?.seconds * 1000 || 0;
         const timeB =
-          b.timestamp && typeof (b.timestamp as any).toDate === "function"
-            ? (b.timestamp as Timestamp).toDate().getTime()
-            : 0;
+          b.timestamp instanceof Timestamp
+            ? b.timestamp.toMillis()
+            : (b.timestamp as any)?.seconds * 1000 || 0;
         return timeB - timeA;
       });
   }, [calls, historyHubFilter, historyDateFilter]);
@@ -737,13 +869,13 @@ export const AdminDashboard = ({
           </button>
           <button
             onClick={() => setAdminView("history")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors flex items-center gap-2 ${
+            className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "history"
                 ? "border-b-2 border-orange-600 text-orange-600"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <History size={16} /> Histórico
+            Histórico
           </button>
         </div>
       </nav>
@@ -871,6 +1003,32 @@ export const AdminDashboard = ({
         </div>
       )}
 
+      {adminView === "approvals" && (
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            Aprovações Pendentes
+          </h2>
+          <div className="space-y-4">
+            {pendingApprovalCalls.length > 0 ? (
+              pendingApprovalCalls.map((call) => (
+                <ApprovalCard
+                  key={call.id}
+                  call={call}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onDelete={handleDeleteClick}
+                  drivers={drivers}
+                />
+              ))
+            ) : (
+              <p className="text-center text-gray-500 pt-8">
+                Não há solicitações pendentes de aprovação.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {adminView === "history" && (
         <div className="p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4">
@@ -953,11 +1111,9 @@ export const AdminDashboard = ({
                   const assignedDriver = drivers.find(
                     (d) => d.id === call.assignedTo
                   );
-                  const callDate =
-                    call.timestamp &&
-                    typeof (call.timestamp as any).toDate === "function"
-                      ? (call.timestamp as Timestamp).toDate()
-                      : null;
+                  const callTimestamp = call.timestamp;
+                  const formattedDate = callTimestamp ? format(callTimestamp instanceof Timestamp ? callTimestamp.toDate() : new Date((callTimestamp as any).seconds * 1000), "dd/MM/yy HH:mm") : "N/A";
+
                   return (
                     <tr
                       key={call.id}
@@ -971,9 +1127,7 @@ export const AdminDashboard = ({
                       </td>
                       <td className="px-6 py-4">{call.hub || "N/A"}</td>
                       <td className="px-6 py-4">{call.status}</td>
-                      <td className="px-6 py-4">
-                        {callDate ? format(callDate, "dd/MM/yy HH:mm") : "N/A"}
-                      </td>
+                      <td className="px-6 py-4">{formattedDate}</td>
                       <td className="px-6 py-4">
                         {(call as any).approvedBy || "N/A"}
                       </td>
@@ -1025,45 +1179,41 @@ export const AdminDashboard = ({
                   excludedHubFilter ? call.hub === excludedHubFilter : true
                 )
                 .map((call) => {
-                  const deletedDate =
-                    call.deletedAt &&
-                    typeof (call.deletedAt as any).toDate === "function"
-                      ? (call.deletedAt as Timestamp).toDate()
-                      : null;
-                  return (
-                    <div
-                      key={call.id}
-                      className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-bold">{call.solicitante.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {call.description}
-                        </p>
-                        {deletedDate && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Excluído em:{" "}
-                            {format(deletedDate, "dd/MM/yyyy 'às' HH:mm")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleRestore(call.id)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                    const deletedTimestamp = call.deletedAt;
+                    const formattedDeletedDate = deletedTimestamp ? format(deletedTimestamp instanceof Timestamp ? deletedTimestamp.toDate() : new Date((deletedTimestamp as any).seconds * 1000), "dd/MM/yyyy 'às' HH:mm") : "Data indisponível";
+                    return (
+                        <div
+                        key={call.id}
+                        className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
                         >
-                          <RotateCcw size={14} /> Restaurar
-                        </button>
-                        <button
-                          onClick={() => handlePermanentDeleteClick(call)}
-                          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                          title="Excluir Permanentemente"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
+                        <div>
+                            <p className="font-bold">{call.solicitante.name}</p>
+                            <p className="text-sm text-gray-500">
+                            {call.description}
+                            </p>
+                            {call.deletedAt && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                Excluído em: {formattedDeletedDate}
+                            </p>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                            onClick={() => handleRestore(call.id)}
+                            className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                            >
+                            <RotateCcw size={14} /> Restaurar
+                            </button>
+                            <button
+                            onClick={() => handlePermanentDeleteClick(call)}
+                            className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                            title="Excluir Permanentemente"
+                            >
+                            <Trash2 size={14} />
+                            </button>
+                        </div>
+                        </div>
+                    )
                 })
             ) : (
               <p className="text-center text-gray-500">
