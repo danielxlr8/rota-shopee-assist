@@ -434,6 +434,7 @@ export const DriverInterface = () => {
   const notifiedCallIds = useRef(new Set<string>());
   const [routeIdSearch, setRouteIdSearch] = useState("");
   const prevOpenSupportCallsRef = useRef<SupportCall[]>([]);
+  const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -845,7 +846,11 @@ export const DriverInterface = () => {
   };
 
   const filteredCalls = useMemo(() => {
-    const activeCalls = allMyCalls.filter((call) => call.status !== "EXCLUIDO");
+    const activeCalls = allMyCalls.filter((call) => {
+      const hubMatch =
+        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
+      return call.status !== "EXCLUIDO" && hubMatch;
+    });
 
     if (historyFilter === "requester")
       return activeCalls.filter((call) => call.solicitante.id === userId);
@@ -858,18 +863,29 @@ export const DriverInterface = () => {
         )
       );
     return activeCalls;
-  }, [allMyCalls, historyFilter, userId]);
+  }, [allMyCalls, historyFilter, userId, globalHubFilter]);
 
   const filteredOpenCalls = useMemo(() => {
     return openSupportCalls.filter((call) => {
-      if (!routeIdSearch) {
-        return true;
-      }
-      return call.routeId
-        ? call.routeId.toLowerCase().includes(routeIdSearch.toLowerCase())
-        : false;
+      const hubMatch =
+        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
+      const searchMatch =
+        !routeIdSearch ||
+        (call.routeId
+          ? call.routeId.toLowerCase().includes(routeIdSearch.toLowerCase())
+          : false);
+      return hubMatch && searchMatch;
     });
-  }, [openSupportCalls, routeIdSearch]);
+  }, [openSupportCalls, routeIdSearch, globalHubFilter]);
+
+  const allHubs = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(allDrivers.map((d) => d.hub).filter(Boolean)),
+      ].sort(),
+    [allDrivers]
+  );
 
   const filteredHubs = useMemo(() => {
     if (!hubSearch) return hubs;
@@ -998,7 +1014,23 @@ export const DriverInterface = () => {
           />
 
           <div className="bg-white rounded-t-lg shadow-md flex-grow flex flex-col overflow-hidden min-h-0">
-            <div className="border-b overflow-x-auto whitespace-nowrap">
+            <div className="px-4 pt-4">
+              <label className="text-sm font-medium text-gray-700">
+                Filtrar por Hub
+              </label>
+              <select
+                value={globalHubFilter}
+                onChange={(e) => setGlobalHubFilter(e.target.value)}
+                className="w-full p-2 mt-1 border rounded-md bg-white shadow-sm"
+              >
+                {allHubs.map((hub) => (
+                  <option key={hub} value={hub}>
+                    {hub}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="border-b overflow-x-auto whitespace-nowrap mt-4">
               <div className="flex">
                 {TABS.map((tab) => (
                   <button
