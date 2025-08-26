@@ -21,8 +21,9 @@ import {
   EyeOff,
   Search,
   Camera,
-  PlusCircle, // Ícone para adicionar
-  MinusCircle, // Ícone para remover
+  PlusCircle,
+  MinusCircle,
+  Ticket, // Ícone para ID da Rota
 } from "lucide-react";
 // Importações do Firebase
 import { auth, db } from "../firebase";
@@ -45,9 +46,7 @@ import {
   uploadBytesResumable,
   getDownloadURL,
 } from "firebase/storage";
-// Importa o sistema de notificações Sonner
-import { toast as sonnerToast } from "sonner";
-// Importa o logótipo
+import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
 const hubs = [
@@ -164,12 +163,14 @@ const DriverCallHistoryCard = ({
   allDrivers,
   onCancelSupport,
   onDeleteSupportRequest,
+  onRequestApproval,
 }: {
   call: SupportCall;
   currentDriver: Driver;
   allDrivers: Driver[];
   onCancelSupport: (callId: string) => void;
   onDeleteSupportRequest: (callId: string) => void;
+  onRequestApproval: (callId: string) => void;
 }) => {
   const isRequester = call.solicitante.id === currentDriver.id;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
@@ -185,7 +186,11 @@ const DriverCallHistoryCard = ({
       statusText = "Aguardando Apoio";
       statusColor = "bg-yellow-200 text-yellow-800";
       icon = <HelpCircle size={20} className="text-yellow-500" />;
-    } else {
+    } else if (call.status === "AGUARDANDO_APROVACAO") {
+      statusText = "Aguardando Aprovação";
+      statusColor = "bg-purple-200 text-purple-800";
+      icon = <Clock size={20} className="text-purple-500" />;
+    } else if (call.status === "EM ANDAMENTO") {
       statusText = `Recebendo Apoio`;
       statusColor = "bg-blue-200 text-blue-800";
       icon = (
@@ -194,9 +199,15 @@ const DriverCallHistoryCard = ({
     }
   } else {
     title = `Apoio a ${call.solicitante.name}`;
-    statusText = "Prestando Apoio";
-    statusColor = "bg-green-200 text-green-800";
-    icon = <Truck size={20} className="text-green-500" />;
+    if (call.status === "EM ANDAMENTO") {
+      statusText = "Prestando Apoio";
+      statusColor = "bg-green-200 text-green-800";
+      icon = <Truck size={20} className="text-green-500" />;
+    } else if (call.status === "AGUARDANDO_APROVACAO") {
+      statusText = "Aguardando Aprovação";
+      statusColor = "bg-purple-200 text-purple-800";
+      icon = <Clock size={20} className="text-purple-500" />;
+    }
   }
   if (call.status === "CONCLUIDO") {
     statusText = "Concluído";
@@ -231,6 +242,15 @@ const DriverCallHistoryCard = ({
           {statusText}
         </div>
       </div>
+
+      <div className="mt-3 pt-3 border-t text-xs text-gray-600">
+        <p className="flex items-center gap-2">
+          <Ticket size={14} />
+          <span className="font-semibold">ID da Rota:</span>{" "}
+          {call.routeId || "N/A"}
+        </p>
+      </div>
+
       {(call.status === "EM ANDAMENTO" ||
         call.status === "AGUARDANDO_APROVACAO" ||
         call.status === "APROVADO" ||
@@ -244,23 +264,46 @@ const DriverCallHistoryCard = ({
               <Phone size={14} /> Contatar
             </button>
           )}
-          {!isRequester && (
+          {!isRequester && call.status === "EM ANDAMENTO" && (
+            <>
+              <button
+                onClick={() => onRequestApproval(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
+              >
+                <Clock size={14} /> Aguardando Aprovação
+              </button>
+              <button
+                onClick={() => onCancelSupport(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+              >
+                <XCircle size={14} /> Cancelar Apoio
+              </button>
+            </>
+          )}
+          {isRequester && call.status === "ABERTO" && (
             <button
-              onClick={() => onCancelSupport(call.id)}
+              onClick={() => onDeleteSupportRequest(call.id)}
               className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
             >
-              <XCircle size={14} /> Cancelar Apoio
+              <XCircle size={14} /> Cancelar Solicitação
             </button>
           )}
-          {isRequester &&
-            (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
+          {isRequester && call.status === "EM ANDAMENTO" && (
+            <>
+              <button
+                onClick={() => onRequestApproval(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
+              >
+                <Clock size={14} /> Aguardando Aprovação
+              </button>
               <button
                 onClick={() => onDeleteSupportRequest(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
               >
                 <XCircle size={14} /> Cancelar Solicitação
               </button>
-            )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -325,7 +368,13 @@ const OpenCallCard = ({
         </div>
       </div>
       <div className="mt-3 pt-3 border-t text-xs text-gray-600 space-y-1">
-        <p>
+        <p className="flex items-center gap-2">
+          <Ticket size={14} />
+          <span className="font-semibold">ID da Rota:</span>{" "}
+          {call.routeId || "N/A"}
+        </p>
+        <p className="flex items-center gap-2">
+          <MapPin size={14} />
           <span className="font-semibold">Local:</span> {call.location}
         </p>
       </div>
@@ -383,43 +432,59 @@ export const DriverInterface = () => {
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
   const userId = auth.currentUser?.uid;
   const notifiedCallIds = useRef(new Set<string>());
+  const [routeIdSearch, setRouteIdSearch] = useState("");
+  const prevOpenSupportCallsRef = useRef<SupportCall[]>([]);
 
-  // Efeito para notificações de novos chamados
+  const isProfileComplete = useMemo(() => {
+    if (!driver) return false;
+    return !!(driver.hub && driver.vehicleType && driver.phone);
+  }, [driver]);
+
   useEffect(() => {
-    // Identifica chamados que são novos desde a última verificação
+    if (driver && !isProfileComplete) {
+      setActiveTab("profile");
+    }
+  }, [driver, isProfileComplete]);
+
+  useEffect(() => {
+    const prevCallIds = new Set(
+      prevOpenSupportCallsRef.current.map((c) => c.id)
+    );
     const newCalls = openSupportCalls.filter(
-      (call) => !notifiedCallIds.current.has(call.id)
+      (call) => !prevCallIds.has(call.id)
     );
 
     if (newCalls.length > 0) {
-      // Toca um som para as novas notificações
       const audio = new Audio("/shopee-ringtone.mp3");
       audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
 
-      // Mostra uma notificação para cada novo chamado
       newCalls.forEach((newCall) => {
-        sonnerToast.custom(
-          () => (
-            <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-              <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-              <div>
-                <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
-                <p className="text-sm text-gray-600">
-                  Um novo chamado de {newCall.solicitante.name} está aberto.
-                </p>
+        if (!notifiedCallIds.current.has(newCall.id)) {
+          sonnerToast.custom(
+            () => (
+              <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+                <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+                <div>
+                  <p className="font-bold text-gray-800">
+                    Novo Apoio Disponível
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Um novo chamado de {newCall.solicitante.name} está aberto.
+                  </p>
+                </div>
               </div>
-            </div>
-          ),
-          {
-            duration: 10000, // Mantém a notificação por 10 segundos
-          }
-        );
-        // Adiciona o ID do novo chamado ao conjunto para não notificar novamente
-        notifiedCallIds.current.add(newCall.id);
+            ),
+            {
+              duration: 10000,
+            }
+          );
+          notifiedCallIds.current.add(newCall.id);
+        }
       });
     }
 
-    // Limpa o conjunto, removendo IDs de chamados que não estão mais abertos
+    prevOpenSupportCallsRef.current = openSupportCalls;
+
     const openCallIds = new Set(openSupportCalls.map((c) => c.id));
     notifiedCallIds.current.forEach((id) => {
       if (!openCallIds.has(id)) {
@@ -552,12 +617,24 @@ export const DriverInterface = () => {
   };
 
   const handleAvailabilityChange = (isAvailable: boolean) => {
+    if (!isProfileComplete) {
+      sonnerToast.error(
+        "Complete seu perfil para alterar sua disponibilidade."
+      );
+      setActiveTab("profile");
+      return;
+    }
     if (!userId) return;
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
     updateDriver(userId, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
+    if (!isProfileComplete) {
+      sonnerToast.error("Complete seu perfil para aceitar um chamado.");
+      setActiveTab("profile");
+      return;
+    }
     if (!userId || !driver) return;
 
     if (driver.status === "EM_ROTA") {
@@ -579,6 +656,16 @@ export const DriverInterface = () => {
       });
     } finally {
       setAcceptingCallId(null);
+    }
+  };
+
+  const handleRequestApproval = async (callId: string) => {
+    try {
+      await updateCall(callId, { status: "AGUARDANDO_APROVACAO" });
+      sonnerToast.success("Chamado enviado para aprovação do monitor.");
+    } catch (error) {
+      console.error("Erro ao enviar para aprovação:", error);
+      sonnerToast.error("Falha ao enviar chamado para aprovação.");
     }
   };
 
@@ -726,13 +813,17 @@ export const DriverInterface = () => {
       if (!parsedJson.description || !parsedJson.urgency)
         throw new Error("A resposta da IA está incompleta.");
 
+      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+
       const newCallData = {
+        routeId: routeId,
         description: parsedJson.description,
         urgency: parsedJson.urgency as UrgencyLevel,
         location: location,
         status: "ABERTO" as const,
         vehicleType: neededVehicles.join(", "),
         isBulky: isBulky,
+        hub: formData.get("hub") as string,
       };
       await addNewCall(newCallData);
       setIsSupportModalOpen(false);
@@ -768,6 +859,17 @@ export const DriverInterface = () => {
       );
     return activeCalls;
   }, [allMyCalls, historyFilter, userId]);
+
+  const filteredOpenCalls = useMemo(() => {
+    return openSupportCalls.filter((call) => {
+      if (!routeIdSearch) {
+        return true;
+      }
+      return call.routeId
+        ? call.routeId.toLowerCase().includes(routeIdSearch.toLowerCase())
+        : false;
+    });
+  }, [openSupportCalls, routeIdSearch]);
 
   const filteredHubs = useMemo(() => {
     if (!hubSearch) return hubs;
@@ -862,8 +964,23 @@ export const DriverInterface = () => {
 
   return (
     <>
-      <div className="bg-gray-100 min-h-dvh font-sans">
+      <Toaster richColors position="top-center" />
+      <div className="bg-orange-50 min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
+          {!isProfileComplete && (
+            <div className="p-4 sticky top-0 z-10">
+              <div
+                className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md"
+                role="alert"
+              >
+                <p className="font-bold">Perfil Incompleto!</p>
+                <p className="text-sm">
+                  Por favor, preencha todas as informações do seu perfil para
+                  poder solicitar ou prestar apoio.
+                </p>
+              </div>
+            </div>
+          )}
           <div className="p-4 md:p-6">
             <ProfileHeaderCard
               driver={driver}
@@ -886,11 +1003,24 @@ export const DriverInterface = () => {
                 {TABS.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id as TabId)}
+                    onClick={() => {
+                      if (!isProfileComplete && tab.id !== "profile") {
+                        sonnerToast.error(
+                          "Complete seu perfil para acessar esta aba."
+                        );
+                        return;
+                      }
+                      setActiveTab(tab.id as TabId);
+                    }}
+                    disabled={!isProfileComplete && tab.id !== "profile"}
                     className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-300 ${
                       activeTab === tab.id
                         ? "border-b-2 border-orange-600 text-orange-600"
                         : "text-gray-500 hover:bg-gray-100"
+                    } ${
+                      !isProfileComplete && tab.id !== "profile"
+                        ? "cursor-not-allowed opacity-50"
+                        : ""
                     }`}
                   >
                     {tab.icon}
@@ -948,9 +1078,22 @@ export const DriverInterface = () => {
                       <h3 className="text-lg font-bold text-gray-800 mb-4">
                         Chamados de Apoio Disponíveis
                       </h3>
-                      {openSupportCalls.length > 0 ? (
+                      <div className="relative mb-4">
+                        <Search
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Pesquisar por ID da Rota..."
+                          value={routeIdSearch}
+                          onChange={(e) => setRouteIdSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                        />
+                      </div>
+                      {filteredOpenCalls.length > 0 ? (
                         <div className="space-y-4">
-                          {openSupportCalls.map((call) => (
+                          {filteredOpenCalls.map((call) => (
                             <OpenCallCard
                               key={call.id}
                               call={call}
@@ -980,10 +1123,18 @@ export const DriverInterface = () => {
                     </div>
                     <button
                       onClick={() => {
+                        if (!isProfileComplete) {
+                          sonnerToast.error(
+                            "Complete seu perfil para solicitar apoio."
+                          );
+                          setActiveTab("profile");
+                          return;
+                        }
                         setModalError("");
                         setIsSupportModalOpen(true);
                       }}
-                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg"
+                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!isProfileComplete}
                     >
                       PRECISO DE APOIO
                     </button>
@@ -1047,6 +1198,7 @@ export const DriverInterface = () => {
                           allDrivers={allDrivers}
                           onCancelSupport={handleCancelSupport}
                           onDeleteSupportRequest={handleDeleteSupportRequest}
+                          onRequestApproval={handleRequestApproval}
                         />
                       ))}
                     </div>

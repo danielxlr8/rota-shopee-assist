@@ -23,9 +23,9 @@ import type {
   Driver,
 } from "./types/logistics";
 // --- CORREÇÃO DOS IMPORTS ---
-// A importação do 'toaster' antigo foi removida.
-// A importação do 'sonner' foi simplificada.
-import { Toaster, toast } from "sonner";
+// Os caminhos foram alterados para usar os ficheiros locais que acabou de copiar.
+import { Toaster } from "./components/ui/toaster";
+import { useToast } from "./hooks/use-toast";
 
 export type SupportCall = OriginalSupportCall & {
   deletedAt?: any;
@@ -64,10 +64,7 @@ function App() {
 
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-
-  // A chamada ao useToast() não é mais necessária aqui.
-  // O 'toast' importado de 'sonner' funcionará globalmente.
-
+  const { toast } = useToast();
   const previousCallsRef = useRef<SupportCall[]>([]);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -119,14 +116,16 @@ function App() {
           newOpenCalls.forEach((newCall) => {
             if (userData.role === "admin") {
               audioRef.current?.play();
-              toast.info("Novo Chamado Aberto!", {
+              toast({
+                title: "Novo Chamado Aberto!",
                 description: `${newCall.solicitante.name} precisa de apoio.`,
               });
             } else if (userData.role === "driver") {
               const currentDriver = drivers.find((d) => d.id === user.uid);
               if (currentDriver?.status === "DISPONIVEL") {
                 audioRef.current?.play();
-                toast.info("Novo Apoio Disponível!", {
+                toast({
+                  title: "Novo Apoio Disponível!",
                   description: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
                 });
               }
@@ -150,7 +149,7 @@ function App() {
         unsubDrivers();
       };
     }
-  }, [user, userData, drivers]);
+  }, [user, userData, drivers, toast]);
 
   const handleUpdateCall = async (
     id: string,
@@ -255,9 +254,8 @@ function App() {
         </header>
       )}
       <main>{renderContent()}</main>
-      {/* --- CORREÇÃO: Renderizando apenas o Toaster do 'sonner' --- */}
-      <Toaster richColors position="top-center" />
-      <audio ref={audioRef} src="/shopee-ringtone.mp3" preload="auto"></audio>
+      <Toaster />
+      <audio ref={audioRef} src="/notification.mp3" preload="auto"></audio>
     </div>
   );
 }
