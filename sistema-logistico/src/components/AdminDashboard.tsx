@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-// Lembre-se de adicionar `approvedBy?: string;` à sua interface SupportCall em `src/types/logistics.ts` para resolver o erro de tipagem.
+// Lembre-se de adicionar `approvedBy?: string;`, `routeId?: string;` e os novos status à sua interface SupportCall em `src/types/logistics.ts`
+// Ex: export type CallStatus = "ABERTO" | "EM ANDAMENTO" | "AGUARDANDO_APROVACAO" | "CONCLUIDO" | "EXCLUIDO" | "ARQUIVADO";
 import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
 import {
   AlertTriangle,
@@ -238,6 +239,8 @@ const CallDetailsModal = ({
         return "text-blue-600";
       case "CONCLUIDO":
         return "text-green-600";
+      case "AGUARDANDO_APROVACAO":
+        return "text-purple-600";
       default:
         return "text-gray-600";
     }
@@ -303,10 +306,12 @@ const CallDetailsModal = ({
             )}
             {call.status === "EM ANDAMENTO" && (
               <button
-                onClick={() => onUpdateStatus(call.id, { status: "CONCLUIDO" })}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+                onClick={() =>
+                  onUpdateStatus(call.id, { status: "AGUARDANDO_APROVACAO" })
+                }
+                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
               >
-                Concluído <ArrowRight size={16} />
+                Aguard. Aprovação <ArrowRight size={16} />
               </button>
             )}
           </div>
@@ -505,14 +510,23 @@ export const AdminDashboard = ({
   const [excludedHubFilter, setExcludedHubFilter] = useState("");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
   const notifiedCallIds = useRef(new Set<string>());
-  const prevCallsRef = useRef<SupportCall[]>([]); // Ref para guardar o estado anterior
+  const prevCallsRef = useRef<SupportCall[]>([]);
 
-  // States para a aba de Histórico
-  const [historyDateFilter, setHistoryDateFilter] = useState({
+  const [tempHistoryFilters, setTempHistoryFilters] = useState({
     start: "",
     end: "",
+    hub: "Todos",
+    routeId: "",
+    status: "Todos",
   });
-  const [historyHubFilter, setHistoryHubFilter] = useState("Todos");
+
+  const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
+    start: "",
+    end: "",
+    hub: "Todos",
+    routeId: "",
+    status: "Todos",
+  });
 
   const [driverHubFilter, setDriverHubFilter] =
     useState<string>("Todos os Hubs");
@@ -530,6 +544,85 @@ export const AdminDashboard = ({
     const driverDocRef = doc(db, "drivers", driverId);
     await updateDoc(driverDocRef, updates);
   };
+
+  const handleApplyHistoryFilters = () => {
+    setAppliedHistoryFilters(tempHistoryFilters);
+    sonnerToast.info("Filtros do histórico aplicados!");
+  };
+
+  const handleHistoryFilterChange = (
+    filterName: keyof typeof tempHistoryFilters,
+    value: string
+  ) => {
+    setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const urgencyLevels: UrgencyLevel[] = [
+        "BAIXA",
+        "MEDIA",
+        "ALTA",
+        "URGENTE",
+      ];
+
+      calls.forEach((call) => {
+        if (call.status === "ABERTO" && call.timestamp) {
+          const callTime =
+            call.timestamp instanceof Timestamp
+              ? call.timestamp.toMillis()
+              : (call.timestamp as any).seconds * 1000;
+          const minutesElapsed = (now - callTime) / 60000;
+
+          const initialUrgencyIndex = urgencyLevels.indexOf(call.urgency);
+          const escalationLevels = Math.floor(minutesElapsed / 30);
+
+          const newUrgencyIndex = Math.min(
+            initialUrgencyIndex + escalationLevels,
+            urgencyLevels.length - 1
+          );
+          const newUrgency = urgencyLevels[newUrgencyIndex];
+
+          if (newUrgency !== call.urgency) {
+            updateCall(call.id, { urgency: newUrgency });
+          }
+        }
+      });
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [calls, updateCall]);
+
+  useEffect(() => {
+    const archiveOldCalls = () => {
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const callsToCheck = calls.filter(
+        (call) => !["ARQUIVADO", "EXCLUIDO", "ABERTO"].includes(call.status)
+      );
+
+      callsToCheck.forEach((call) => {
+        if (call.timestamp) {
+          const callDate =
+            call.timestamp instanceof Timestamp
+              ? call.timestamp.toDate()
+              : new Date((call.timestamp as any).seconds * 1000);
+
+          if (callDate < twentyFourHoursAgo) {
+            console.log(`Arquivando chamado antigo: ${call.id}`);
+            updateCall(call.id, { status: "ARQUIVADO" });
+          }
+        }
+      });
+    };
+
+    const intervalId = setInterval(archiveOldCalls, 60 * 60 * 1000);
+    archiveOldCalls();
+
+    return () => clearInterval(intervalId);
+  }, [calls, updateCall]);
 
   useEffect(() => {
     const prevCallsMap = new Map(
@@ -667,7 +760,10 @@ export const AdminDashboard = ({
   }, [drivers, globalHubFilter]);
 
   const activeCalls = useMemo(
-    () => filteredCalls.filter((c) => c.status !== "EXCLUIDO"),
+    () =>
+      filteredCalls.filter(
+        (c) => !["EXCLUIDO", "ARQUIVADO"].includes(c.status)
+      ),
     [filteredCalls]
   );
   const excludedCalls = useMemo(
@@ -682,11 +778,9 @@ export const AdminDashboard = ({
     () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
     [activeCalls]
   );
+  // CORREÇÃO: Removida a verificação para "APROVADO" que causava erro.
   const concludedCalls = useMemo(
-    () =>
-      activeCalls.filter(
-        (c) => c.status === "CONCLUIDO" || c.status === "APROVADO"
-      ),
+    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
     [activeCalls]
   );
   const pendingApprovalCalls = useMemo(
@@ -739,7 +833,28 @@ export const AdminDashboard = ({
     return filteredCalls
       .filter((call) => {
         if (call.status === "EXCLUIDO") return false;
-        if (historyHubFilter !== "Todos" && call.hub !== historyHubFilter)
+
+        if (
+          appliedHistoryFilters.hub !== "Todos" &&
+          call.hub !== appliedHistoryFilters.hub
+        )
+          return false;
+        if (
+          appliedHistoryFilters.routeId &&
+          !call.routeId
+            ?.toLowerCase()
+            .includes(appliedHistoryFilters.routeId.toLowerCase())
+        )
+          return false;
+        if (
+          appliedHistoryFilters.status === "Concluidas" &&
+          call.status !== "CONCLUIDO"
+        )
+          return false;
+        if (
+          appliedHistoryFilters.status === "Nao Concluidas" &&
+          call.status === "CONCLUIDO"
+        )
           return false;
 
         const callTimestamp = call.timestamp;
@@ -750,13 +865,14 @@ export const AdminDashboard = ({
             ? callTimestamp.toDate()
             : new Date((callTimestamp as any).seconds * 1000);
 
-        if (historyDateFilter.start) {
-          const startDate = new Date(historyDateFilter.start);
+        if (appliedHistoryFilters.start) {
+          const startDate = new Date(appliedHistoryFilters.start);
+          startDate.setHours(0, 0, 0, 0);
           if (callDate < startDate) return false;
         }
-        if (historyDateFilter.end) {
-          const endDate = new Date(historyDateFilter.end);
-          endDate.setHours(23, 59, 59, 999); // Include the whole end day
+        if (appliedHistoryFilters.end) {
+          const endDate = new Date(appliedHistoryFilters.end);
+          endDate.setHours(23, 59, 59, 999);
           if (callDate > endDate) return false;
         }
         return true;
@@ -772,7 +888,7 @@ export const AdminDashboard = ({
             : (b.timestamp as any)?.seconds * 1000 || 0;
         return timeB - timeA;
       });
-  }, [filteredCalls, historyHubFilter, historyDateFilter]);
+  }, [filteredCalls, appliedHistoryFilters]);
 
   const filteredOpenCalls = useMemo(
     () =>
@@ -944,7 +1060,7 @@ export const AdminDashboard = ({
               title="Concluídos"
               value={concludedCalls.length}
               icon={<CheckCircle />}
-              subtext="Finalizados"
+              subtext="Finalizados hoje"
               colorClass="#10B981"
             />
             <SummaryCard
@@ -1084,12 +1200,9 @@ export const AdminDashboard = ({
               </label>
               <input
                 type="date"
-                value={historyDateFilter.start}
+                value={tempHistoryFilters.start}
                 onChange={(e) =>
-                  setHistoryDateFilter((prev) => ({
-                    ...prev,
-                    start: e.target.value,
-                  }))
+                  handleHistoryFilterChange("start", e.target.value)
                 }
                 className="w-full p-2 border rounded-md"
               />
@@ -1100,12 +1213,9 @@ export const AdminDashboard = ({
               </label>
               <input
                 type="date"
-                value={historyDateFilter.end}
+                value={tempHistoryFilters.end}
                 onChange={(e) =>
-                  setHistoryDateFilter((prev) => ({
-                    ...prev,
-                    end: e.target.value,
-                  }))
+                  handleHistoryFilterChange("end", e.target.value)
                 }
                 className="w-full p-2 border rounded-md"
               />
@@ -1113,8 +1223,10 @@ export const AdminDashboard = ({
             <div>
               <label className="text-sm font-medium text-gray-700">Hub</label>
               <select
-                value={historyHubFilter}
-                onChange={(e) => setHistoryHubFilter(e.target.value)}
+                value={tempHistoryFilters.hub}
+                onChange={(e) =>
+                  handleHistoryFilterChange("hub", e.target.value)
+                }
                 className="w-full p-2 border rounded-md bg-white"
               >
                 {allHubs.map((hub) => (
@@ -1124,6 +1236,42 @@ export const AdminDashboard = ({
                 ))}
               </select>
             </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                ID da Rota
+              </label>
+              <input
+                type="text"
+                placeholder="Digite o ID da rota..."
+                value={tempHistoryFilters.routeId}
+                onChange={(e) =>
+                  handleHistoryFilterChange("routeId", e.target.value)
+                }
+                className="w-full p-2 border rounded-md"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">
+                Status
+              </label>
+              <select
+                value={tempHistoryFilters.status}
+                onChange={(e) =>
+                  handleHistoryFilterChange("status", e.target.value)
+                }
+                className="w-full p-2 border rounded-md bg-white"
+              >
+                <option value="Todos">Todos</option>
+                <option value="Concluidas">Concluídas</option>
+                <option value="Nao Concluidas">Não Concluídas</option>
+              </select>
+            </div>
+            <button
+              onClick={handleApplyHistoryFilters}
+              className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              Filtrar
+            </button>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
             <table className="w-full text-sm text-left text-gray-500">

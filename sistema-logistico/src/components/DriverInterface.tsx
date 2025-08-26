@@ -23,7 +23,9 @@ import {
   Camera,
   PlusCircle,
   MinusCircle,
-  Ticket, // Ícone para ID da Rota
+  Ticket,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 // Importações do Firebase
 import { auth, db } from "../firebase";
@@ -217,7 +219,7 @@ const DriverCallHistoryCard = ({
   const handleWhatsAppClick = () => {
     const contactPhone = otherParty?.phone;
     if (!contactPhone) {
-      alert("O outro motorista não tem um telefone cadastrado.");
+      sonnerToast.error("O outro motorista não tem um telefone cadastrado.");
       return;
     }
     const message = encodeURIComponent(
@@ -253,7 +255,6 @@ const DriverCallHistoryCard = ({
 
       {(call.status === "EM ANDAMENTO" ||
         call.status === "AGUARDANDO_APROVACAO" ||
-        call.status === "APROVADO" ||
         call.status === "ABERTO") && (
         <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
           {otherParty && (
@@ -327,7 +328,7 @@ const OpenCallCard = ({
 
   const handleWhatsAppClick = () => {
     if (!requesterPhone) {
-      alert(
+      sonnerToast.error(
         "O motorista solicitante não possui um número de telefone cadastrado."
       );
       return;
@@ -335,6 +336,7 @@ const OpenCallCard = ({
     const message = encodeURIComponent(
       `Olá ${call.solicitante.name}, me chamo ${currentDriverName} e aceitei seu chamado e serei seu apoio`
     );
+    // CORREÇÃO: Corrigido o erro de digitação de 'requESTERPhone' para 'requesterPhone'
     window.open(`https://wa.me/55${requesterPhone}?text=${message}`, "_blank");
   };
 
@@ -435,11 +437,28 @@ export const DriverInterface = () => {
   const [routeIdSearch, setRouteIdSearch] = useState("");
   const prevOpenSupportCallsRef = useRef<SupportCall[]>([]);
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
+  const [isMuted, setIsMuted] = useState(false);
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
     return !!(driver.hub && driver.vehicleType && driver.phone);
   }, [driver]);
+
+  const hasActiveRequest = useMemo(() => {
+    return allMyCalls.some(
+      (call) =>
+        call.solicitante.id === userId &&
+        ["ABERTO", "EM ANDAMENTO", "AGUARDANDO_APROVACAO"].includes(call.status)
+    );
+  }, [allMyCalls, userId]);
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+    const savedMutePreference = localStorage.getItem("notificationsMuted");
+    setIsMuted(savedMutePreference === "true");
+  }, []);
 
   useEffect(() => {
     if (driver && !isProfileComplete) {
@@ -455,9 +474,11 @@ export const DriverInterface = () => {
       (call) => !prevCallIds.has(call.id)
     );
 
-    if (newCalls.length > 0) {
-      const audio = new Audio("/shopee-ringtone.mp3");
-      audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+    if (newCalls.length > 0 && driver?.status === "DISPONIVEL") {
+      if (!isMuted) {
+        const audio = new Audio("/shopee-ringtone.mp3");
+        audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+      }
 
       newCalls.forEach((newCall) => {
         if (!notifiedCallIds.current.has(newCall.id)) {
@@ -479,6 +500,15 @@ export const DriverInterface = () => {
               duration: 10000,
             }
           );
+          if (document.hidden && Notification.permission === "granted") {
+            new Notification("Novo Apoio Disponível!", {
+              body: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
+              icon: spxLogo,
+            });
+            if ("vibrate" in navigator) {
+              navigator.vibrate([200, 100, 200]);
+            }
+          }
           notifiedCallIds.current.add(newCall.id);
         }
       });
@@ -492,7 +522,7 @@ export const DriverInterface = () => {
         notifiedCallIds.current.delete(id);
       }
     });
-  }, [openSupportCalls]);
+  }, [openSupportCalls, driver?.status, isMuted]);
 
   useEffect(() => {
     if (!userId) {
@@ -697,12 +727,14 @@ export const DriverInterface = () => {
     if (!userId) return;
 
     if (phone.replace(/\D/g, "").length !== 11) {
-      alert("O telefone deve ter 11 dígitos, incluindo o DDD.");
+      sonnerToast.error("O telefone deve ter 11 dígitos, incluindo o DDD.");
       return;
     }
 
     if (!hubs.includes(hub)) {
-      alert("Hub inválido. Por favor, selecione um Hub válido da lista.");
+      sonnerToast.error(
+        "Hub inválido. Por favor, selecione um Hub válido da lista."
+      );
       return;
     }
 
@@ -712,11 +744,11 @@ export const DriverInterface = () => {
       hub,
       vehicleType,
     });
-    alert("Perfil atualizado com sucesso!");
+    sonnerToast.success("Perfil atualizado com sucesso!");
   };
 
   const handleChangePassword = () => {
-    alert("Funcionalidade de alterar senha a ser implementada.");
+    sonnerToast.info("Funcionalidade de alterar senha a ser implementada.");
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -733,7 +765,7 @@ export const DriverInterface = () => {
       () => {},
       (error) => {
         console.error("Upload failed:", error);
-        alert("Falha ao enviar a imagem.");
+        sonnerToast.error("Falha ao enviar a imagem.");
         setIsUploading(false);
       },
       () => {
@@ -772,24 +804,31 @@ export const DriverInterface = () => {
 
     const formData = new FormData(e.currentTarget);
     const isBulky = formData.get("isBulky") === "on";
+    const packageCount = Number(formData.get("packageCount"));
+
+    if (packageCount < 20) {
+      sonnerToast.error(
+        "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
+      );
+      setIsSubmitting(false);
+      return;
+    }
 
     const informalDescription = `Preciso de apoio de transferência. Estou no hub ${formData.get(
       "hub"
-    )}. Minha localização atual está disponível neste link: ${location}. Tenho ${formData.get(
-      "packageCount"
-    )} pacotes para a(s) região(ões) de ${deliveryRegions.join(", ")}.
+    )}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${deliveryRegions.join(
+      ", "
+    )}.
     Veículo(s) necessário(s): ${neededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
     try {
-      const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é:
-        1. Reescrever a descrição de forma clara e profissional para um chamado de suporte.
-        2. Classificar a urgência do problema como 'URGENTE', 'ALTA' ou 'MEDIA'.
-        
+      const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é reescrever a descrição de forma clara e profissional para um chamado de suporte.
+      
         Descrição do motorista: "${informalDescription}"
         
-        Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional", "urgency": "sua classificação de urgência"}`;
+        Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional"}`;
 
       const apiKey = "AIzaSyAXV3wmwo0eMgx3Q3CuE0o2WfROU50jaaU";
 
@@ -811,15 +850,24 @@ export const DriverInterface = () => {
       const cleanedJsonString = textPart.replace(/```json|```/g, "").trim();
 
       const parsedJson = JSON.parse(cleanedJsonString);
-      if (!parsedJson.description || !parsedJson.urgency)
+      if (!parsedJson.description)
         throw new Error("A resposta da IA está incompleta.");
 
       const routeId = `SPX-${Date.now().toString().slice(-6)}`;
 
+      let urgency: UrgencyLevel = "BAIXA";
+      if (packageCount >= 100) {
+        urgency = "URGENTE";
+      } else if (packageCount >= 90) {
+        urgency = "ALTA";
+      } else if (packageCount >= 60) {
+        urgency = "MEDIA";
+      }
+
       const newCallData = {
         routeId: routeId,
         description: parsedJson.description,
-        urgency: parsedJson.urgency as UrgencyLevel,
+        urgency: urgency,
         location: location,
         status: "ABERTO" as const,
         vehicleType: neededVehicles.join(", "),
@@ -858,9 +906,7 @@ export const DriverInterface = () => {
       return activeCalls.filter((call) => call.assignedTo === userId);
     if (historyFilter === "inProgress")
       return activeCalls.filter((call) =>
-        ["EM ANDAMENTO", "AGUARDANDO_APROVACAO", "APROVADO"].includes(
-          call.status
-        )
+        ["EM ANDAMENTO", "AGUARDANDO_APROVACAO"].includes(call.status)
       );
     return activeCalls;
   }, [allMyCalls, historyFilter, userId, globalHubFilter]);
@@ -961,6 +1007,22 @@ export const DriverInterface = () => {
     }
     touchStartX.current = 0;
     touchEndX.current = 0;
+  };
+
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    localStorage.setItem("notificationsMuted", String(newMutedState));
+    if (!newMutedState) {
+      const audio = new Audio("/shopee-ringtone.mp3");
+      audio.volume = 0;
+      audio.play().catch(() => {});
+    }
+    sonnerToast.success(
+      newMutedState
+        ? "Som das notificações desativado."
+        : "Som das notificações ativado."
+    );
   };
 
   if (loading)
@@ -1155,6 +1217,16 @@ export const DriverInterface = () => {
                     </div>
                     <button
                       onClick={() => {
+                        if (hasActiveRequest) {
+                          sonnerToast.error(
+                            "Você já possui uma solicitação de apoio ativa.",
+                            {
+                              description:
+                                "Cancele a solicitação anterior para criar uma nova.",
+                            }
+                          );
+                          return;
+                        }
                         if (!isProfileComplete) {
                           sonnerToast.error(
                             "Complete seu perfil para solicitar apoio."
@@ -1166,7 +1238,7 @@ export const DriverInterface = () => {
                         setIsSupportModalOpen(true);
                       }}
                       className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!isProfileComplete}
+                      disabled={!isProfileComplete || hasActiveRequest}
                     >
                       PRECISO DE APOIO
                     </button>
@@ -1244,6 +1316,26 @@ export const DriverInterface = () => {
                 {/* Profile Tab */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4">
                   <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-lg shadow-sm">
+                      <h3 className="text-lg font-semibold mb-4">
+                        Configurações
+                      </h3>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">
+                          Som das notificações
+                        </label>
+                        <button
+                          onClick={toggleMute}
+                          className="p-2 rounded-full hover:bg-gray-200"
+                        >
+                          {isMuted ? (
+                            <VolumeX size={20} />
+                          ) : (
+                            <Volume2 size={20} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
                     <div className="bg-white p-6 rounded-lg shadow-sm">
                       <h3 className="text-lg font-semibold mb-4">
                         Editar Perfil

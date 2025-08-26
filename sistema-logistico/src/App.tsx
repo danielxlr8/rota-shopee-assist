@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type { User as FirebaseUser } from "firebase/auth";
@@ -22,10 +22,6 @@ import type {
   SupportCall as OriginalSupportCall,
   Driver,
 } from "./types/logistics";
-// --- CORREÇÃO DOS IMPORTS ---
-// Os caminhos foram alterados para usar os ficheiros locais que acabou de copiar.
-import { Toaster } from "./components/ui/toaster";
-import { useToast } from "./hooks/use-toast";
 
 export type SupportCall = OriginalSupportCall & {
   deletedAt?: any;
@@ -64,9 +60,6 @@ function App() {
 
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const { toast } = useToast();
-  const previousCallsRef = useRef<SupportCall[]>([]);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -100,41 +93,7 @@ function App() {
         const callsData = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
         );
-
-        if (previousCallsRef.current.length > 0) {
-          const previousOpenCallsIds = new Set(
-            previousCallsRef.current
-              .filter((c) => c.status === "ABERTO")
-              .map((c) => c.id)
-          );
-
-          const newOpenCalls = callsData.filter(
-            (call) =>
-              call.status === "ABERTO" && !previousOpenCallsIds.has(call.id)
-          );
-
-          newOpenCalls.forEach((newCall) => {
-            if (userData.role === "admin") {
-              audioRef.current?.play();
-              toast({
-                title: "Novo Chamado Aberto!",
-                description: `${newCall.solicitante.name} precisa de apoio.`,
-              });
-            } else if (userData.role === "driver") {
-              const currentDriver = drivers.find((d) => d.id === user.uid);
-              if (currentDriver?.status === "DISPONIVEL") {
-                audioRef.current?.play();
-                toast({
-                  title: "Novo Apoio Disponível!",
-                  description: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
-                });
-              }
-            }
-          });
-        }
-
         setCalls(callsData);
-        previousCallsRef.current = callsData;
       });
 
       const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
@@ -149,7 +108,7 @@ function App() {
         unsubDrivers();
       };
     }
-  }, [user, userData, drivers, toast]);
+  }, [user, userData]);
 
   const handleUpdateCall = async (
     id: string,
@@ -254,8 +213,6 @@ function App() {
         </header>
       )}
       <main>{renderContent()}</main>
-      <Toaster />
-      <audio ref={audioRef} src="/notification.mp3" preload="auto"></audio>
     </div>
   );
 }

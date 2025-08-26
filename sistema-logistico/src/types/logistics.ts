@@ -16,10 +16,10 @@ export type DriverStatus =
 export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
-  | "CONCLUIDO"
   | "AGUARDANDO_APROVACAO"
-  | "APROVADO"
-  | "EXCLUIDO";
+  | "CONCLUIDO"
+  | "EXCLUIDO"
+  | "ARQUIVADO";
 
 // Define a estrutura para um chamado de suporte.
 export interface SupportCall {
@@ -40,8 +40,9 @@ export interface SupportCall {
   vehicleType?: string;
   isBulky?: boolean;
   hub?: string;
-  // CORREÇÃO: Adicionada a propriedade opcional 'deletedAt' para corrigir o erro de tipo.
   deletedAt?: Timestamp;
+  approvedBy?: string; // Adicionado para rastrear quem aprovou
+  routeId?: string; // CORREÇÃO: Adicionada a propriedade que faltava
 }
 
 // Define a estrutura para um motorista.
@@ -54,12 +55,6 @@ export interface Driver {
   status: DriverStatus;
   phone: string;
   region: string;
-  hub?: string; // CORREÇÃO: Campo adicionado
-  vehicleType?: string; // CORREÇÃO: Campo adicionado
-}
-
-export interface SupportCall {
-  id: string;
-  routeId?: string; // Adicione esta linha
-  // ... outras propriedades existentes
+  hub?: string;
+  vehicleType?: string;
 }
