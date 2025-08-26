@@ -329,11 +329,11 @@ const CallCard = ({
     if (!timestamp) return "Horário indisponível";
     let date;
     if (timestamp instanceof Timestamp) {
-        date = timestamp.toDate();
-    } else if (timestamp && typeof timestamp.seconds === 'number') {
-        date = new Date(timestamp.seconds * 1000);
+      date = timestamp.toDate();
+    } else if (timestamp && typeof timestamp.seconds === "number") {
+      date = new Date(timestamp.seconds * 1000);
     } else {
-        return "Data inválida";
+      return "Data inválida";
     }
     if (isNaN(date.getTime())) return "Data inválida";
     return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
@@ -369,12 +369,12 @@ const CallCard = ({
       </div>
       <div className="text-sm text-gray-600 space-y-2">
         <div className="flex items-center space-x-2">
-            <Ticket size={16} className="text-gray-400" />
-            <span>{call.routeId || "N/A"}</span>
+          <Ticket size={16} className="text-gray-400" />
+          <span>{call.routeId || "N/A"}</span>
         </div>
         <div className="flex items-center space-x-2">
-            <Building size={16} className="text-gray-400" />
-            <span>{call.hub || "N/A"}</span>
+          <Building size={16} className="text-gray-400" />
+          <span>{call.hub || "N/A"}</span>
         </div>
         <div className="flex items-center space-x-2">
           <Clock size={16} className="text-gray-400" />
@@ -393,83 +393,83 @@ const CallCard = ({
 };
 
 const ApprovalCard = ({
-    call,
-    onApprove,
-    onReject,
-    onDelete,
-    drivers,
-  }: {
-    call: SupportCall;
-    onApprove: (call: SupportCall) => void;
-    onReject: (call: SupportCall) => void;
-    onDelete: (call: SupportCall) => void;
-    drivers: Driver[];
-  }) => {
-    const assignedDriver = drivers.find((d) => d.id === call.assignedTo);
-  
-    return (
-      <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
-        <div className="flex justify-between items-start">
-          <div className="flex items-center space-x-3">
-            <AvatarComponent user={call.solicitante} />
-            <div>
-              <p className="font-bold text-gray-800">{call.solicitante.name}</p>
-              <p className="text-sm text-gray-500">Solicitante</p>
-            </div>
-          </div>
-          <UrgencyBadge urgency={call.urgency} />
-        </div>
-  
-        {assignedDriver && (
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-            <ArrowRight size={16} className="text-gray-400" />
-            <AvatarComponent user={assignedDriver} />
-            <div>
-              <p className="font-semibold">{assignedDriver.name}</p>
-              <p className="text-xs text-gray-500">Prestador do Apoio</p>
-            </div>
-          </div>
-        )}
-  
-        <div className="text-sm text-gray-600 space-y-2">
-            <div className="flex items-center space-x-2">
-                <Ticket size={16} className="text-gray-400" />
-                <span>{call.routeId || "N/A"}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-                <Building size={16} className="text-gray-400" />
-                <span>{call.hub || "N/A"}</span>
-            </div>
-        </div>
+  call,
+  onApprove,
+  onReject,
+  onDelete,
+  drivers,
+}: {
+  call: SupportCall;
+  onApprove: (call: SupportCall) => void;
+  onReject: (call: SupportCall) => void;
+  onDelete: (call: SupportCall) => void;
+  drivers: Driver[];
+}) => {
+  const assignedDriver = drivers.find((d) => d.id === call.assignedTo);
 
-        <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-          {call.description}
-        </p>
-  
-        <div className="mt-2 pt-2 border-t flex justify-end gap-3">
-          <button
-            onClick={() => onDelete(call)}
-            className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-            title="Excluir Solicitação"
-          >
-            <Trash2 size={16} />
-          </button>
-          <button
-            onClick={() => onReject(call)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-          >
-            <X size={16} /> Rejeitar
-          </button>
-          <button
-            onClick={() => onApprove(call)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
-          >
-            <CheckCircle size={16} /> Aprovar
-          </button>
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
+      <div className="flex justify-between items-start">
+        <div className="flex items-center space-x-3">
+          <AvatarComponent user={call.solicitante} />
+          <div>
+            <p className="font-bold text-gray-800">{call.solicitante.name}</p>
+            <p className="text-sm text-gray-500">Solicitante</p>
+          </div>
+        </div>
+        <UrgencyBadge urgency={call.urgency} />
+      </div>
+
+      {assignedDriver && (
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <ArrowRight size={16} className="text-gray-400" />
+          <AvatarComponent user={assignedDriver} />
+          <div>
+            <p className="font-semibold">{assignedDriver.name}</p>
+            <p className="text-xs text-gray-500">Prestador do Apoio</p>
+          </div>
+        </div>
+      )}
+
+      <div className="text-sm text-gray-600 space-y-2">
+        <div className="flex items-center space-x-2">
+          <Ticket size={16} className="text-gray-400" />
+          <span>{call.routeId || "N/A"}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Building size={16} className="text-gray-400" />
+          <span>{call.hub || "N/A"}</span>
         </div>
       </div>
-    );
-  };
+
+      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
+        {call.description}
+      </p>
+
+      <div className="mt-2 pt-2 border-t flex justify-end gap-3">
+        <button
+          onClick={() => onDelete(call)}
+          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+          title="Excluir Solicitação"
+        >
+          <Trash2 size={16} />
+        </button>
+        <button
+          onClick={() => onReject(call)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+        >
+          <X size={16} /> Rejeitar
+        </button>
+        <button
+          onClick={() => onApprove(call)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+        >
+          <CheckCircle size={16} /> Aprovar
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
@@ -519,7 +519,13 @@ export const AdminDashboard = ({
   const [driverVehicleFilter, setDriverVehicleFilter] =
     useState<string>("Todos os Veículos");
 
-  const updateDriver = async (driverId: string, updates: Partial<Omit<Driver, "id">>) => {
+  const [globalHubFilter, setGlobalHubFilter] =
+    useState<string>("Todos os Hubs");
+
+  const updateDriver = async (
+    driverId: string,
+    updates: Partial<Omit<Driver, "id">>
+  ) => {
     if (!driverId) return;
     const driverDocRef = doc(db, "drivers", driverId);
     await updateDoc(driverDocRef, updates);
@@ -576,30 +582,32 @@ export const AdminDashboard = ({
 
   const handleApprove = async (call: SupportCall) => {
     try {
-        const updates: Partial<SupportCall> = { status: "CONCLUIDO", approvedBy: "Admin" };
-        await updateCall(call.id, updates);
+      const updates = { status: "CONCLUIDO", approvedBy: "Admin" };
+      await updateCall(call.id, updates as Partial<Omit<SupportCall, "id">>);
 
-        if (call.solicitante.id) {
-            await updateDriver(call.solicitante.id, { status: "DISPONIVEL" });
-        }
-        if (call.assignedTo) {
-            await updateDriver(call.assignedTo, { status: "DISPONIVEL" });
-        }
-        sonnerToast.success("Chamado aprovado e concluído com sucesso!");
+      if (call.solicitante.id) {
+        await updateDriver(call.solicitante.id, { status: "DISPONIVEL" });
+      }
+      if (call.assignedTo) {
+        await updateDriver(call.assignedTo, { status: "DISPONIVEL" });
+      }
+      sonnerToast.success("Chamado aprovado e concluído com sucesso!");
     } catch (error) {
-        console.error("Erro ao aprovar chamado:", error);
-        sonnerToast.error("Falha ao aprovar o chamado.");
+      console.error("Erro ao aprovar chamado:", error);
+      sonnerToast.error("Falha ao aprovar o chamado.");
     }
   };
-  
+
   const handleReject = async (call: SupportCall) => {
-      try {
-          await updateCall(call.id, { status: "EM ANDAMENTO" });
-          sonnerToast.warning("Aprovação rejeitada. O chamado voltou para 'Em Andamento'.");
-      } catch (error) {
-          console.error("Erro ao rejeitar chamado:", error);
-          sonnerToast.error("Falha ao rejeitar o chamado.");
-      }
+    try {
+      await updateCall(call.id, { status: "EM ANDAMENTO" });
+      sonnerToast.warning(
+        "Aprovação rejeitada. O chamado voltou para 'Em Andamento'."
+      );
+    } catch (error) {
+      console.error("Erro ao rejeitar chamado:", error);
+      sonnerToast.error("Falha ao rejeitar o chamado.");
+    }
   };
 
   const handleAcionarDriver = (driverId: string) => {
@@ -644,13 +652,27 @@ export const AdminDashboard = ({
     updateCall(callId, { status: "ABERTO" });
   };
 
+  const filteredCalls = useMemo(() => {
+    return calls.filter(
+      (call) =>
+        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter
+    );
+  }, [calls, globalHubFilter]);
+
+  const filteredDrivers = useMemo(() => {
+    return drivers.filter(
+      (driver) =>
+        globalHubFilter === "Todos os Hubs" || driver.hub === globalHubFilter
+    );
+  }, [drivers, globalHubFilter]);
+
   const activeCalls = useMemo(
-    () => calls.filter((c) => c.status !== "EXCLUIDO"),
-    [calls]
+    () => filteredCalls.filter((c) => c.status !== "EXCLUIDO"),
+    [filteredCalls]
   );
   const excludedCalls = useMemo(
-    () => calls.filter((c) => c.status === "EXCLUIDO"),
-    [calls]
+    () => filteredCalls.filter((c) => c.status === "EXCLUIDO"),
+    [filteredCalls]
   );
   const openCalls = useMemo(
     () => activeCalls.filter((c) => c.status === "ABERTO"),
@@ -680,6 +702,14 @@ export const AdminDashboard = ({
       ].sort(),
     [drivers]
   );
+  const allHubsForFilter = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(calls.map((c) => c.hub).filter(Boolean)),
+      ].sort(),
+    [calls]
+  );
   const allHubs = useMemo(
     () => ["Todos", ...new Set(calls.map((c) => c.hub).filter(Boolean))].sort(),
     [calls]
@@ -694,7 +724,7 @@ export const AdminDashboard = ({
   );
 
   const availableDrivers = useMemo(() => {
-    return drivers.filter((d) => {
+    return filteredDrivers.filter((d) => {
       const isAvailable = d.status === "DISPONIVEL";
       const hubMatch =
         driverHubFilter === "Todos os Hubs" || d.hub === driverHubFilter;
@@ -703,10 +733,10 @@ export const AdminDashboard = ({
         d.vehicleType === driverVehicleFilter;
       return isAvailable && hubMatch && vehicleMatch;
     });
-  }, [drivers, driverHubFilter, driverVehicleFilter]);
+  }, [filteredDrivers, driverHubFilter, driverVehicleFilter]);
 
   const filteredHistoryCalls = useMemo(() => {
-    return calls
+    return filteredCalls
       .filter((call) => {
         if (call.status === "EXCLUIDO") return false;
         if (historyHubFilter !== "Todos" && call.hub !== historyHubFilter)
@@ -742,7 +772,7 @@ export const AdminDashboard = ({
             : (b.timestamp as any)?.seconds * 1000 || 0;
         return timeB - timeA;
       });
-  }, [calls, historyHubFilter, historyDateFilter]);
+  }, [filteredCalls, historyHubFilter, historyDateFilter]);
 
   const filteredOpenCalls = useMemo(
     () =>
@@ -827,6 +857,19 @@ export const AdminDashboard = ({
               Sistema de Apoio Logístico
             </h1>
             <p className="text-gray-500">Painel Administrativo - SPX Shopee</p>
+          </div>
+          <div className="w-full sm:w-auto sm:min-w-[250px]">
+            <select
+              value={globalHubFilter}
+              onChange={(e) => setGlobalHubFilter(e.target.value)}
+              className="w-full p-2 border rounded-md text-sm bg-white shadow-sm"
+            >
+              {allHubsForFilter.map((hub) => (
+                <option key={hub} value={hub}>
+                  {hub}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
@@ -1112,7 +1155,14 @@ export const AdminDashboard = ({
                     (d) => d.id === call.assignedTo
                   );
                   const callTimestamp = call.timestamp;
-                  const formattedDate = callTimestamp ? format(callTimestamp instanceof Timestamp ? callTimestamp.toDate() : new Date((callTimestamp as any).seconds * 1000), "dd/MM/yy HH:mm") : "N/A";
+                  const formattedDate = callTimestamp
+                    ? format(
+                        callTimestamp instanceof Timestamp
+                          ? callTimestamp.toDate()
+                          : new Date((callTimestamp as any).seconds * 1000),
+                        "dd/MM/yy HH:mm"
+                      )
+                    : "N/A";
 
                   return (
                     <tr
@@ -1179,41 +1229,48 @@ export const AdminDashboard = ({
                   excludedHubFilter ? call.hub === excludedHubFilter : true
                 )
                 .map((call) => {
-                    const deletedTimestamp = call.deletedAt;
-                    const formattedDeletedDate = deletedTimestamp ? format(deletedTimestamp instanceof Timestamp ? deletedTimestamp.toDate() : new Date((deletedTimestamp as any).seconds * 1000), "dd/MM/yyyy 'às' HH:mm") : "Data indisponível";
-                    return (
-                        <div
-                        key={call.id}
-                        className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
+                  const deletedTimestamp = call.deletedAt;
+                  const formattedDeletedDate = deletedTimestamp
+                    ? format(
+                        deletedTimestamp instanceof Timestamp
+                          ? deletedTimestamp.toDate()
+                          : new Date((deletedTimestamp as any).seconds * 1000),
+                        "dd/MM/yyyy 'às' HH:mm"
+                      )
+                    : "Data indisponível";
+                  return (
+                    <div
+                      key={call.id}
+                      className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
+                    >
+                      <div>
+                        <p className="font-bold">{call.solicitante.name}</p>
+                        <p className="text-sm text-gray-500">
+                          {call.description}
+                        </p>
+                        {call.deletedAt && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Excluído em: {formattedDeletedDate}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleRestore(call.id)}
+                          className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
                         >
-                        <div>
-                            <p className="font-bold">{call.solicitante.name}</p>
-                            <p className="text-sm text-gray-500">
-                            {call.description}
-                            </p>
-                            {call.deletedAt && (
-                            <p className="text-xs text-gray-400 mt-1">
-                                Excluído em: {formattedDeletedDate}
-                            </p>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                            onClick={() => handleRestore(call.id)}
-                            className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-                            >
-                            <RotateCcw size={14} /> Restaurar
-                            </button>
-                            <button
-                            onClick={() => handlePermanentDeleteClick(call)}
-                            className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                            title="Excluir Permanentemente"
-                            >
-                            <Trash2 size={14} />
-                            </button>
-                        </div>
-                        </div>
-                    )
+                          <RotateCcw size={14} /> Restaurar
+                        </button>
+                        <button
+                          onClick={() => handlePermanentDeleteClick(call)}
+                          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+                          title="Excluir Permanentemente"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
                 })
             ) : (
               <p className="text-center text-gray-500">
