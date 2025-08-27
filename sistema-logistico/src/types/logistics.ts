@@ -57,4 +57,5 @@ export interface Driver {
   region: string;
   hub?: string;
   vehicleType?: string;
+  googleUid?: string;
 }

@@ -14,6 +14,7 @@ import {
   getDocs,
   writeBatch,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
@@ -46,6 +47,7 @@ const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+// Interface unificada para os dados do usuário na sessão
 interface UserData {
   uid: string;
   name: string;
@@ -64,17 +66,62 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
+        let resolvedUserData: UserData | null = null;
 
-        if (userDocSnap.exists()) {
-          setUser(currentUser);
-          setUserData(userDocSnap.data() as UserData);
+        // 1. É um administrador?
+        const adminDocRef = doc(db, "admins_pre_aprovados", currentUser.uid);
+        const adminDocSnap = await getDoc(adminDocRef);
+
+        if (currentUser.email?.endsWith("@shopee.com")) {
+          if (adminDocSnap.exists()) {
+            resolvedUserData = adminDocSnap.data() as UserData;
+          } else {
+            // Cria o perfil do admin no primeiro login com conta @shopee.com
+            const newAdminData: UserData = {
+              uid: currentUser.uid,
+              email: currentUser.email!,
+              name: currentUser.displayName || "Admin Shopee",
+              role: "admin",
+            };
+            await setDoc(adminDocRef, newAdminData);
+            resolvedUserData = newAdminData;
+          }
         } else {
-          console.error("Documento do usuário não encontrado no Firestore!");
+          // 2. Se não for admin, é um motorista?
+          const driversRef = collection(db, "motoristas_pre_aprovados");
+          const q = query(driversRef, where("uid", "==", currentUser.uid));
+          const qGoogle = query(
+            driversRef,
+            where("googleUid", "==", currentUser.uid)
+          );
+
+          const querySnapshot = await getDocs(q);
+          const querySnapshotGoogle = await getDocs(qGoogle);
+
+          const driverDoc =
+            querySnapshot.docs[0] || querySnapshotGoogle.docs[0];
+
+          if (driverDoc) {
+            const driverData = driverDoc.data() as Driver;
+            resolvedUserData = {
+              uid: currentUser.uid,
+              email: currentUser.email!,
+              name: driverData.name,
+              role: "driver",
+            };
+          }
+        }
+
+        if (resolvedUserData) {
+          setUserData(resolvedUserData);
+          setUser(currentUser);
+        } else {
+          // Não é admin e não é um motorista reconhecido
+          console.error("Usuário não autorizado. Fazendo logout.");
           await signOut(auth);
         }
       } else {
+        // Usuário deslogado
         setUser(null);
         setUserData(null);
       }
@@ -87,7 +134,7 @@ function App() {
   useEffect(() => {
     if (user && userData) {
       const callsCollection = collection(db, "supportCalls");
-      const driversCollection = collection(db, "drivers");
+      const driversCollection = collection(db, "motoristas_pre_aprovados");
 
       const unsubCalls = onSnapshot(callsCollection, (snapshot) => {
         const callsData = snapshot.docs.map(
@@ -187,11 +234,8 @@ function App() {
       case "driver":
         return <DriverInterface />;
       default:
-        return (
-          <div className="flex items-center justify-center min-h-screen">
-            <p>A verificar permissões...</p>
-          </div>
-        );
+        signOut(auth); // Se o papel for desconhecido, desloga por segurança
+        return <AuthPage />;
     }
   };
 
