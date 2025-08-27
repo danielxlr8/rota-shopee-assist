@@ -9,7 +9,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo",
   authDomain: "shopee-apoio-9b103.firebaseapp.com",
   projectId: "shopee-apoio-9b103",
-  storageBucket: "shopee-apoio-9b103.appspot.com",
+  storageBucket: "shopee-apoio-9b103.firebasestorage.app",
   messagingSenderId: "610673332843",
   appId: "1:610673332843:web:090bdd2433790d2a37972e",
   measurementId: "G-72YLGWY45W",

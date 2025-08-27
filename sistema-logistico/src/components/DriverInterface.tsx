@@ -28,7 +28,7 @@ import {
   VolumeX,
 } from "lucide-react";
 // Importações do Firebase
-import { auth, db } from "../firebase";
+import { auth, db, storage } from "../firebase"; // Import storage from firebase.ts
 import {
   doc,
   onSnapshot,
@@ -42,12 +42,7 @@ import {
   Timestamp,
   deleteField,
 } from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-} from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
@@ -467,9 +462,6 @@ export const DriverInterface = () => {
     }
   }, [driver, isProfileComplete]);
 
-  // CORREÇÃO: Lógica de notificação refatorada para ser mais robusta.
-  // Usamos uma ref para a função de notificação para que o listener do Firebase
-  // sempre tenha acesso aos estados mais recentes (driver, isMuted).
   const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
 
   useEffect(() => {
@@ -512,7 +504,7 @@ export const DriverInterface = () => {
       }
       sessionNotifiedCallIds.add(newCall.id);
     };
-  }, [driver?.status, isMuted]); // Este efeito atualiza a função na ref quando o status ou som mudam.
+  }, [driver?.status, isMuted]);
 
   useEffect(() => {
     if (!userId) {
@@ -585,7 +577,6 @@ export const DriverInterface = () => {
       collection(db, "supportCalls"),
       where("status", "==", "ABERTO")
     );
-    // CORREÇÃO: Listener de chamados abertos agora usa docChanges para notificações
     const unsubscribeOpenCalls = onSnapshot(openCallsQuery, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         const callData = {
@@ -602,7 +593,6 @@ export const DriverInterface = () => {
         }
       });
 
-      // A atualização do estado para a UI continua a mesma
       const openCallsData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
@@ -617,7 +607,7 @@ export const DriverInterface = () => {
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
     };
-  }, [userId]); // Apenas userId como dependência para configurar os listeners uma vez.
+  }, [userId]);
 
   const updateDriver = async (
     driverId: string,
@@ -762,22 +752,46 @@ export const DriverInterface = () => {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
 
+    console.log("Iniciando upload do arquivo:", file.name);
     setIsUploading(true);
-    const storage = getStorage();
+
     const storageRef = ref(storage, `avatars/${userId}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
       "state_changed",
-      () => {},
+      (snapshot) => {
+        const progress =
+          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        console.log("Upload está " + progress + "% concluído");
+      },
       (error) => {
-        console.error("Upload failed:", error);
-        sonnerToast.error("Falha ao enviar a imagem.");
+        console.error("Falha no upload:", error.code, error.message);
+        switch (error.code) {
+          case "storage/unauthorized":
+            sonnerToast.error("Erro de permissão", {
+              description:
+                "Você não tem permissão para enviar este arquivo. Verifique as regras do Storage.",
+            });
+            break;
+          case "storage/canceled":
+            sonnerToast.warning("Upload cancelado.");
+            break;
+          default:
+            sonnerToast.error("Erro desconhecido", {
+              description:
+                "Ocorreu um erro inesperado. Verifique o console para mais detalhes.",
+            });
+            break;
+        }
         setIsUploading(false);
       },
       () => {
+        console.log("Upload concluído. Obtendo URL de download...");
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          console.log("URL do arquivo:", downloadURL);
           updateDriver(userId, { avatar: downloadURL });
+          sonnerToast.success("Foto de perfil atualizada com sucesso!");
           setIsUploading(false);
         });
       }
