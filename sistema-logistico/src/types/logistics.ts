@@ -1,18 +1,6 @@
-import { Timestamp } from "firebase/firestore";
+export type UrgencyLevel = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
 
-// Define os níveis de urgência para os chamados de suporte.
-export type UrgencyLevel = "URGENTE" | "ALTA" | "MEDIA" | "BAIXA";
-
-// Define os possíveis status para um motorista.
-export type DriverStatus =
-  | "DISPONIVEL"
-  | "INDISPONIVEL"
-  | "EM_ROTA"
-  | "PAUSADO"
-  | "OFFLINE"
-  | "EM_ATENDIMENTO";
-
-// Define todos os status usados na aplicação.
+// Adicionado "ARQUIVADO" para corresponder ao uso no AdminDashboard
 export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
@@ -21,41 +9,38 @@ export type CallStatus =
   | "EXCLUIDO"
   | "ARQUIVADO";
 
-// Define a estrutura para um chamado de suporte.
+export interface Driver {
+  id: string;
+  name: string;
+  phone: string;
+  status: "DISPONIVEL" | "INDISPONIVEL" | "EM_ROTA" | "OFFLINE";
+  hub: string;
+  vehicleType: string;
+  avatar?: string;
+  initials?: string;
+  uid?: string;
+  googleUid?: string;
+}
+
 export interface SupportCall {
   id: string;
   solicitante: {
     id: string;
     name: string;
-    avatar: string;
-    initials: string;
+    avatar?: string;
+    initials?: string;
     phone?: string;
   };
-  timestamp: Timestamp | { seconds: number; nanoseconds: number } | string;
-  urgency: UrgencyLevel;
-  location: string;
-  description: string;
-  status: CallStatus;
   assignedTo?: string;
+  description: string;
+  location: string;
+  status: CallStatus; // Usando o tipo CallStatus atualizado
+  timestamp: any;
+  urgency: UrgencyLevel;
+  routeId?: string;
   vehicleType?: string;
   isBulky?: boolean;
   hub?: string;
-  deletedAt?: Timestamp;
-  approvedBy?: string; // Adicionado para rastrear quem aprovou
-  routeId?: string; // CORREÇÃO: Adicionada a propriedade que faltava
-}
-
-// Define a estrutura para um motorista.
-export interface Driver {
-  id: string;
-  name: string;
-  avatar: string;
-  initials: string;
-  location: string;
-  status: DriverStatus;
-  phone: string;
-  region: string;
-  hub?: string;
-  vehicleType?: string;
-  googleUid?: string;
+  approvedBy?: string;
+  deletedAt?: any; // Propriedade opcional adicionada
 }

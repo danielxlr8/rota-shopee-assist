@@ -19,6 +19,7 @@ import {
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
+import { VerifyEmailPage } from "./components/VerifyEmailPage";
 import type {
   SupportCall as OriginalSupportCall,
   Driver,
@@ -47,7 +48,6 @@ const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-// Interface unificada para os dados do usuário na sessão
 interface UserData {
   uid: string;
   name: string;
@@ -59,24 +59,33 @@ function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdminUnverified, setIsAdminUnverified] = useState(false);
 
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setIsAdminUnverified(false);
+
       if (currentUser) {
+        await currentUser.reload();
         let resolvedUserData: UserData | null = null;
 
-        // 1. É um administrador?
-        const adminDocRef = doc(db, "admins_pre_aprovados", currentUser.uid);
-        const adminDocSnap = await getDoc(adminDocRef);
-
         if (currentUser.email?.endsWith("@shopee.com")) {
+          if (!currentUser.emailVerified) {
+            setUser(currentUser);
+            setIsAdminUnverified(true);
+            setLoading(false);
+            return;
+          }
+
+          const adminDocRef = doc(db, "admins_pre_aprovados", currentUser.uid);
+          const adminDocSnap = await getDoc(adminDocRef);
+
           if (adminDocSnap.exists()) {
             resolvedUserData = adminDocSnap.data() as UserData;
           } else {
-            // Cria o perfil do admin no primeiro login com conta @shopee.com
             const newAdminData: UserData = {
               uid: currentUser.uid,
               email: currentUser.email!,
@@ -87,21 +96,21 @@ function App() {
             resolvedUserData = newAdminData;
           }
         } else {
-          // 2. Se não for admin, é um motorista?
           const driversRef = collection(db, "motoristas_pre_aprovados");
-          const q = query(driversRef, where("uid", "==", currentUser.uid));
-          const qGoogle = query(
+          const qUid = query(driversRef, where("uid", "==", currentUser.uid));
+          const qGoogleUid = query(
             driversRef,
             where("googleUid", "==", currentUser.uid)
           );
 
-          const querySnapshot = await getDocs(q);
-          const querySnapshotGoogle = await getDocs(qGoogle);
+          const [uidSnapshot, googleUidSnapshot] = await Promise.all([
+            getDocs(qUid),
+            getDocs(qGoogleUid),
+          ]);
 
-          const driverDoc =
-            querySnapshot.docs[0] || querySnapshotGoogle.docs[0];
+          const driverDoc = uidSnapshot.docs[0] || googleUidSnapshot.docs[0];
 
-          if (driverDoc) {
+          if (driverDoc && driverDoc.exists()) {
             const driverData = driverDoc.data() as Driver;
             resolvedUserData = {
               uid: currentUser.uid,
@@ -116,12 +125,14 @@ function App() {
           setUserData(resolvedUserData);
           setUser(currentUser);
         } else {
-          // Não é admin e não é um motorista reconhecido
-          console.error("Usuário não autorizado. Fazendo logout.");
-          await signOut(auth);
+          console.error(
+            "Usuário não encontrado ou não autorizado. Fazendo logout."
+          );
+          if (!isAdminUnverified) {
+            await signOut(auth);
+          }
         }
       } else {
-        // Usuário deslogado
         setUser(null);
         setUserData(null);
       }
@@ -129,10 +140,10 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isAdminUnverified]);
 
   useEffect(() => {
-    if (user && userData) {
+    if (user && userData && !isAdminUnverified) {
       const callsCollection = collection(db, "supportCalls");
       const driversCollection = collection(db, "motoristas_pre_aprovados");
 
@@ -155,7 +166,7 @@ function App() {
         unsubDrivers();
       };
     }
-  }, [user, userData]);
+  }, [user, userData, isAdminUnverified]);
 
   const handleUpdateCall = async (
     id: string,
@@ -180,7 +191,6 @@ function App() {
     const callDocRef = doc(db, "supportCalls", id);
     try {
       await deleteDoc(callDocRef);
-      console.log(`Chamado ${id} excluído permanentemente.`);
     } catch (error) {
       console.error("Erro ao excluir chamado permanentemente: ", error);
     }
@@ -192,15 +202,10 @@ function App() {
       where("status", "==", "EXCLUIDO")
     );
     const querySnapshot = await getDocs(q);
-
     const batch = writeBatch(db);
-    querySnapshot.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-
+    querySnapshot.forEach((doc) => batch.delete(doc.ref));
     try {
       await batch.commit();
-      console.log("Todos os chamados excluídos foram limpos.");
     } catch (error) {
       console.error("Erro ao limpar chamados excluídos: ", error);
     }
@@ -213,6 +218,10 @@ function App() {
           <p>A carregar...</p>
         </div>
       );
+    }
+
+    if (user && isAdminUnverified) {
+      return <VerifyEmailPage user={user} />;
     }
 
     if (!user || !userData) {
@@ -232,16 +241,31 @@ function App() {
           />
         );
       case "driver":
-        return <DriverInterface />;
+        const currentUser = auth.currentUser;
+        if (!currentUser) return <AuthPage />;
+
+        const driverProfile = drivers.find(
+          (d) => d.uid === currentUser.uid || d.googleUid === currentUser.uid
+        );
+
+        if (driverProfile) {
+          return <DriverInterface driver={driverProfile} />;
+        }
+
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <p>Carregando perfil do motorista...</p>
+          </div>
+        );
       default:
-        signOut(auth); // Se o papel for desconhecido, desloga por segurança
+        signOut(auth);
         return <AuthPage />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {user && userData && (
+      {user && userData && !isAdminUnverified && (
         <header className="bg-white shadow-md p-4 flex justify-between items-center">
           <div className="text-lg font-semibold text-gray-700">
             Bem-vindo,{" "}

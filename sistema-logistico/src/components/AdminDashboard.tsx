@@ -965,14 +965,14 @@ export const AdminDashboard = ({
   );
 
   return (
-    <div className="bg-orange-50 min-h-screen font-sans flex flex-col">
+    <div className="bg-orange-400 min-h-screen font-sans flex flex-col">
       <header className="p-6">
         <div className="flex flex-wrap justify-between items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">
-              Sistema de Apoio Logístico
+            <h1 className="text-2xl font-bold text-orange-600">
+              Painel do Admin
             </h1>
-            <p className="text-gray-500">Painel Administrativo - SPX Shopee</p>
+            <p className="text-gray-900">Sistema de Apoio - SPX</p>
           </div>
           <div className="w-full sm:w-auto sm:min-w-[250px]">
             <select
@@ -989,24 +989,24 @@ export const AdminDashboard = ({
           </div>
         </div>
       </header>
-      <nav className="px-6 border-b border-gray-200">
+      <nav className="px-6 border-b border--200">
         <div className="flex space-x-4">
           <button
             onClick={() => setAdminView("kanban")}
             className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "kanban"
                 ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-900 hover:text-gray-500"
             }`}
           >
-            Painel de Chamados
+            Acompanhamento de chamados
           </button>
           <button
             onClick={() => setAdminView("approvals")}
             className={`py-2 px-1 text-sm font-semibold relative transition-colors ${
               adminView === "approvals"
                 ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-900 hover:text-gray-500"
             }`}
           >
             Aprovações Pendentes
@@ -1021,7 +1021,7 @@ export const AdminDashboard = ({
             className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "excluded"
                 ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-900 hover:text-gray-500"
             }`}
           >
             Solicitações Excluídas
@@ -1031,7 +1031,7 @@ export const AdminDashboard = ({
             className={`py-2 px-1 text-sm font-semibold transition-colors ${
               adminView === "history"
                 ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-900 hover:text-gray-500"
             }`}
           >
             Histórico

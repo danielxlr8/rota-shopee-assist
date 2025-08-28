@@ -90,7 +90,6 @@ export const AuthPage = () => {
     setError("");
     setSuccessMessage("");
 
-    // CORREÇÃO: Validação de domínio por aba
     if (activeTab === "driver" && email.endsWith("@shopee.com")) {
       setError("Contas @shopee.com devem fazer login na aba de Admin.");
       setLoading(false);
@@ -108,10 +107,9 @@ export const AuthPage = () => {
         email,
         password
       );
-      // CORREÇÃO: Forçar verificação de e-mail para admins
       if (activeTab === "admin" && !userCredential.user.emailVerified) {
         setError("Por favor, verifique seu e-mail antes de fazer o login.");
-        await signOut(auth); // Desloga para impedir acesso temporário
+        await signOut(auth);
         setLoading(false);
         return;
       }
@@ -128,7 +126,6 @@ export const AuthPage = () => {
     setError("");
     setSuccessMessage("");
 
-    // CORREÇÃO: Validação de domínio por aba no cadastro
     if (activeTab === "driver" && email.endsWith("@shopee.com")) {
       setError("Contas @shopee.com devem se registrar como Admin.");
       setLoading(false);
@@ -154,7 +151,7 @@ export const AuthPage = () => {
 
         if (!driverDoc.exists() || driverDoc.data().uid) {
           setError("ID de Motorista inválido ou já cadastrado.");
-          await user.delete(); // Deleta o usuário criado no Auth se a validação falhar
+          await user.delete();
           setLoading(false);
           return;
         }
@@ -166,11 +163,9 @@ export const AuthPage = () => {
           email,
           uid: user.uid,
         });
-        // Após o cadastro, o App.tsx cuidará do login automático
+        // O App.tsx cuidará do login automático após esta atualização
       } else {
-        // Cadastro de Admin
         await sendEmailVerification(user);
-
         const adminDocRef = doc(db, "admins_pre_aprovados", user.uid);
         await setDoc(adminDocRef, {
           uid: user.uid,
@@ -180,12 +175,11 @@ export const AuthPage = () => {
           birthDate,
           role: "admin",
         });
-
-        // CORREÇÃO: Não desloga, apenas mostra a mensagem e volta para a tela de login
+        await signOut(auth);
         setSuccessMessage(
           "Conta criada! Um e-mail de verificação foi enviado. Por favor, confirme seu e-mail antes de fazer o login."
         );
-        setIsLoginView(true); // Muda para a tela de login
+        setIsLoginView(true);
       }
     } catch (err: any) {
       setError(
@@ -212,7 +206,6 @@ export const AuthPage = () => {
           await signOut(auth);
         }
       } else {
-        // role === 'driver'
         if (user.email?.endsWith("@shopee.com")) {
           setError("Contas @shopee.com devem fazer login na aba de Admin.");
           await signOut(auth);
