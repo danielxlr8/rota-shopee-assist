@@ -28,7 +28,7 @@ import {
   VolumeX,
 } from "lucide-react";
 // Importações do Firebase
-import { auth, db, storage } from "../firebase"; // Import storage from firebase.ts
+import { auth, db, storage } from "../firebase";
 import {
   doc,
   onSnapshot,
@@ -46,6 +46,11 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
+// Define a interface para as props que o componente receberá
+interface DriverInterfaceProps {
+  driver: Driver;
+}
+
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
   "LM Hub_PR_Maringa",
@@ -55,8 +60,6 @@ const hubs = [
 
 const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
-// CORREÇÃO: Set de notificações movido para fora do componente.
-// Isso garante que ele persista durante toda a sessão do usuário, mesmo se o componente for remontado.
 const sessionNotifiedCallIds = new Set<string>();
 
 // Card de Cabeçalho do Perfil
@@ -382,12 +385,10 @@ const OpenCallCard = ({
   );
 };
 
-export const DriverInterface = () => {
-  const [driver, setDriver] = useState<Driver | null>(null);
+export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const TABS = useMemo(
     () => [
@@ -434,6 +435,7 @@ export const DriverInterface = () => {
   const [routeIdSearch, setRouteIdSearch] = useState("");
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
+  const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true); // Estado para o aviso
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -461,6 +463,23 @@ export const DriverInterface = () => {
       setActiveTab("profile");
     }
   }, [driver, isProfileComplete]);
+
+  useEffect(() => {
+    if (driver && !isProfileInitialized.current) {
+      setName(driver.name || "");
+      setPhone(driver.phone || "");
+      const initialHub = driver.hub || "";
+      if (hubs.includes(initialHub)) {
+        setHub(initialHub);
+        setHubSearch(initialHub);
+      } else {
+        setHub("");
+        setHubSearch(""); // Garante que o campo de busca fique vazio se o hub não for válido
+      }
+      setVehicleType(driver.vehicleType || "");
+      isProfileInitialized.current = true;
+    }
+  }, [driver]);
 
   const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
 
@@ -507,40 +526,10 @@ export const DriverInterface = () => {
   }, [driver?.status, isMuted]);
 
   useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+    if (!userId) return;
 
-    const driverDocRef = doc(db, "drivers", userId);
-    const unsubscribeDriver = onSnapshot(driverDocRef, (doc) => {
-      if (doc.exists()) {
-        const driverData = { id: doc.id, ...doc.data() } as Driver;
-        setDriver(driverData);
-
-        if (!isProfileInitialized.current) {
-          setName(driverData.name || "");
-          setPhone(driverData.phone || "");
-
-          const initialHub = driverData.hub || "";
-          if (hubs.includes(initialHub)) {
-            setHub(initialHub);
-            setHubSearch(initialHub);
-          } else {
-            setHub("");
-            setHubSearch("");
-          }
-
-          setVehicleType(driverData.vehicleType || "");
-          isProfileInitialized.current = true;
-        }
-      } else {
-        console.log("Documento do motorista não encontrado!");
-      }
-      setLoading(false);
-    });
-
-    const allDriversQuery = query(collection(db, "drivers"));
+    // CORREÇÃO: A coleção de onde buscamos todos os motoristas
+    const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as Driver)
@@ -602,7 +591,6 @@ export const DriverInterface = () => {
     });
 
     return () => {
-      unsubscribeDriver();
       unsubscribeMyCalls();
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
@@ -614,7 +602,8 @@ export const DriverInterface = () => {
     updates: Partial<Omit<Driver, "id">>
   ) => {
     if (!driverId) return;
-    const driverDocRef = doc(db, "drivers", driverId);
+    // CORREÇÃO: A coleção que atualizamos
+    const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
     await updateDoc(driverDocRef, updates);
   };
 
@@ -752,44 +741,20 @@ export const DriverInterface = () => {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
 
-    console.log("Iniciando upload do arquivo:", file.name);
     setIsUploading(true);
-
     const storageRef = ref(storage, `avatars/${userId}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
       "state_changed",
-      (snapshot) => {
-        const progress =
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        console.log("Upload está " + progress + "% concluído");
-      },
+      () => {},
       (error) => {
-        console.error("Falha no upload:", error.code, error.message);
-        switch (error.code) {
-          case "storage/unauthorized":
-            sonnerToast.error("Erro de permissão", {
-              description:
-                "Você não tem permissão para enviar este arquivo. Verifique as regras do Storage.",
-            });
-            break;
-          case "storage/canceled":
-            sonnerToast.warning("Upload cancelado.");
-            break;
-          default:
-            sonnerToast.error("Erro desconhecido", {
-              description:
-                "Ocorreu um erro inesperado. Verifique o console para mais detalhes.",
-            });
-            break;
-        }
+        console.error("Falha no upload:", error);
+        sonnerToast.error("Falha no upload", { description: error.message });
         setIsUploading(false);
       },
       () => {
-        console.log("Upload concluído. Obtendo URL de download...");
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          console.log("URL do arquivo:", downloadURL);
           updateDriver(userId, { avatar: downloadURL });
           sonnerToast.success("Foto de perfil atualizada com sucesso!");
           setIsUploading(false);
@@ -1046,19 +1011,6 @@ export const DriverInterface = () => {
     );
   };
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <LoaderCircle className="animate-spin text-orange-600" size={48} />
-      </div>
-    );
-  if (!driver)
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        Perfil não encontrado.
-      </div>
-    );
-
   const activeTabIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
   return (
@@ -1066,17 +1018,25 @@ export const DriverInterface = () => {
       <Toaster richColors position="top-center" />
       <div className="bg-orange-50 min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
-          {!isProfileComplete && (
+          {!isProfileComplete && isProfileWarningVisible && (
             <div className="p-4 sticky top-0 z-10">
               <div
-                className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md"
+                className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md flex justify-between items-center"
                 role="alert"
               >
-                <p className="font-bold">Perfil Incompleto!</p>
-                <p className="text-sm">
-                  Por favor, preencha todas as informações do seu perfil para
-                  poder solicitar ou prestar apoio.
-                </p>
+                <div>
+                  <p className="font-bold">Perfil Incompleto!</p>
+                  <p className="text-sm">
+                    Por favor, preencha todas as informações do seu perfil para
+                    poder solicitar ou prestar apoio.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsProfileWarningVisible(false)}
+                  className="p-1 rounded-full hover:bg-yellow-200"
+                >
+                  <X size={20} />
+                </button>
               </div>
             </div>
           )}
