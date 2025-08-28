@@ -1,3 +1,5 @@
+// src/components/DriverInterface.tsx
+
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
 import {
@@ -42,7 +44,12 @@ import {
   Timestamp,
   deleteField,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
@@ -439,7 +446,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-    return !!(driver.hub && driver.vehicleType && driver.phone);
+    return !!(driver.hub && driver.vehicleType && driver.phone && driver.name);
   }, [driver]);
 
   const hasActiveRequest = useMemo(() => {
@@ -641,9 +648,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
       return;
     }
-    if (!userId) return;
+    if (!driver) return;
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-    updateDriver(userId, { status: newStatus });
+    updateDriver(driver.id, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
@@ -710,7 +717,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleUpdateProfile = () => {
-    if (!userId) return;
+    if (!driver) return;
 
     if (phone.replace(/\D/g, "").length !== 11) {
       sonnerToast.error("O telefone deve ter 11 dígitos, incluindo o DDD.");
@@ -724,7 +731,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    updateDriver(userId, {
+    updateDriver(driver.id, {
       name,
       phone: phone.replace(/\D/g, ""),
       hub,
@@ -737,12 +744,29 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     sonnerToast.info("Funcionalidade de alterar senha a ser implementada.");
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !userId) return;
+    if (!file || !driver) return; // Agora usa a prop 'driver' para verificar a existência
 
     setIsUploading(true);
-    const storageRef = ref(storage, `avatars/${userId}`);
+
+    // Deletar avatar anterior, se existir
+    if (driver.avatar) {
+      try {
+        const oldAvatarRef = ref(storage, driver.avatar);
+        await deleteObject(oldAvatarRef);
+      } catch (error) {
+        console.warn(
+          "Erro ao deletar avatar antigo. Pode ser que não exista, ignorando:",
+          error
+        );
+      }
+    }
+
+    const storageRef = ref(
+      storage,
+      `motoristas_pre_aprovados/${driver.id}/avatar.jpg`
+    );
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
@@ -755,7 +779,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          updateDriver(userId, { avatar: downloadURL });
+          updateDriver(driver.id, { avatar: downloadURL }); // Usa driver.id para a atualização
           sonnerToast.success("Foto de perfil atualizada com sucesso!");
           setIsUploading(false);
         });

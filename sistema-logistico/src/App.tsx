@@ -249,6 +249,7 @@ function App() {
         );
 
         if (driverProfile) {
+          // Passando o perfil do motorista como prop
           return <DriverInterface driver={driverProfile} />;
         }
 
