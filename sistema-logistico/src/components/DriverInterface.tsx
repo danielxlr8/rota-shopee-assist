@@ -840,7 +840,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         
         Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional"}`;
 
-      const apiKey = "AIzaSyAXV3wmwo0eMgx3Q3CuE0o2WfROU50jaaU";
+      const apiKey = "AIzaSyC-iyurEf3r-ozdbBFd08B4Yyl0uM69k7Q";
 
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {

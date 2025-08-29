@@ -1,8 +1,8 @@
-// Importe as funções necessárias dos SDKs que você precisa
+import { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; // 1. Adicione esta importação
+import { getStorage } from "firebase/storage";
 
 // A configuração do seu projeto Firebase
 const firebaseConfig = {
@@ -15,10 +15,31 @@ const firebaseConfig = {
   measurementId: "G-72YLGWY45W",
 };
 
-// Inicialize o Firebase
+// Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
 
 // Exporte os serviços que vamos usar na aplicação
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app); // 2. Adicione esta linha para inicializar e exportar o Storage
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Crie ganchos personalizados para fornecer o estado do Firebase
+export const useAuth = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  return { user, loading };
+};
+
+export const useFirestore = () => db;
+export const useStorage = () => storage;
+
+export { auth, db, storage };
