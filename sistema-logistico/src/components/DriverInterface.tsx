@@ -29,7 +29,6 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-// Importações do Firebase
 import { auth, db, storage } from "../firebase";
 import {
   doc,
@@ -52,6 +51,8 @@ import {
 } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
@@ -840,7 +841,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         
         Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional"}`;
 
-      const apiKey = "AIzaSyC-iyurEf3r-ozdbBFd08B4Yyl0uM69k7Q";
+      const apiKey = "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo";
 
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
       const response = await fetch(apiUrl, {
@@ -1674,7 +1675,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         className="w-full pl-10 pr-4 py-2 border rounded-lg appearance-none"
                         required
                       >
-                        <option value="">Selecione o veículo...</option>
+                        <option value="">Selecione seu veículo</option>
                         {vehicleTypesList.map((v) => (
                           <option key={v} value={v}>
                             {v.charAt(0).toUpperCase() + v.slice(1)}
