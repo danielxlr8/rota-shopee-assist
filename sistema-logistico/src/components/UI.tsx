@@ -1,18 +1,9 @@
 import React from "react";
 import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
-import {
-  // Ícones não utilizados foram removidos desta lista
-  Building,
-  Truck,
-  Phone,
-  MapPin,
-  X,
-} from "lucide-react";
+import { Building, Truck, Phone, MapPin, X } from "lucide-react";
 
-// Tipo para o usuário que pode ser um Driver ou o solicitante de um chamado
 type UserLike = Partial<Driver> | Partial<SupportCall["solicitante"]>;
 
-// Componente Avatar corrigido para aceitar props que podem ser undefined
 export const AvatarComponent = ({
   user,
   onClick,
