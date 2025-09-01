@@ -1,6 +1,5 @@
 export type UrgencyLevel = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
 
-// Adicionado "ARQUIVADO" para corresponder ao uso no AdminDashboard
 export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
@@ -34,7 +33,7 @@ export interface SupportCall {
   assignedTo?: string;
   description: string;
   location: string;
-  status: CallStatus; // Usando o tipo CallStatus atualizado
+  status: CallStatus;
   timestamp: any;
   urgency: UrgencyLevel;
   routeId?: string;
@@ -42,5 +41,5 @@ export interface SupportCall {
   isBulky?: boolean;
   hub?: string;
   approvedBy?: string;
-  deletedAt?: any; // Propriedade opcional adicionada
+  deletedAt?: any;
 }
