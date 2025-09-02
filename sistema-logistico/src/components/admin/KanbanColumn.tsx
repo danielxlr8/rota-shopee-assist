@@ -13,15 +13,15 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { ArrowRight, ArrowLeft, Trash2, RotateCcw } from "lucide-react";
-import { SupportCall, SupportCallStatus, Driver } from "../../types/logistics";
-import { updateDoc, doc } from "firebase/firestore";
+import { SupportCall, CallStatus, Driver } from "../../types/logistics";
+import { updateDoc, doc, deleteField, Timestamp } from "firebase/firestore";
 import { db } from "../../firebase";
-import { useToast } from "../ui/use-toast";
+import { useToast } from "../../hooks/use-toast";
 import SupportCallCard from "./SupportCallCard";
 
 type Props = {
   title: string;
-  status: SupportCallStatus;
+  status: CallStatus;
   calls: SupportCall[];
   drivers: Driver[];
   handleSoftDelete: (callId: string) => void;
@@ -40,24 +40,26 @@ export default function KanbanColumn({
 
   const handleChangeStatus = async (
     call: SupportCall,
-    newStatus: SupportCallStatus
+    newStatus: CallStatus
   ) => {
     try {
-      const callRef = doc(db, "support-calls", call.id);
-      const updateData: {
-        status: SupportCallStatus;
-        assignedTo?: any;
-        dataConclusao?: any;
-      } = { status: newStatus };
+      const callRef = doc(db, "supportCalls", call.id);
 
-      if (newStatus === "EM_ANDAMENTO") {
+      const updateData: Partial<SupportCall> = { status: newStatus };
+
+      if (
+        newStatus === "EM ANDAMENTO" ||
+        newStatus === "AGUARDANDO_APROVACAO"
+      ) {
         updateData.assignedTo = call.assignedTo;
       } else {
-        updateData.assignedTo = null;
+        updateData.assignedTo = deleteField() as any;
       }
 
       if (newStatus === "CONCLUIDO") {
-        updateData.dataConclusao = new Date();
+        updateData.deletedAt = Timestamp.now();
+      } else if (call.deletedAt) {
+        updateData.deletedAt = deleteField() as any;
       }
 
       await updateDoc(callRef, updateData);
@@ -70,7 +72,6 @@ export default function KanbanColumn({
       toast({
         title: "Erro",
         description: "Falha ao atualizar o status do chamado.",
-        variant: "destructive",
       });
     }
   };
@@ -79,38 +80,42 @@ export default function KanbanColumn({
   const hasPreviousStatus = status !== "ABERTO" && status !== "EXCLUIDO";
   const canBeRestored = status === "EXCLUIDO";
 
-  const getNextStatus = (
-    currentStatus: SupportCallStatus
-  ): SupportCallStatus => {
+  const getNextStatus = (currentStatus: CallStatus): CallStatus => {
     switch (currentStatus) {
       case "ABERTO":
-        return "AGUARDANDO_APROVACAO";
-      case "AGUARDANDO_APROVACAO":
-        return "EM_ANDAMENTO";
-      case "EM_ANDAMENTO":
+        return "EM ANDAMENTO";
+      case "EM ANDAMENTO":
         return "CONCLUIDO";
+      case "AGUARDANDO_APROVACAO":
+        return "EM ANDAMENTO";
       default:
-        return "ABERTO";
+        return currentStatus;
     }
   };
 
-  const getPreviousStatus = (
-    currentStatus: SupportCallStatus
-  ): SupportCallStatus => {
+  const getPreviousStatus = (currentStatus: CallStatus): CallStatus => {
     switch (currentStatus) {
       case "CONCLUIDO":
-        return "EM_ANDAMENTO";
-      case "EM_ANDAMENTO":
-        return "AGUARDANDO_APROVACAO";
+        return "EM ANDAMENTO";
+      case "EM ANDAMENTO":
+        return "ABERTO";
       case "AGUARDANDO_APROVACAO":
         return "ABERTO";
       default:
-        return "CONCLUIDO";
+        return currentStatus;
     }
+  };
+
+  const onContactRequester = (phone: string) => {
+    console.log(`Contactando solicitante: ${phone}`);
+  };
+
+  const onContactAssigned = (phone: string) => {
+    console.log(`Contactando motorista designado: ${phone}`);
   };
 
   return (
-    <Card>
+    <Card className="w-96 shadow-md rounded-lg">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>{title}</CardTitle>
         <CardDescription>
@@ -118,89 +123,106 @@ export default function KanbanColumn({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {calls.map((call) => (
-          <div key={call.id} className="relative">
-            <SupportCallCard call={call} drivers={drivers} />
-            <div className="absolute top-2 right-2 flex space-x-1">
-              {canBeRestored && handleRestore && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRestore(call.id)}
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Restaurar</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+        {calls.map((call) => {
+          const requester = drivers.find(
+            (driver) => driver.uid === call.solicitante.id
+          );
+          const assignedDriver = call.assignedTo
+            ? drivers.find((driver) => driver.uid === call.assignedTo)
+            : undefined;
+
+          return (
+            <div key={call.id} className="relative">
+              {requester && (
+                <SupportCallCard
+                  call={call}
+                  requester={requester}
+                  assignedDriver={assignedDriver}
+                  onContactRequester={onContactRequester}
+                  onContactAssigned={onContactAssigned}
+                />
               )}
-              {hasNextStatus && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          handleChangeStatus(call, getNextStatus(status))
-                        }
-                      >
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Mover para o próximo status</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {hasPreviousStatus && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          handleChangeStatus(call, getPreviousStatus(status))
-                        }
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Mover para o status anterior</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {status !== "EXCLUIDO" && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSoftDelete(call.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Excluir</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
+              <div className="absolute top-2 right-2 flex space-x-1">
+                {canBeRestored && handleRestore && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRestore(call.id)}
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Restaurar</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {hasNextStatus && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleChangeStatus(call, getNextStatus(status))
+                          }
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Mover para o próximo status</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {hasPreviousStatus && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleChangeStatus(call, getPreviousStatus(status))
+                          }
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Mover para o status anterior</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {status !== "EXCLUIDO" && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleSoftDelete(call.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Excluir</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
