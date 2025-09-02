@@ -10,7 +10,14 @@ exports.generateDescription = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const { prompt } = data;
+  const { prompt } = data; // A função espera uma chave 'prompt'
+  if (!prompt) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "O campo 'prompt' é obrigatório."
+    );
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -21,18 +28,16 @@ exports.generateDescription = functions.https.onCall(async (data, context) => {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash-latest",
+  });
 
   try {
     const result = await model.generateContent(prompt);
-    const response = await result.response;
+    const response = result.response;
     const text = response.text();
 
-    // Limpa a string JSON e faz o parse
-    const cleanedJsonString = text.replace(/```json|```/g, "").trim();
-    const parsedJson = JSON.parse(cleanedJsonString);
-
-    return { description: parsedJson.description };
+    return { description: text }; // Retorna o texto gerado diretamente
   } catch (error) {
     console.error("Erro ao chamar a API do Gemini:", error);
     throw new functions.https.HttpsError(
