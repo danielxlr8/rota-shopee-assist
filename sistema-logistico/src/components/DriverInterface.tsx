@@ -1,10 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import type {
-  Driver,
-  SupportCall,
-  UrgencyLevel,
-  CallStatus,
-} from "../types/logistics";
+import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
 import {
   Clock,
   AlertTriangle,
@@ -848,7 +843,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         functions,
         "generateDescription"
       );
-      const result = await generateDescription({ informalDescription });
+      const result = await generateDescription({ prompt: informalDescription });
       const professionalDescription = (result.data as any).description;
 
       const routeId = `SPX-${Date.now().toString().slice(-6)}`;
@@ -895,7 +890,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
+        setLocation(`http://maps.google.com/maps?q=${latitude},${longitude}`);
         setIsLocating(false);
       },
       () => {
