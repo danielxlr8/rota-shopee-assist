@@ -1,7 +1,10 @@
-// src/components/DriverInterface.tsx
-
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
+import type {
+  Driver,
+  SupportCall,
+  UrgencyLevel,
+  CallStatus,
+} from "../types/logistics";
 import {
   Clock,
   AlertTriangle,
@@ -43,6 +46,7 @@ import {
   Timestamp,
   deleteField,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   ref,
   uploadBytesResumable,
@@ -51,8 +55,6 @@ import {
 } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
@@ -94,7 +96,7 @@ const ProfileHeaderCard = ({
   const getStatusInfo = () => {
     if (
       activeCall &&
-      activeCall.solicitante.id === driver.id &&
+      activeCall.solicitante.id === driver.uid &&
       activeCall.status === "ABERTO"
     ) {
       return { text: "Aguardando Apoio", color: "bg-orange-500" };
@@ -184,9 +186,9 @@ const DriverCallHistoryCard = ({
   onDeleteSupportRequest: (callId: string) => void;
   onRequestApproval: (callId: string) => void;
 }) => {
-  const isRequester = call.solicitante.id === currentDriver.id;
+  const isRequester = call.solicitante.id === currentDriver.uid;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
-  const otherParty = allDrivers.find((d) => d.id === otherPartyId);
+  const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
   let statusText = "Status desconhecido",
     statusColor = "bg-gray-200",
     icon = <HelpCircle size={20} />,
@@ -540,7 +542,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ id: doc.id, ...doc.data() } as Driver)
+        (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
       );
       setAllDrivers(driversData);
     });
@@ -607,7 +609,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const updateDriver = async (
     driverId: string,
-    updates: Partial<Omit<Driver, "id">>
+    updates: Partial<Omit<Driver, "uid">>
   ) => {
     if (!driverId) return;
     // CORREÇÃO: A coleção que atualizamos
@@ -631,7 +633,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       ...newCall,
       timestamp: serverTimestamp(),
       solicitante: {
-        id: driver.id,
+        id: driver.uid,
         name: driver.name,
         avatar: driver.avatar,
         initials: driver.initials,
@@ -651,7 +653,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     }
     if (!driver) return;
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-    updateDriver(driver.id, { status: newStatus });
+    updateDriver(driver.uid, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
@@ -701,6 +703,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       status: "ABERTO",
     } as any);
     await updateDriver(userId, { status: "DISPONIVEL" });
+    sonnerToast.success("Apoio cancelado com sucesso.");
   };
 
   const handleDeleteSupportRequest = async (callId: string) => {
@@ -715,12 +718,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       status: "EXCLUIDO",
       deletedAt: serverTimestamp(),
     } as any);
+    sonnerToast.success("Solicitação de apoio cancelada com sucesso.");
   };
 
   const handleUpdateProfile = () => {
     if (!driver) return;
 
-    if (phone.replace(/\D/g, "").length !== 11) {
+    const formattedPhone = phone.replace(/\D/g, "");
+    if (formattedPhone.length !== 11) {
       sonnerToast.error("O telefone deve ter 11 dígitos, incluindo o DDD.");
       return;
     }
@@ -732,26 +737,37 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    updateDriver(driver.id, {
+    updateDriver(driver.uid, {
       name,
-      phone: phone.replace(/\D/g, ""),
+      phone: formattedPhone,
       hub,
       vehicleType,
     });
     sonnerToast.success("Perfil atualizado com sucesso!");
+    setIsProfileWarningVisible(false);
   };
 
   const handleChangePassword = () => {
-    sonnerToast.info("Funcionalidade de alterar senha a ser implementada.");
+    // CORREÇÃO: Adicionada validação de senhas e lógica básica.
+    if (newPassword !== confirmPassword) {
+      sonnerToast.error("As novas senhas não coincidem.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      sonnerToast.error("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+    sonnerToast.info(
+      "Funcionalidade de alteração de senha a ser implementada com reautenticação."
+    );
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !driver) return; // Agora usa a prop 'driver' para verificar a existência
+    if (!file || !driver || !driver.uid) return;
 
     setIsUploading(true);
 
-    // Deletar avatar anterior, se existir
     if (driver.avatar) {
       try {
         const oldAvatarRef = ref(storage, driver.avatar);
@@ -766,7 +782,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     const storageRef = ref(
       storage,
-      `motoristas_pre_aprovados/${driver.id}/avatar.jpg`
+      `motoristas_pre_aprovados/${driver.uid}/avatar.jpg`
     );
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -780,12 +796,93 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          updateDriver(driver.id, { avatar: downloadURL }); // Usa driver.id para a atualização
+          updateDriver(driver.uid, { avatar: downloadURL });
           sonnerToast.success("Foto de perfil atualizada com sucesso!");
           setIsUploading(false);
         });
       }
     );
+  };
+
+  const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setModalError("");
+
+    const formData = new FormData(e.currentTarget);
+    const isBulky = formData.get("isBulky") === "on";
+    const packageCount = Number(formData.get("packageCount"));
+    const selectedHub = formData.get("hub") as string;
+    const selectedDeliveryRegions = deliveryRegions.filter(Boolean);
+    const selectedNeededVehicles = neededVehicles.filter(Boolean);
+
+    if (packageCount < 20) {
+      sonnerToast.error(
+        "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (
+      !location ||
+      !selectedHub ||
+      selectedDeliveryRegions.length === 0 ||
+      selectedNeededVehicles.length === 0
+    ) {
+      setModalError("Por favor, preencha todos os campos obrigatórios.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
+      ", "
+    )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
+      isBulky ? "Contém pacote volumoso." : ""
+    }`;
+
+    try {
+      // CORREÇÃO: Chamando a Firebase Function em vez de acessar a API diretamente
+      const functions = getFunctions();
+      const generateDescription = httpsCallable(
+        functions,
+        "generateDescription"
+      );
+      const result = await generateDescription({ informalDescription });
+      const professionalDescription = (result.data as any).description;
+
+      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+
+      let urgency: UrgencyLevel = "BAIXA";
+      if (packageCount >= 100) {
+        urgency = "URGENTE";
+      } else if (packageCount >= 90) {
+        urgency = "ALTA";
+      } else if (packageCount >= 60) {
+        urgency = "MEDIA";
+      }
+
+      const newCallData = {
+        routeId: routeId,
+        description: professionalDescription,
+        urgency: urgency,
+        location: location,
+        status: "ABERTO" as const,
+        vehicleType: selectedNeededVehicles.join(", "),
+        isBulky: isBulky,
+        hub: selectedHub,
+      };
+      await addNewCall(newCallData);
+      setIsSupportModalOpen(false);
+      setShowSuccessModal(true);
+      setDeliveryRegions([""]);
+      setNeededVehicles([""]);
+    } catch (error: any) {
+      console.error("Erro detalhado ao criar chamado:", error);
+      setModalError(`Erro: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleGetLocation = () => {
@@ -806,102 +903,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         setIsLocating(false);
       }
     );
-  };
-
-  const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setModalError("");
-
-    const formData = new FormData(e.currentTarget);
-    const isBulky = formData.get("isBulky") === "on";
-    const packageCount = Number(formData.get("packageCount"));
-
-    if (packageCount < 20) {
-      sonnerToast.error(
-        "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${formData.get(
-      "hub"
-    )}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${deliveryRegions.join(
-      ", "
-    )}.
-    Veículo(s) necessário(s): ${neededVehicles.join(", ")}. ${
-      isBulky ? "Contém pacote volumoso." : ""
-    }`;
-
-    try {
-      const prompt = `Aja como um assistente de logística. Um motorista descreveu um problema. Sua tarefa é reescrever a descrição de forma clara e profissional para um chamado de suporte.
-      
-        Descrição do motorista: "${informalDescription}"
-        
-        Retorne a sua resposta APENAS no formato JSON, seguindo este schema: {"description": "sua descrição profissional"}`;
-
-      const apiKey = "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo";
-
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      });
-
-      if (!response.ok)
-        throw new Error(`${response.statusText} (${response.status})`);
-      const result = await response.json();
-      const textPart = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (!textPart)
-        throw new Error("Não foi possível processar a resposta da IA.");
-
-      const cleanedJsonString = textPart.replace(/```json|```/g, "").trim();
-
-      const parsedJson = JSON.parse(cleanedJsonString);
-      if (!parsedJson.description)
-        throw new Error("A resposta da IA está incompleta.");
-
-      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
-
-      let urgency: UrgencyLevel = "BAIXA";
-      if (packageCount >= 100) {
-        urgency = "URGENTE";
-      } else if (packageCount >= 90) {
-        urgency = "ALTA";
-      } else if (packageCount >= 60) {
-        urgency = "MEDIA";
-      }
-
-      const newCallData = {
-        routeId: routeId,
-        description: parsedJson.description,
-        urgency: urgency,
-        location: location,
-        status: "ABERTO" as const,
-        vehicleType: neededVehicles.join(", "),
-        isBulky: isBulky,
-        hub: formData.get("hub") as string,
-      };
-      await addNewCall(newCallData);
-      setIsSupportModalOpen(false);
-      setShowSuccessModal(true);
-      setDeliveryRegions([""]);
-      setNeededVehicles([""]);
-    } catch (error: any) {
-      console.error("Erro detalhado ao criar chamado:", error);
-      if (error.message.includes("Failed to fetch")) {
-        setModalError(
-          "Falha de rede. Verifique a sua ligação à Internet e se a sua chave de API está correta e configurada para localhost."
-        );
-      } else {
-        setModalError(`Erro: ${error.message}`);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const filteredCalls = useMemo(() => {
@@ -1543,13 +1544,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   <select
                     id="hub"
                     name="hub"
+                    value={hub}
+                    onChange={(e) => setHub(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
                     required
                   >
                     <option value="">Selecione...</option>
-                    {hubs.map((hub) => (
-                      <option key={hub} value={hub}>
-                        {hub}
+                    {hubs.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
                       </option>
                     ))}
                   </select>

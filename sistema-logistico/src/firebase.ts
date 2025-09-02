@@ -3,10 +3,12 @@ import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 // A configuração do seu projeto Firebase
+// As variáveis de ambiente devem ser configuradas para segurança
 const firebaseConfig = {
-  apiKey: "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo",
+  apiKey: "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo", // A CHAVE DEVE VIR DAS VARIAVEIS DE AMBIENTE EM PRODUCAO
   authDomain: "shopee-apoio-9b103.firebaseapp.com",
   projectId: "shopee-apoio-9b103",
   storageBucket: "shopee-apoio-9b103.firebasestorage.app",
@@ -22,6 +24,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
 // Crie ganchos personalizados para fornecer o estado do Firebase
 export const useAuth = () => {
@@ -42,4 +45,4 @@ export const useAuth = () => {
 export const useFirestore = () => db;
 export const useStorage = () => storage;
 
-export { auth, db, storage };
+export { auth, db, storage, functions };
