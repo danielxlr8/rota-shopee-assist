@@ -1,3 +1,4 @@
+// Tipos para o Sistema Logístico
 export type UrgencyLevel = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE";
 
 export type CallStatus =
@@ -9,7 +10,7 @@ export type CallStatus =
   | "ARQUIVADO";
 
 export interface Driver {
-  id: string;
+  uid: string;
   name: string;
   phone: string;
   status: "DISPONIVEL" | "INDISPONIVEL" | "EM_ROTA" | "OFFLINE";
@@ -17,7 +18,6 @@ export interface Driver {
   vehicleType: string;
   avatar?: string;
   initials?: string;
-  uid?: string;
   googleUid?: string;
 }
 

@@ -1,7 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-// Lembre-se de adicionar `approvedBy?: string;`, `routeId?: string;` e os novos status à sua interface SupportCall em `src/types/logistics.ts`
-// Ex: export type CallStatus = "ABERTO" | "EM ANDAMENTO" | "AGUARDANDO_APROVACAO" | "CONCLUIDO" | "EXCLUIDO" | "ARQUIVADO";
-import type { SupportCall, Driver, UrgencyLevel } from "../types/logistics";
+import type {
+  SupportCall,
+  Driver,
+  UrgencyLevel,
+  CallStatus,
+} from "../types/logistics";
 import {
   AlertTriangle,
   Clock,
@@ -75,7 +78,7 @@ const EnhancedDriverCard = ({
         Disponível
       </span>
       <button
-        onClick={() => onAction(driver.id)}
+        onClick={() => onAction(driver.uid)}
         className="px-3 py-1 text-xs font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
       >
         Acionar
@@ -231,7 +234,7 @@ const CallDetailsModal = ({
 }) => {
   if (!call) return null;
 
-  const getStatusColor = (status: SupportCall["status"]) => {
+  const getStatusColor = (status: CallStatus) => {
     switch (status) {
       case "ABERTO":
         return "text-yellow-600";
@@ -410,7 +413,7 @@ const ApprovalCard = ({
   onDelete: (call: SupportCall) => void;
   drivers: Driver[];
 }) => {
-  const assignedDriver = drivers.find((d) => d.id === call.assignedTo);
+  const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
@@ -537,11 +540,11 @@ export const AdminDashboard = ({
     useState<string>("Todos os Hubs");
 
   const updateDriver = async (
-    driverId: string,
-    updates: Partial<Omit<Driver, "id">>
+    driverUid: string,
+    updates: Partial<Omit<Driver, "uid">>
   ) => {
-    if (!driverId) return;
-    const driverDocRef = doc(db, "drivers", driverId);
+    if (!driverUid) return;
+    const driverDocRef = doc(db, "motoristas_pre_aprovados", driverUid);
     await updateDoc(driverDocRef, updates);
   };
 
@@ -703,8 +706,8 @@ export const AdminDashboard = ({
     }
   };
 
-  const handleAcionarDriver = (driverId: string) => {
-    const driver = drivers.find((d) => d.id === driverId);
+  const handleAcionarDriver = (driverUid: string) => {
+    const driver = drivers.find((d) => d.uid === driverUid);
     if (driver?.phone) {
       const message = encodeURIComponent(
         `Olá ${driver.name}, temos um chamado de apoio para você.`
@@ -778,7 +781,6 @@ export const AdminDashboard = ({
     () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
     [activeCalls]
   );
-  // CORREÇÃO: Removida a verificação para "APROVADO" que causava erro.
   const concludedCalls = useMemo(
     () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
     [activeCalls]
@@ -950,7 +952,7 @@ export const AdminDashboard = ({
   const activeCallForDriver = infoModalDriver
     ? calls.find(
         (c) =>
-          c.assignedTo === infoModalDriver.id &&
+          c.assignedTo === infoModalDriver.uid &&
           (c.status === "EM ANDAMENTO" || c.status === "AGUARDANDO_APROVACAO")
       ) || null
     : null;
@@ -1149,7 +1151,7 @@ export const AdminDashboard = ({
                 >
                   {availableDrivers.map((driver) => (
                     <EnhancedDriverCard
-                      key={driver.id}
+                      key={driver.uid}
                       driver={driver}
                       onAction={handleAcionarDriver}
                       onInfoClick={() => setInfoModalDriver(driver)}
@@ -1300,7 +1302,7 @@ export const AdminDashboard = ({
               <tbody>
                 {filteredHistoryCalls.map((call) => {
                   const assignedDriver = drivers.find(
-                    (d) => d.id === call.assignedTo
+                    (d) => d.uid === call.assignedTo
                   );
                   const callTimestamp = call.timestamp;
                   const formattedDate = callTimestamp

@@ -156,7 +156,7 @@ function App() {
 
       const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
         const driversData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as Driver)
+          (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
         );
         setDrivers(driversData);
       });
