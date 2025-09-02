@@ -843,7 +843,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         functions,
         "generateDescription"
       );
-      const result = await generateDescription({ prompt: informalDescription });
+      const result = await generateDescription({
+        supportCallDescription: informalDescription,
+      });
       const professionalDescription = (result.data as any).description;
 
       const routeId = `SPX-${Date.now().toString().slice(-6)}`;
@@ -890,7 +892,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setLocation(`http://maps.google.com/maps?q=${latitude},${longitude}`);
+        setLocation(
+          `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`
+        );
         setIsLocating(false);
       },
       () => {
@@ -1435,63 +1439,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600"
                         >
                           Salvar Alterações
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                      <h3 className="text-lg font-semibold mb-4">
-                        Alterar Senha
-                      </h3>
-                      <div className="space-y-4">
-                        <div className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Senha Atual
-                          </label>
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            className="w-full p-2 border rounded-md pr-10"
-                          />
-                          <button
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute inset-y-0 right-0 top-6 pr-3 flex items-center text-gray-500"
-                          >
-                            {showPassword ? (
-                              <EyeOff size={20} />
-                            ) : (
-                              <Eye size={20} />
-                            )}
-                          </button>
-                        </div>
-                        <div className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Nova Senha
-                          </label>
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full p-2 border rounded-md pr-10"
-                          />
-                        </div>
-                        <div className="relative">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Confirmar Nova Senha
-                          </label>
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full p-2 border rounded-md pr-10"
-                          />
-                        </div>
-                        <button
-                          onClick={handleChangePassword}
-                          className="w-full bg-gray-700 text-white font-bold py-3 rounded-lg hover:bg-gray-800"
-                        >
-                          Alterar Senha
                         </button>
                       </div>
                     </div>
