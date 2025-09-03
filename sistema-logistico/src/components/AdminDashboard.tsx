@@ -967,7 +967,7 @@ export const AdminDashboard = ({
   );
 
   return (
-    <div className="bg-orange-400 min-h-screen font-sans flex flex-col">
+    <div className="bg-orange-100 min-h-screen font-sans flex flex-col">
       <header className="p-6">
         <div className="flex flex-wrap justify-between items-center gap-4">
           <div>
