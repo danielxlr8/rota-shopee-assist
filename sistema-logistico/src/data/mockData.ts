@@ -1,6 +1,6 @@
 import type { Driver, SupportCall } from "../types/logistics";
 
-// ... (funções auxiliares getInitials e formatNameForAvatar continuam iguais)
+// Funções auxiliares para dados mock (permanecem inalteradas)
 const getInitials = (name: string) => {
   const names = name.trim().split(" ");
   if (names.length > 1) {
@@ -11,27 +11,43 @@ const getInitials = (name: string) => {
 const formatNameForAvatar = (name: string) =>
   name.toLowerCase().replace(/\s/g, "");
 
+// Dados mock corrigidos para o tipo Driver
 const driverData = [
-  { name: "WILLIAN SANDI RIBEIRO", phone: "43988345149", region: "Londrina" },
+  {
+    name: "WILLIAN SANDI RIBEIRO",
+    phone: "43988345149",
+    region: "Londrina",
+    hub: "LM Hub_PR_Londrina_Parque ABC II",
+    vehicleType: "moto",
+  },
   {
     name: "JONATAS FABRICIO DA SILVA",
     phone: "43984121594",
     region: "Maringá",
+    hub: "LM Hub_PR_Maringa",
+    vehicleType: "carro passeio",
   },
-  { name: "MISLENE DE JESUS LEGRO", phone: "43991805479", region: "Londrina" },
+  {
+    name: "MISLENE DE JESUS LEGRO",
+    phone: "43991805479",
+    region: "Londrina",
+    hub: "LM Hub_PR_Londrina_Parque ABC II",
+    vehicleType: "van",
+  },
 ];
 
 export const mockDrivers: Driver[] = driverData.map((driver, index) => ({
-  id: `d${index + 1}`,
+  uid: `d${index + 1}`,
   name: driver.name,
   phone: driver.phone,
-  location: `LM Hub_PR_${driver.region}`,
+  hub: driver.hub,
+  vehicleType: driver.vehicleType,
   status: "INDISPONIVEL",
-  region: driver.region,
   initials: getInitials(driver.name),
   avatar: `https://i.pravatar.cc/150?u=${formatNameForAvatar(driver.name)}`,
 }));
 
+// Dados mock corrigidos para o tipo SupportCall
 export const mockCalls: SupportCall[] = [
   {
     id: "c1",
@@ -40,12 +56,16 @@ export const mockCalls: SupportCall[] = [
       name: "Carlos Oliveira",
       avatar: "https://i.pravatar.cc/150?u=carlos",
       initials: "CO",
+      phone: "11987654321",
     },
     timestamp: new Date().getTime() - 15 * 60000,
     location: "R. da Consolação, 800 - São Paulo, SP",
     description: "Pneu furado, preciso de apoio urgente",
     urgency: "URGENTE",
     status: "ABERTO",
+    routeId: "SPX-123456",
+    hub: "LM Hub_PR_Londrina_Parque ABC II",
+    vehicleType: "moto",
   },
   {
     id: "c2",
@@ -54,12 +74,16 @@ export const mockCalls: SupportCall[] = [
       name: "Ana Costa",
       avatar: "https://i.pravatar.cc/150?u=ana",
       initials: "AC",
+      phone: "11998765432",
     },
     timestamp: new Date().getTime() - 8 * 60000,
     location: "R. Augusta, 500 - São Paulo, SP",
     description: "Mercadoria muito pesada, preciso de ajuda para carregar",
     urgency: "MEDIA",
     status: "ABERTO",
+    routeId: "SPX-234567",
+    hub: "LM Hub_PR_Maringa",
+    vehicleType: "carro passeio",
   },
   {
     id: "c3",
@@ -68,6 +92,7 @@ export const mockCalls: SupportCall[] = [
       name: "Pedro Alves",
       avatar: "https://i.pravatar.cc/150?u=pedro",
       initials: "PA",
+      phone: "11999887766",
     },
     timestamp: new Date().getTime() - 60 * 60000,
     location: "Av. Paulista, 1000 - São Paulo, SP",
@@ -75,8 +100,10 @@ export const mockCalls: SupportCall[] = [
     urgency: "ALTA",
     status: "EM ANDAMENTO",
     assignedTo: "d1",
+    routeId: "SPX-345678",
+    hub: "LM Hub_PR_Londrina_Parque ABC II",
+    vehicleType: "van",
   },
-  // NOVO CHAMADO DE TESTE: Aguardando aprovação
   {
     id: "c4",
     solicitante: {
@@ -84,6 +111,7 @@ export const mockCalls: SupportCall[] = [
       name: "Fernanda Lima",
       avatar: "https://i.pravatar.cc/150?u=fernanda",
       initials: "FL",
+      phone: "11977665544",
     },
     timestamp: new Date().getTime() - 120 * 60000,
     location: "R. Oscar Freire, 200 - São Paulo, SP",
@@ -91,5 +119,8 @@ export const mockCalls: SupportCall[] = [
     urgency: "MEDIA",
     status: "AGUARDANDO_APROVACAO",
     assignedTo: "d2",
+    routeId: "SPX-456789",
+    hub: "LM Hub_PR_Foz do Iguaçu",
+    vehicleType: "carro utilitario",
   },
 ];

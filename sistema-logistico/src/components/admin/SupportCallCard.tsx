@@ -3,13 +3,7 @@ import { Card, CardContent, CardHeader } from "../ui/card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/Avatar";
-import {
-  Clock,
-  MapPin,
-  Phone,
-  MessageCircle,
-  AlertTriangle,
-} from "lucide-react";
+import { Clock, MapPin, MessageCircle, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Timestamp } from "firebase/firestore";
