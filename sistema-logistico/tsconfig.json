@@ -8,22 +8,21 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
-    /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  // --- ALTERAÇÃO AQUI: Corrigido o caminho para o ficheiro de configuração do Node ---
-  "references": [{ "path": "./src/tsconfig.node.json" }]
+  "references": [
+    {
+      "path": "./src/tsconfig.node.json"
+    }
+  ]
 }
