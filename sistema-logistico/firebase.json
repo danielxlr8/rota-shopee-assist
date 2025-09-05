@@ -1,6 +1,6 @@
 {
   "functions": {
-    "source": "src/firebase-functions",
+    "source": "functions",
     "runtime": "nodejs18"
   },
   "hosting": {
