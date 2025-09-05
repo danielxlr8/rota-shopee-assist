@@ -1,32 +1,54 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import { https } from "firebase-functions";
+import { initializeApp } from "firebase-admin/app";
+initializeApp();
+import { getFirestore } from "firebase-admin/firestore";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
-import * as logger from "firebase-functions/logger";
+// Inicializa o SDK do Firebase Admin.
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+const db = getFirestore();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+// Obtém a chave da API do ambiente (a ser definida no .env ou via firebase functions:config:set)
+const API_KEY = process.env.API_KEY;
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// Exporta a função que gera a descrição.
+exports.generateDescription = https.onRequest(async (request, response) => {
+  try {
+    // ADICIONADO PARA DEPURAR A REQUISIÇÃO
+    console.log("Corpo da requisição recebida:", request.body);
+
+    if (!request.body || !request.body.text) {
+      response
+        .status(400)
+        .send("O campo 'text' é obrigatório no corpo da requisição.");
+      return;
+    }
+
+    // ADICIONADO: Verifica se a chave da API existe.
+    if (!API_KEY) {
+      console.error(
+        "Erro: A variável de ambiente 'API_KEY' não está definida."
+      );
+      response
+        .status(500)
+        .send("Erro interno: A chave da API não está configurada.");
+      return;
+    }
+
+    const { text } = request.body;
+
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `Gere uma descrição profissional para um chamado de suporte de logística, com base na seguinte descrição informal do motorista: "${text}". A descrição deve ser concisa, clara e objetiva. Inclua informações relevantes como o tipo de problema, a localização e a ação necessária.`;
+
+    const result = await model.generateContent(prompt);
+    const apiResponse = await result.response;
+    const generatedText = apiResponse.text();
+
+    response.status(200).json({ description: generatedText });
+  } catch (error) {
+    console.error("Erro na função generateDescription:", error);
+    response.status(500).send("Ocorreu um erro interno na função.");
+  }
+});
