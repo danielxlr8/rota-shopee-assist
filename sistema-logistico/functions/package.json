@@ -8,10 +8,11 @@
     "@google/generative-ai": "^0.15.0",
     "cors": "^2.8.5",
     "firebase-admin": "^13.5.0",
-    "firebase-functions": "^5.0.1"
+    "firebase-functions": "^4.4.1"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0"
+    
   },
   "private": true
 }
