@@ -8,14 +8,14 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
-        "source": "**",
+        "source": "/api/generateDescription",
         "destination": "/index.html"
       }
     ]
   },
   "emulators": {
     "functions": {
-      "port": 5001
+      "port": 5100
     },
     "firestore": {
       "port": 8080
@@ -27,7 +27,7 @@
       "port": 9099
     },
     "ui": {
-      "port": 4000
+      "port": 4001
     }
   }
 }
