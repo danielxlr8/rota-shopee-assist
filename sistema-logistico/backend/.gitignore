@@ -1,0 +1,55 @@
+# ============================
+# Node.js
+# ============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ============================
+# Build / Output
+# ============================
+dist/
+build/
+.cache/
+.temp/
+
+# ============================
+# Ambiente e Credenciais
+# ============================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Credenciais Firebase/Google
+service-account.json
+*.pem
+
+# ============================
+# Logs
+# ============================
+logs/
+*.log
+*.out
+*.err
+
+# ============================
+# Sistema Operacional / Editor
+# ============================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ============================
+# MongoDB
+# ============================
+dump/
