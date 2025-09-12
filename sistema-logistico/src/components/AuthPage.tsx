@@ -200,6 +200,19 @@ export const AuthPage = () => {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
+      if (!user) {
+        setError("Não foi possível autenticar com o Google.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const token = await user.getIdToken(true);
+        console.log("TOKEN JWT:", token); // Copie este token no console do navegador (F12)
+      } catch (tokenErr) {
+        console.warn("Não foi possível obter idToken:", tokenErr);
+      }
+
       if (role === "admin") {
         if (!user.email?.endsWith("@shopee.com")) {
           setError("Acesso restrito a contas @shopee.com.");
