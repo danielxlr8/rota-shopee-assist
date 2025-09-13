@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
+import type { Driver, SupportCall } from "../types/logistics";
 import {
   Clock,
   AlertTriangle,
@@ -33,15 +33,12 @@ import {
   onSnapshot,
   updateDoc,
   collection,
-  addDoc,
-  serverTimestamp,
   query,
   where,
   or,
   Timestamp,
   deleteField,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   ref,
   uploadBytesResumable,
@@ -50,6 +47,7 @@ import {
 } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
+import { getAuth } from "firebase/auth";
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
@@ -619,24 +617,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     await updateDoc(callDocRef, updates as any);
   };
 
-  const addNewCall = async (
-    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
-  ) => {
-    if (!driver) return;
-    const callToAdd = {
-      ...newCall,
-      timestamp: serverTimestamp(),
-      solicitante: {
-        id: driver.uid,
-        name: driver.name,
-        avatar: driver.avatar,
-        initials: driver.initials,
-        phone: driver.phone,
-      },
-    };
-    await addDoc(collection(db, "supportCalls"), callToAdd as any);
-  };
-
   const handleAvailabilityChange = (isAvailable: boolean) => {
     if (!isProfileComplete) {
       sonnerToast.error(
@@ -708,9 +688,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       await updateDriver(callToCancel.assignedTo, { status: "DISPONIVEL" });
     }
 
+    // CORREÇÃO: Substitui a string 'serverTimestamp()' por Timestamp.now()
     await updateCall(callId, {
       status: "EXCLUIDO",
-      deletedAt: serverTimestamp(),
+      deletedAt: Timestamp.now(),
     } as any);
     sonnerToast.success("Solicitação de apoio cancelada com sucesso.");
   };
@@ -828,46 +809,37 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
+    const prompt = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
       ", "
     )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
     try {
-      // CORREÇÃO: Chamando a Firebase Function em vez de acessar a API diretamente
-      const functions = getFunctions();
-      const generateDescription = httpsCallable(
-        functions,
-        "generateDescription"
-      );
-      const result = await generateDescription({
-        supportCallDescription: informalDescription,
+      const user = auth.currentUser;
+      if (!user) {
+        sonnerToast.error("Usuário não autenticado.");
+        setIsSubmitting(false);
+        return;
+      }
+      const token = await user.getIdToken();
+
+      const response = await fetch("http://localhost:3000/tickets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt }),
       });
-      const professionalDescription = (result.data as any).description;
 
-      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
-
-      let urgency: UrgencyLevel = "BAIXA";
-      if (packageCount >= 100) {
-        urgency = "URGENTE";
-      } else if (packageCount >= 90) {
-        urgency = "ALTA";
-      } else if (packageCount >= 60) {
-        urgency = "MEDIA";
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Erro desconhecido ao criar ticket."
+        );
       }
 
-      const newCallData = {
-        routeId: routeId,
-        description: professionalDescription,
-        urgency: urgency,
-        location: location,
-        status: "ABERTO" as const,
-        vehicleType: selectedNeededVehicles.join(", "),
-        isBulky: isBulky,
-        hub: selectedHub,
-      };
-      await addNewCall(newCallData);
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
       setDeliveryRegions([""]);
@@ -1241,8 +1213,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         setModalError("");
                         setIsSupportModalOpen(true);
                       }}
-                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!isProfileComplete || hasActiveRequest}
+                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       PRECISO DE APOIO
                     </button>
@@ -1497,7 +1469,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
                     <div className="bg-white p-6 rounded-lg shadow-sm">
                       <button
-                        onClick={() => auth.signOut()}
+                        onClick={() => getAuth().signOut()}
                         className="w-full flex items-center justify-center gap-2 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600"
                       >
                         <LogOut size={16} />

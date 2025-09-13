@@ -6,6 +6,7 @@ import * as admin from "firebase-admin";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Ticket } from "./ticket.model";
 import fs from "fs";
+import path from "path";
 
 // Carrega variáveis de ambiente
 dotenv.config();
@@ -20,8 +21,9 @@ if (!process.env.MONGO_URI || !process.env.GEMINI_API_KEY) {
 
 // 🔹 Inicializa o Firebase Admin SDK a partir de um arquivo local service-account.json
 try {
+  const serviceAccountPath = path.resolve(__dirname, "../service-account.json");
   const serviceAccount = JSON.parse(
-    fs.readFileSync("./service-account.json", "utf-8")
+    fs.readFileSync(serviceAccountPath, "utf-8")
   );
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -33,10 +35,15 @@ try {
 }
 
 const app: Express = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-// Middleware de CORS
-app.use(cors());
+// Middleware de CORS - Configurado para aceitar requisições do frontend
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "http://localhost:5173", // URL do seu frontend
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 
 // Middleware para processar JSON
 app.use(express.json());
@@ -76,7 +83,7 @@ const authMiddleware = async (
 
 // Conecta ao MongoDB
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI as string)
   .then(() => console.log("Conectado ao MongoDB Atlas!"))
   .catch((err) => {
     console.error("Erro de conexão com MongoDB:", err);
@@ -84,7 +91,7 @@ mongoose
   });
 
 // Inicializa a API Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash-preview-05-20",
 });
