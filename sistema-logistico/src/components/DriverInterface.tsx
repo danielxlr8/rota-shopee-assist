@@ -1,885 +1,556 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
-import type {
-  SupportCall,
-  Driver,
-  UrgencyLevel,
-  CallStatus,
-} from "../types/logistics";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
 import {
-  AlertTriangle,
   Clock,
-  CheckCircle,
-  Users,
-  Trash2,
-  RotateCcw,
-  MapPin,
-  ArrowRight,
-  ArrowLeft,
+  AlertTriangle,
   X,
-  Search,
+  MapPin,
+  Package,
   Building,
+  Globe,
+  LoaderCircle,
+  Zap,
+  CheckCircle,
+  HelpCircle,
   Truck,
+  Phone,
+  XCircle,
+  User,
+  LogOut,
+  Eye,
+  EyeOff,
+  Search,
+  Camera,
+  PlusCircle,
+  MinusCircle,
   Ticket,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale/pt-BR";
-import { Timestamp, doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db, storage } from "../firebase";
 import {
-  AvatarComponent,
-  UrgencyBadge,
-  SummaryCard,
-  KanbanColumn,
-  DriverInfoModal,
-} from "./UI";
+  doc,
+  onSnapshot,
+  updateDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  or,
+  Timestamp,
+  deleteField,
+} from "firebase/firestore";
 import {
-  Panel as ResizablePanel,
-  PanelGroup as ResizablePanelGroup,
-  PanelResizeHandle as ResizableHandle,
-} from "react-resizable-panels";
-import { toast as sonnerToast } from "sonner";
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
+import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
-// --- NOVO COMPONENTE: EnhancedDriverCard ---
-const EnhancedDriverCard = ({
-  driver,
-  onAction,
-  onInfoClick,
-}: {
+// Define a interface para as props que o componente receberá
+interface DriverInterfaceProps {
   driver: Driver;
-  onAction: (driverId: string) => void;
-  onInfoClick: (driver: Driver) => void;
-}) => (
-  <div className="bg-white p-3 rounded-lg shadow flex items-center justify-between gap-2">
-    <div className="flex items-center gap-3 flex-1 min-w-0">
-      <AvatarComponent user={driver} onClick={() => onInfoClick(driver)} />
-      <div className="flex-1 min-w-0">
-        <p
-          className="font-bold text-gray-800 cursor-pointer truncate"
-          onClick={() => onInfoClick(driver)}
-          title={driver.name}
-        >
-          {driver.name}
-        </p>
-        <div className="text-xs text-gray-500 flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
-          <div className="flex items-center gap-1 truncate" title={driver.hub}>
-            <Building size={12} />
-            <span className="truncate">{driver.hub || "N/A"}</span>
-          </div>
-          <div className="flex items-center gap-1 capitalize">
-            <Truck size={12} />
-            <span>{driver.vehicleType || "N/A"}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div className="flex flex-col items-end gap-1">
-      <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
-        Disponível
-      </span>
-      <button
-        onClick={() => onAction(driver.uid)}
-        className="px-3 py-1 text-xs font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
-      >
-        Acionar
-      </button>
-    </div>
-  </div>
-);
-
-// --- Componente de Busca Reutilizável (ComboBox) ---
-const SearchableComboBox = ({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: string[];
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [wrapperRef]);
-
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleSelect = (option: string) => {
-    onChange(option);
-    setSearchTerm(option);
-    setIsOpen(false);
-  };
-
-  const displayValue = isOpen ? searchTerm : value;
-
-  return (
-    <div className="relative w-full" ref={wrapperRef}>
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          size={18}
-        />
-        <input
-          type="text"
-          placeholder={placeholder}
-          value={displayValue}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            onChange(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-          }}
-          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-        />
-      </div>
-      {isOpen && (
-        <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, index) => (
-              <li
-                key={index}
-                onClick={() => handleSelect(option)}
-                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
-              >
-                {option}
-              </li>
-            ))
-          ) : (
-            <li className="px-4 py-2 text-gray-500">
-              Nenhuma opção encontrada.
-            </li>
-          )}
-        </ul>
-      )}
-    </div>
-  );
-};
-
-// --- COMPONENTES AUXILIARES ---
-
-const ConfirmationModal = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  title,
-  children,
-  confirmText,
-  confirmColor = "bg-red-600",
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  children: React.ReactNode;
-  confirmText: string;
-  confirmColor?: string;
-}) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-        <div className="text-gray-600 my-4">{children}</div>
-        <div className="flex justify-end gap-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`px-4 py-2 text-white font-semibold rounded-lg transition-colors ${confirmColor} hover:opacity-90`}
-          >
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const CallDetailsModal = ({
-  call,
-  onClose,
-  onUpdateStatus,
-}: {
-  call: SupportCall | null;
-  onClose: () => void;
-  onUpdateStatus: (
-    id: string,
-    updates: Partial<Omit<SupportCall, "id">>
-  ) => void;
-}) => {
-  if (!call) return null;
-
-  const getStatusColor = (status: CallStatus) => {
-    switch (status) {
-      case "ABERTO":
-        return "text-yellow-600";
-      case "EM ANDAMENTO":
-        return "text-blue-600";
-      case "CONCLUIDO":
-        return "text-green-600";
-      case "AGUARDANDO_APROVACAO":
-        return "text-purple-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
-        >
-          <X size={24} />
-        </button>
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          Detalhes do Chamado
-        </h2>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <AvatarComponent user={call.solicitante} />
-            <div>
-              <p className="font-bold">{call.solicitante.name}</p>
-              <p className="text-sm text-gray-500">Solicitante</p>
-            </div>
-          </div>
-          <p className={`font-bold text-sm ${getStatusColor(call.status)}`}>
-            {call.status.replace("_", " ")}
-          </p>
-          <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-            {call.description}
-          </p>
-        </div>
-        <div className="mt-6 pt-4 border-t flex justify-between items-center">
-          <p className="text-sm text-gray-500">Mover para:</p>
-          <div className="flex gap-2">
-            {call.status === "EM ANDAMENTO" && (
-              <button
-                onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-              >
-                <ArrowLeft size={16} /> Aberto
-              </button>
-            )}
-            {call.status === "CONCLUIDO" && (
-              <button
-                onClick={() =>
-                  onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
-                }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-              >
-                <ArrowLeft size={16} /> Em Andamento
-              </button>
-            )}
-            {call.status === "ABERTO" && (
-              <button
-                onClick={() =>
-                  onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
-                }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
-              >
-                Em Andamento <ArrowRight size={16} />
-              </button>
-            )}
-            {call.status === "EM ANDAMENTO" && (
-              <button
-                onClick={() =>
-                  onUpdateStatus(call.id, { status: "AGUARDANDO_APROVACAO" })
-                }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
-              >
-                Aguard. Aprovação <ArrowRight size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const CallCard = ({
-  call,
-  onDelete,
-  onClick,
-}: {
-  call: SupportCall;
-  onDelete: (call: SupportCall) => void;
-  onClick: (call: SupportCall) => void;
-}) => {
-  const formatTimestamp = (timestamp: any): string => {
-    if (!timestamp) return "Horário indisponível";
-    let date;
-    if (timestamp instanceof Timestamp) {
-      date = timestamp.toDate();
-    } else if (timestamp && typeof timestamp.seconds === "number") {
-      date = new Date(timestamp.seconds * 1000);
-    } else {
-      return "Data inválida";
-    }
-    if (isNaN(date.getTime())) return "Data inválida";
-    return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
-  };
-  const timeAgo = formatTimestamp(call.timestamp);
-
-  return (
-    <div
-      className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3 hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={() => onClick(call)}
-    >
-      <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <AvatarComponent user={call.solicitante} />
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-bold text-gray-800">{call.solicitante.name}</p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(call);
-                }}
-                className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600 transition-colors"
-                title="Excluir Solicitação"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500">Solicitante</p>
-          </div>
-        </div>
-        <UrgencyBadge urgency={call.urgency} />
-      </div>
-      <div className="text-sm text-gray-600 space-y-2">
-        <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-gray-400" />
-          <span>{call.routeId || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Building size={16} className="text-gray-400" />
-          <span>{call.hub || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Clock size={16} className="text-gray-400" />
-          <span>{timeAgo}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <MapPin size={16} className="text-gray-400" />
-          <span>{call.location}</span>
-        </div>
-      </div>
-      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-        {call.description}
-      </p>
-    </div>
-  );
-};
-
-const ApprovalCard = ({
-  call,
-  onApprove,
-  onReject,
-  onDelete,
-  drivers,
-}: {
-  call: SupportCall;
-  onApprove: (call: SupportCall) => void;
-  onReject: (call: SupportCall) => void;
-  onDelete: (call: SupportCall) => void;
-  drivers: Driver[];
-}) => {
-  const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
-
-  return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
-      <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <AvatarComponent user={call.solicitante} />
-          <div>
-            <p className="font-bold text-gray-800">{call.solicitante.name}</p>
-            <p className="text-sm text-gray-500">Solicitante</p>
-          </div>
-        </div>
-        <UrgencyBadge urgency={call.urgency} />
-      </div>
-
-      {assignedDriver && (
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <ArrowRight size={16} className="text-gray-400" />
-          <AvatarComponent user={assignedDriver} />
-          <div>
-            <p className="font-semibold">{assignedDriver.name}</p>
-            <p className="text-xs text-gray-500">Prestador do Apoio</p>
-          </div>
-        </div>
-      )}
-
-      <div className="text-sm text-gray-600 space-y-2">
-        <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-gray-400" />
-          <span>{call.routeId || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Building size={16} className="text-gray-400" />
-          <span>{call.hub || "N/A"}</span>
-        </div>
-      </div>
-
-      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-        {call.description}
-      </p>
-
-      <div className="mt-2 pt-2 border-t flex justify-end gap-3">
-        <button
-          onClick={() => onDelete(call)}
-          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-          title="Excluir Solicitação"
-        >
-          <Trash2 size={16} />
-        </button>
-        <button
-          onClick={() => onReject(call)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-        >
-          <X size={16} /> Rejeitar
-        </button>
-        <button
-          onClick={() => onApprove(call)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
-        >
-          <CheckCircle size={16} /> Aprovar
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// --- COMPONENTE PRINCIPAL DO PAINEL ---
-
-interface AdminDashboardProps {
-  calls: SupportCall[];
-  drivers: Driver[];
-  updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
-  onDeleteCall: (id: string) => void;
-  onDeletePermanently: (id: string) => void;
-  onDeleteAllExcluded: () => void;
 }
 
-export const AdminDashboard = ({
-  calls,
-  drivers,
-  updateCall,
-  onDeleteCall,
-  onDeletePermanently,
-  onDeleteAllExcluded,
-}: AdminDashboardProps) => {
-  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
-    "TODOS"
-  );
-  const [adminView, setAdminView] = useState<
-    "kanban" | "approvals" | "excluded" | "history"
-  >("kanban");
-  const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
-  const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
-  const [confirmationType, setConfirmationType] = useState<
-    "soft-delete" | "permanent-delete" | "clear-all" | null
-  >(null);
-  const [excludedNameFilter, setExcludedNameFilter] = useState("");
-  const [excludedHubFilter, setExcludedHubFilter] = useState("");
-  const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
-  const notifiedCallIds = useRef(new Set<string>());
-  const prevCallsRef = useRef<SupportCall[]>([]);
+const hubs = [
+  "LM Hub_PR_Londrina_Parque ABC II",
+  "LM Hub_PR_Maringa",
+  "LM Hub_PR_Foz do Iguaçu",
+  "LM Hub_PR_Cascavel",
+];
 
-  const [tempHistoryFilters, setTempHistoryFilters] = useState({
-    start: "",
-    end: "",
-    hub: "Todos",
-    routeId: "",
-    status: "Todos",
-  });
+const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
-  const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
-    start: "",
-    end: "",
-    hub: "Todos",
-    routeId: "",
-    status: "Todos",
-  });
+const sessionNotifiedCallIds = new Set<string>();
 
-  const [driverHubFilter, setDriverHubFilter] =
-    useState<string>("Todos os Hubs");
-  const [driverVehicleFilter, setDriverVehicleFilter] =
-    useState<string>("Todos os Veículos");
+// Card de Cabeçalho do Perfil (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
+const ProfileHeaderCard = ({
+  driver,
+  onEditClick,
+  isUploading,
+  activeCall,
+}: {
+  driver: Driver | null;
+  onEditClick: () => void;
+  isUploading: boolean;
+  activeCall: SupportCall | null;
+}) => {
+  if (!driver) return null;
 
-  const [globalHubFilter, setGlobalHubFilter] =
-    useState<string>("Todos os Hubs");
-
-  const updateDriver = async (
-    driverUid: string,
-    updates: Partial<Omit<Driver, "uid">>
-  ) => {
-    if (!driverUid) return;
-    const driverDocRef = doc(db, "motoristas_pre_aprovados", driverUid);
-    await updateDoc(driverDocRef, updates);
+  const formatPhoneNumberSimple = (phone: string) => {
+    if (!phone) return "";
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 11) return phone;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
-  const handleApplyHistoryFilters = () => {
-    setAppliedHistoryFilters(tempHistoryFilters);
-    sonnerToast.info("Filtros do histórico aplicados!");
+  const getStatusInfo = () => {
+    if (
+      activeCall &&
+      activeCall.solicitante.id === driver.uid &&
+      activeCall.status === "ABERTO"
+    ) {
+      return { text: "Aguardando Apoio", color: "bg-orange-500" };
+    }
+
+    switch (driver.status) {
+      case "DISPONIVEL":
+        return { text: "Disponível para Apoio", color: "bg-green-500" };
+      case "INDISPONIVEL":
+        return { text: "Indisponível", color: "bg-red-500" };
+      case "EM_ROTA":
+        return { text: "Prestando Apoio", color: "bg-blue-500" };
+      default:
+        return { text: "Offline", color: "bg-gray-500" };
+    }
   };
 
-  const handleHistoryFilterChange = (
-    filterName: keyof typeof tempHistoryFilters,
-    value: string
-  ) => {
-    setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
-  };
+  const statusInfo = getStatusInfo();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const urgencyLevels: UrgencyLevel[] = [
-        "BAIXA",
-        "MEDIA",
-        "ALTA",
-        "URGENTE",
-      ];
-
-      calls.forEach((call) => {
-        if (call.status === "ABERTO" && call.timestamp) {
-          const callTime =
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toMillis()
-              : (call.timestamp as any).seconds * 1000;
-          const minutesElapsed = (now - callTime) / 60000;
-
-          const initialUrgencyIndex = urgencyLevels.indexOf(call.urgency);
-          const escalationLevels = Math.floor(minutesElapsed / 30);
-
-          const newUrgencyIndex = Math.min(
-            initialUrgencyIndex + escalationLevels,
-            urgencyLevels.length - 1
-          );
-          const newUrgency = urgencyLevels[newUrgencyIndex];
-
-          if (newUrgency !== call.urgency) {
-            updateCall(call.id, { urgency: newUrgency });
-          }
-        }
-      });
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [calls, updateCall]);
-
-  useEffect(() => {
-    const archiveOldCalls = () => {
-      const now = new Date();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-      const callsToCheck = calls.filter(
-        (call) => !["ARQUIVADO", "EXCLUIDO", "ABERTO"].includes(call.status)
-      );
-
-      callsToCheck.forEach((call) => {
-        if (call.timestamp) {
-          const callDate =
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toDate()
-              : new Date((call.timestamp as any).seconds * 1000);
-
-          if (callDate < twentyFourHoursAgo) {
-            console.log(`Arquivando chamado antigo: ${call.id}`);
-            updateCall(call.id, { status: "ARQUIVADO" });
-          }
-        }
-      });
-    };
-
-    const intervalId = setInterval(archiveOldCalls, 60 * 60 * 1000);
-    archiveOldCalls();
-
-    return () => clearInterval(intervalId);
-  }, [calls, updateCall]);
-
-  useEffect(() => {
-    const prevCallsMap = new Map(
-      prevCallsRef.current.map((c) => [c.id, c.status])
-    );
-    const newOpenCalls = calls.filter((call) => {
-      const prevStatus = prevCallsMap.get(call.id);
-      return call.status === "ABERTO" && prevStatus !== "ABERTO";
-    });
-
-    if (newOpenCalls.length > 0) {
-      const audio = new Audio("/shopee-ringtone.mp3");
-      audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
-
-      newOpenCalls.forEach((newCall) => {
-        if (!notifiedCallIds.current.has(newCall.id)) {
-          sonnerToast.custom(
-            () => (
-              <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-                <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-                <div>
-                  <p className="font-bold text-gray-800">
-                    Novo Chamado Aberto!
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {newCall.solicitante.name} do hub{" "}
-                    {newCall.hub || "desconhecido"} precisa de apoio.
-                  </p>
-                </div>
+  return (
+    <div className="relative mb-12">
+      <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-lg shadow-lg p-6 pt-16 text-white text-center">
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 group">
+          <div className="relative w-24 h-24 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center overflow-hidden">
+            {driver.avatar ? (
+              <img
+                src={driver.avatar}
+                alt={driver.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-3xl font-bold text-orange-600">
+                {driver.initials}
+              </span>
+            )}
+            {isUploading ? (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <LoaderCircle className="text-white animate-spin" />
               </div>
-            ),
-            { duration: 10000 }
-          );
-          notifiedCallIds.current.add(newCall.id);
-        }
-      });
+            ) : (
+              <button
+                onClick={onEditClick}
+                className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
+              >
+                <Camera className="text-white" size={32} />
+              </button>
+            )}
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold">{driver.name}</h2>
+        <div className="text-sm opacity-90 mt-2 space-y-1">
+          <p className="flex items-center justify-center gap-2">
+            <Building size={14} /> {driver.hub || "Hub não definido"}
+          </p>
+          <p className="flex items-center justify-center gap-2">
+            <Phone size={14} />{" "}
+            {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
+          </p>
+          <p className="flex items-center justify-center gap-2 capitalize">
+            <Truck size={14} /> {driver.vehicleType || "Veículo não definido"}
+          </p>
+        </div>
+        <div className="flex items-center justify-center mt-3">
+          <span
+            className={`w-3 h-3 rounded-full ${statusInfo.color} mr-2`}
+          ></span>
+          <p className="text-sm font-bold">{statusInfo.text}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente para o cartão de histórico (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
+const DriverCallHistoryCard = ({
+  call,
+  currentDriver,
+  allDrivers,
+  onCancelSupport,
+  onDeleteSupportRequest,
+  onRequestApproval,
+}: {
+  call: SupportCall;
+  currentDriver: Driver;
+  allDrivers: Driver[];
+  onCancelSupport: (callId: string) => void;
+  onDeleteSupportRequest: (callId: string) => void;
+  onRequestApproval: (callId: string) => void;
+}) => {
+  const isRequester = call.solicitante.id === currentDriver.uid;
+  const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
+  const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
+  let statusText = "Status desconhecido",
+    statusColor = "bg-gray-200",
+    icon = <HelpCircle size={20} />,
+    title = "Chamado";
+
+  if (isRequester) {
+    title = "Pedido de Apoio";
+    if (call.status === "ABERTO") {
+      statusText = "Aguardando Apoio";
+      statusColor = "bg-yellow-200 text-yellow-800";
+      icon = <HelpCircle size={20} className="text-yellow-500" />;
+    } else if (call.status === "AGUARDANDO_APROVACAO") {
+      statusText = "Aguardando Aprovação";
+      statusColor = "bg-purple-200 text-purple-800";
+      icon = <Clock size={20} className="text-purple-500" />;
+    } else if (call.status === "EM ANDAMENTO") {
+      statusText = `Recebendo Apoio`;
+      statusColor = "bg-blue-200 text-blue-800";
+      icon = (
+        <Truck size={20} className="text-blue-500 transform -scale-x-100" />
+      );
     }
+  } else {
+    title = `Apoio a ${call.solicitante.name}`;
+    if (call.status === "EM ANDAMENTO") {
+      statusText = "Prestando Apoio";
+      statusColor = "bg-green-200 text-green-800";
+      icon = <Truck size={20} className="text-green-500" />;
+    } else if (call.status === "AGUARDANDO_APROVACAO") {
+      statusText = "Aguardando Aprovação";
+      statusColor = "bg-purple-200 text-purple-800";
+      icon = <Clock size={20} className="text-purple-500" />;
+    }
+  }
+  if (call.status === "CONCLUIDO") {
+    statusText = "Concluído";
+    statusColor = "bg-gray-200 text-gray-800";
+  }
 
-    prevCallsRef.current = calls;
-
-    const openCallIds = new Set(
-      calls.filter((c) => c.status === "ABERTO").map((c) => c.id)
+  const handleWhatsAppClick = () => {
+    const contactPhone = otherParty?.phone;
+    if (!contactPhone) {
+      sonnerToast.error("O outro motorista não tem um telefone cadastrado.");
+      return;
+    }
+    const message = encodeURIComponent(
+      `Olá ${otherParty?.name}, sou o ${currentDriver.name} referente ao chamado de apoio.`
     );
-    notifiedCallIds.current.forEach((id) => {
-      if (!openCallIds.has(id)) {
-        notifiedCallIds.current.delete(id);
-      }
-    });
-  }, [calls]);
-
-  const handleApprove = async (call: SupportCall) => {
-    try {
-      const updates = { status: "CONCLUIDO", approvedBy: "Admin" };
-      await updateCall(call.id, updates as Partial<Omit<SupportCall, "id">>);
-
-      if (call.solicitante.id) {
-        await updateDriver(call.solicitante.id, { status: "DISPONIVEL" });
-      }
-      if (call.assignedTo) {
-        await updateDriver(call.assignedTo, { status: "DISPONIVEL" });
-      }
-      sonnerToast.success("Chamado aprovado e concluído com sucesso!");
-    } catch (error) {
-      console.error("Erro ao aprovar chamado:", error);
-      sonnerToast.error("Falha ao aprovar o chamado.");
-    }
+    window.open(`https://wa.me/55${contactPhone}?text=${message}`, "_blank");
   };
 
-  const handleReject = async (call: SupportCall) => {
-    try {
-      await updateCall(call.id, { status: "EM ANDAMENTO" });
-      sonnerToast.warning(
-        "Aprovação rejeitada. O chamado voltou para 'Em Andamento'."
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          {icon}
+          <div>
+            <p className="font-bold text-gray-800">{title}</p>
+            <p className="text-sm text-gray-500">{call.description}</p>
+          </div>
+        </div>
+        <div
+          className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColor} self-end sm:self-center`}
+        >
+          {statusText}
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t text-xs text-gray-600">
+        <p className="flex items-center gap-2">
+          <Ticket size={14} />
+          <span className="font-semibold">ID da Rota:</span>{" "}
+          {call.routeId || "N/A"}
+        </p>
+      </div>
+
+      {(call.status === "EM ANDAMENTO" ||
+        call.status === "AGUARDANDO_APROVACAO" ||
+        call.status === "ABERTO") && (
+        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
+          {otherParty && (
+            <button
+              onClick={handleWhatsAppClick}
+              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+            >
+              <Phone size={14} /> Contatar
+            </button>
+          )}
+          {!isRequester && call.status === "EM ANDAMENTO" && (
+            <>
+              <button
+                onClick={() => onRequestApproval(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
+              >
+                <Clock size={14} /> Aguardando Aprovação
+              </button>
+              <button
+                onClick={() => onCancelSupport(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+              >
+                <XCircle size={14} /> Cancelar Apoio
+              </button>
+            </>
+          )}
+          {isRequester && call.status === "ABERTO" && (
+            <button
+              onClick={() => onDeleteSupportRequest(call.id)}
+              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+            >
+              <XCircle size={14} /> Cancelar Solicitação
+            </button>
+          )}
+          {isRequester && call.status === "EM ANDAMENTO" && (
+            <>
+              <button
+                onClick={() => onRequestApproval(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
+              >
+                <Clock size={14} /> Aguardando Aprovação
+              </button>
+              <button
+                onClick={() => onDeleteSupportRequest(call.id)}
+                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+              >
+                <XCircle size={14} /> Cancelar Solicitação
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Componente para a lista de chamados abertos (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
+const OpenCallCard = ({
+  call,
+  currentDriverName,
+  onAccept,
+  acceptingCallId,
+}: {
+  call: SupportCall;
+  currentDriverName: string;
+  onAccept: (callId: string) => void;
+  acceptingCallId: string | null;
+}) => {
+  const requesterPhone = call.solicitante.phone || "";
+  const isAcceptingThisCall = acceptingCallId === call.id;
+
+  const handleWhatsAppClick = () => {
+    if (!requesterPhone) {
+      sonnerToast.error(
+        "O motorista solicitante não possui um número de telefone cadastrado."
       );
-    } catch (error) {
-      console.error("Erro ao rejeitar chamado:", error);
-      sonnerToast.error("Falha ao rejeitar o chamado.");
+      return;
     }
+    const message = encodeURIComponent(
+      `Olá ${call.solicitante.name}, me chamo ${currentDriverName} e aceitei seu chamado e serei seu apoio`
+    );
+    window.open(`https://wa.me/55${requesterPhone}?text=${message}`, "_blank");
   };
 
-  const handleAcionarDriver = (driverUid: string) => {
-    const driver = drivers.find((d) => d.uid === driverUid);
-    if (driver?.phone) {
-      const message = encodeURIComponent(
-        `Olá ${driver.name}, temos um chamado de apoio para você.`
-      );
-      window.open(`https://wa.me/55${driver.phone}?text=${message}`, "_blank");
-    }
-  };
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <p className="font-bold text-gray-800">
+            Apoio para {call.solicitante.name}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
+        </div>
+        <div className="flex items-center gap-2 self-end sm:self-center">
+          <button
+            onClick={handleWhatsAppClick}
+            className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+          >
+            <Phone size={16} />
+          </button>
+          <button
+            onClick={() => onAccept(call.id)}
+            disabled={!!acceptingCallId}
+            className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
+          >
+            {isAcceptingThisCall ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              "Aceitar Apoio"
+            )}
+          </button>
+        </div>
+      </div>
+      <div className="mt-3 pt-3 border-t text-xs text-gray-600 space-y-1">
+        <p className="flex items-center gap-2">
+          <Ticket size={14} />
+          <span className="font-semibold">ID da Rota:</span>{" "}
+          {call.routeId || "N/A"}
+        </p>
+        <p className="flex items-center gap-2">
+          <MapPin size={14} />
+          <span className="font-semibold">Local:</span> {call.location}
+        </p>
+      </div>
+    </div>
+  );
+};
 
-  const handleDeleteClick = (call: SupportCall) => {
-    setCallToConfirm(call);
-    setConfirmationType("soft-delete");
-  };
+export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
+  const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
+  const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
+  const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handlePermanentDeleteClick = (call: SupportCall) => {
-    setCallToConfirm(call);
-    setConfirmationType("permanent-delete");
-  };
+  const TABS = useMemo(
+    () => [
+      { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
+      { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
+      { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
+      { id: "profile", label: "Perfil", icon: <User size={16} /> },
+    ],
+    []
+  );
+  type TabId = "availability" | "support" | "activeCalls" | "profile";
+  const [activeTab, setActiveTab] = useState<TabId>("availability");
 
-  const handleClearAllClick = () => {
-    setConfirmationType("clear-all");
-  };
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [location, setLocation] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<
+    "all" | "requester" | "provider" | "inProgress"
+  >("all");
 
-  const confirmAction = () => {
-    if (confirmationType === "soft-delete" && callToConfirm)
-      onDeleteCall(callToConfirm.id);
-    else if (confirmationType === "permanent-delete" && callToConfirm)
-      onDeletePermanently(callToConfirm.id);
-    else if (confirmationType === "clear-all") onDeleteAllExcluded();
-    closeModal();
-  };
+  const [deliveryRegions, setDeliveryRegions] = useState([""]);
+  const [neededVehicles, setNeededVehicles] = useState([""]);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [hub, setHub] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [hubSearch, setHubSearch] = useState("");
+  const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isProfileInitialized = useRef(false);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+  const swipeContainerRef = useRef<HTMLDivElement>(null);
+  const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
+  const userId = auth.currentUser?.uid;
+  const [routeIdSearch, setRouteIdSearch] = useState("");
+  const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
+  const [isMuted, setIsMuted] = useState(false);
+  const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
 
-  const closeModal = () => {
-    setCallToConfirm(null);
-    setConfirmationType(null);
-  };
+  const isProfileComplete = useMemo(() => {
+    if (!driver) return false;
+    return !!(driver.hub && driver.vehicleType && driver.phone && driver.name);
+  }, [driver]);
 
-  const handleRestore = (callId: string) => {
-    updateCall(callId, { status: "ABERTO" });
-  };
-
-  const filteredCalls = useMemo(() => {
-    return calls.filter(
+  const hasActiveRequest = useMemo(() => {
+    return allMyCalls.some(
       (call) =>
-        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter
+        call.solicitante.id === userId &&
+        ["ABERTO", "EM ANDAMENTO", "AGUARDANDO_APROVACAO"].includes(call.status)
     );
-  }, [calls, globalHubFilter]);
+  }, [allMyCalls, userId]);
 
-  const filteredDrivers = useMemo(() => {
-    return drivers.filter(
-      (driver) =>
-        globalHubFilter === "Todos os Hubs" || driver.hub === globalHubFilter
-    );
-  }, [drivers, globalHubFilter]);
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+    const savedMutePreference = localStorage.getItem("notificationsMuted");
+    setIsMuted(savedMutePreference === "true");
+  }, []);
 
-  const activeCalls = useMemo(
-    () =>
-      filteredCalls.filter(
-        (c) => !["EXCLUIDO", "ARQUIVADO"].includes(c.status)
-      ),
-    [filteredCalls]
-  );
-  const excludedCalls = useMemo(
-    () => filteredCalls.filter((c) => c.status === "EXCLUIDO"),
-    [filteredCalls]
-  );
-  const openCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "ABERTO"),
-    [activeCalls]
-  );
-  const inProgressCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
-    [activeCalls]
-  );
-  const concludedCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
-    [activeCalls]
-  );
-  const pendingApprovalCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
-    [activeCalls]
-  );
+  useEffect(() => {
+    if (driver && !isProfileComplete) {
+      setActiveTab("profile");
+    }
+  }, [driver, isProfileComplete, TABS]);
 
-  const availableDriverHubs = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(drivers.map((d) => d.hub).filter(Boolean)),
-      ].sort(),
-    [drivers]
-  );
-  const allHubsForFilter = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(calls.map((c) => c.hub).filter(Boolean)),
-      ].sort(),
-    [calls]
-  );
-  const allHubs = useMemo(
-    () => ["Todos", ...new Set(calls.map((c) => c.hub).filter(Boolean))].sort(),
-    [calls]
-  );
-  const vehicleTypes = useMemo(
-    () =>
-      [
-        "Todos os Veículos",
-        ...new Set(drivers.map((d) => d.vehicleType).filter(Boolean)),
-      ].sort(),
-    [drivers]
-  );
+  useEffect(() => {
+    if (driver && !isProfileInitialized.current) {
+      setName(driver.name || "");
+      setPhone(driver.phone || "");
+      const initialHub = driver.hub || "";
+      if (hubs.includes(initialHub)) {
+        setHub(initialHub);
+        setHubSearch(initialHub);
+      } else {
+        setHub("");
+        setHubSearch("");
+      }
+      setVehicleType(driver.vehicleType || "");
+      isProfileInitialized.current = true;
+    }
+  }, [driver]);
 
-  const availableDrivers = useMemo(() => {
-    return filteredDrivers.filter((d) => {
-      const isAvailable = d.status === "DISPONIVEL";
-      const hubMatch =
-        driverHubFilter === "Todos os Hubs" || d.hub === driverHubFilter;
-      const vehicleMatch =
-        driverVehicleFilter === "Todos os Veículos" ||
-        d.vehicleType === driverVehicleFilter;
-      return isAvailable && hubMatch && vehicleMatch;
+  const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
+
+  useEffect(() => {
+    triggerNotificationRef.current = (newCall: SupportCall) => {
+      if (
+        driver?.status !== "DISPONIVEL" ||
+        sessionNotifiedCallIds.has(newCall.id)
+      ) {
+        return;
+      }
+
+      if (!isMuted) {
+        const audio = new Audio("/shopee-ringtone.mp3");
+        audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+      }
+
+      sonnerToast.custom(
+        () => (
+          <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
+            <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+            <div>
+              <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
+              <p className="text-sm text-gray-600">
+                Um novo chamado de {newCall.solicitante.name} está aberto.
+              </p>
+            </div>
+          </div>
+        ),
+        { duration: 10000 }
+      );
+
+      if (document.hidden && Notification.permission === "granted") {
+        new Notification("Novo Apoio Disponível!", {
+          body: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
+          icon: spxLogo,
+        });
+        if ("vibrate" in navigator) {
+          navigator.vibrate([200, 100, 200]);
+        }
+      }
+      sessionNotifiedCallIds.add(newCall.id);
+    };
+  }, [driver?.status, isMuted]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
+    const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
+      const driversData = snapshot.docs.map(
+        (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
+      );
+      setAllDrivers(driversData);
     });
-  }, [filteredDrivers, driverHubFilter, driverVehicleFilter]);
 
-  const filteredHistoryCalls = useMemo(() => {
-    return filteredCalls
-      .filter((call) => {
-        if (call.status === "EXCLUIDO") return false;
-
-        if (
-          appliedHistoryFilters.hub !== "Todos" &&
-          call.hub !== appliedHistoryFilters.hub
-        )
-          return false;
-        if (
-          appliedHistoryFilters.routeId &&
-          !call.routeId
-            ?.toLowerCase()
-            .includes(appliedHistoryFilters.routeId.toLowerCase())
-        )
-          return false;
-        if (
-          appliedHistoryFilters.status === "Concluidas" &&
-          call.status !== "CONCLUIDO"
-        )
-          return false;
-        if (
-          appliedHistoryFilters.status === "Nao Concluidas" &&
-          call.status === "CONCLUIDO"
-        )
-          return false;
-
-        const callTimestamp = call.timestamp;
-        if (!callTimestamp) return true;
-
-        const callDate =
-          callTimestamp instanceof Timestamp
-            ? callTimestamp.toDate()
-            : new Date((callTimestamp as any).seconds * 1000);
-
-        if (appliedHistoryFilters.start) {
-          const startDate = new Date(appliedHistoryFilters.start);
-          startDate.setHours(0, 0, 0, 0);
-          if (callDate < startDate) return false;
-        }
-        if (appliedHistoryFilters.end) {
-          const endDate = new Date(appliedHistoryFilters.end);
-          endDate.setHours(23, 59, 59, 999);
-          if (callDate > endDate) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
+    const myCallsQuery = query(
+      collection(db, "supportCalls"),
+      or(
+        where("solicitante.id", "==", userId),
+        where("assignedTo", "==", userId)
+      )
+    );
+    const unsubscribeMyCalls = onSnapshot(myCallsQuery, (snapshot) => {
+      const callsData = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
+      );
+      callsData.sort((a, b) => {
         const timeA =
           a.timestamp instanceof Timestamp
             ? a.timestamp.toMillis()
@@ -890,346 +561,565 @@ export const AdminDashboard = ({
             : (b.timestamp as any)?.seconds * 1000 || 0;
         return timeB - timeA;
       });
-  }, [filteredCalls, appliedHistoryFilters]);
+      setAllMyCalls(callsData);
+    });
 
-  const filteredOpenCalls = useMemo(
+    const openCallsQuery = query(
+      collection(db, "supportCalls"),
+      where("status", "==", "ABERTO")
+    );
+    const unsubscribeOpenCalls = onSnapshot(openCallsQuery, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const callData = {
+          id: change.doc.id,
+          ...change.doc.data(),
+        } as SupportCall;
+        if (callData.solicitante.id !== userId) {
+          if (change.type === "added") {
+            triggerNotificationRef.current(callData);
+          }
+          if (change.type === "removed") {
+            sessionNotifiedCallIds.delete(callData.id);
+          }
+        }
+      });
+
+      const openCallsData = snapshot.docs.map(
+        (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
+      );
+      setOpenSupportCalls(
+        openCallsData.filter((call) => call.solicitante.id !== userId)
+      );
+    });
+
+    return () => {
+      unsubscribeMyCalls();
+      unsubscribeOpenCalls();
+      unsubscribeAllDrivers();
+    };
+  }, [userId]);
+
+  const updateDriver = async (
+    driverId: string,
+    updates: Partial<Omit<Driver, "uid">>
+  ) => {
+    if (!driverId) return;
+    const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
+    await updateDoc(driverDocRef, updates);
+  };
+
+  const updateCall = async (
+    id: string,
+    updates: Partial<Omit<SupportCall, "id">>
+  ) => {
+    const callDocRef = doc(db, "supportCalls", id);
+    await updateDoc(callDocRef, updates as any);
+  };
+
+  const addNewCall = async (
+    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
+  ) => {
+    if (!driver) return;
+
+    // Lógica para gerar iniciais caso não existam
+    const getInitials = (name: string | undefined) => {
+      if (!name) return "??";
+      return name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .substring(0, 2);
+    };
+
+    const callToAdd = {
+      ...newCall,
+      timestamp: serverTimestamp(),
+      solicitante: {
+        id: driver.uid,
+        name: driver.name || "Nome não definido",
+        // ✅ CORREÇÃO: Usamos valores padrão caso os campos sejam undefined
+        avatar: driver.avatar || null,
+        initials: driver.initials || getInitials(driver.name),
+        phone: driver.phone || null,
+      },
+    };
+    await addDoc(collection(db, "supportCalls"), callToAdd as any);
+  };
+
+  const handleAvailabilityChange = (isAvailable: boolean) => {
+    if (!isProfileComplete) {
+      sonnerToast.error(
+        "Complete seu perfil para alterar sua disponibilidade."
+      );
+      setActiveTab("profile");
+      return;
+    }
+    if (!driver) return;
+    const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
+    updateDriver(driver.uid, { status: newStatus });
+  };
+
+  const handleAcceptCall = async (callId: string) => {
+    if (!isProfileComplete) {
+      sonnerToast.error("Complete seu perfil para aceitar um chamado.");
+      setActiveTab("profile");
+      return;
+    }
+    if (!userId || !driver) return;
+
+    if (driver.status === "EM_ROTA") {
+      sonnerToast.error("Ação não permitida", {
+        description:
+          "Você já está prestando um apoio e não pode aceitar outro no momento.",
+      });
+      return;
+    }
+
+    setAcceptingCallId(callId);
+    try {
+      await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
+      await updateDriver(userId, { status: "EM_ROTA" });
+    } catch (error) {
+      console.error("Erro ao aceitar chamado:", error);
+      sonnerToast.error("Erro", {
+        description: "Não foi possível aceitar o chamado.",
+      });
+    } finally {
+      setAcceptingCallId(null);
+    }
+  };
+
+  const handleRequestApproval = async (callId: string) => {
+    try {
+      await updateCall(callId, { status: "AGUARDANDO_APROVACAO" });
+      sonnerToast.success("Chamado enviado para aprovação do monitor.");
+    } catch (error) {
+      console.error("Erro ao enviar para aprovação:", error);
+      sonnerToast.error("Falha ao enviar chamado para aprovação.");
+    }
+  };
+
+  const handleCancelSupport = async (callId: string) => {
+    if (!userId) return;
+    await updateCall(callId, {
+      assignedTo: deleteField(),
+      status: "ABERTO",
+    } as any);
+    await updateDriver(userId, { status: "DISPONIVEL" });
+    sonnerToast.success("Apoio cancelado com sucesso.");
+  };
+
+  const handleDeleteSupportRequest = async (callId: string) => {
+    if (!userId) return;
+    const callToCancel = allMyCalls.find((c) => c.id === callId);
+
+    if (callToCancel && callToCancel.assignedTo) {
+      await updateDriver(callToCancel.assignedTo, { status: "DISPONIVEL" });
+    }
+
+    await updateCall(callId, {
+      status: "EXCLUIDO",
+      deletedAt: serverTimestamp(),
+    } as any);
+    sonnerToast.success("Solicitação de apoio cancelada com sucesso.");
+  };
+
+  const handleUpdateProfile = () => {
+    if (!driver) return;
+
+    const formattedPhone = phone.replace(/\D/g, "");
+    if (formattedPhone.length !== 11) {
+      sonnerToast.error("O telefone deve ter 11 dígitos, incluindo o DDD.");
+      return;
+    }
+
+    if (!hubs.includes(hub)) {
+      sonnerToast.error(
+        "Hub inválido. Por favor, selecione um Hub válido da lista."
+      );
+      return;
+    }
+
+    updateDriver(driver.uid, {
+      name,
+      phone: formattedPhone,
+      hub,
+      vehicleType,
+    });
+    sonnerToast.success("Perfil atualizado com sucesso!");
+    setIsProfileWarningVisible(false);
+  };
+
+  const handleChangePassword = () => {
+    if (newPassword !== confirmPassword) {
+      sonnerToast.error("As novas senhas não coincidem.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      sonnerToast.error("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+    sonnerToast.info(
+      "Funcionalidade de alteração de senha a ser implementada com reautenticação."
+    );
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !driver || !driver.uid) return;
+
+    setIsUploading(true);
+
+    if (driver.avatar) {
+      try {
+        const oldAvatarRef = ref(storage, driver.avatar);
+        await deleteObject(oldAvatarRef);
+      } catch (error) {
+        console.warn(
+          "Erro ao deletar avatar antigo. Pode ser que não exista, ignorando:",
+          error
+        );
+      }
+    }
+
+    const storageRef = ref(
+      storage,
+      `motoristas_pre_aprovados/${driver.uid}/avatar.jpg`
+    );
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      "state_changed",
+      () => {},
+      (error) => {
+        console.error("Falha no upload:", error);
+        sonnerToast.error("Falha no upload", { description: error.message });
+        setIsUploading(false);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          updateDriver(driver.uid, { avatar: downloadURL });
+          sonnerToast.success("Foto de perfil atualizada com sucesso!");
+          setIsUploading(false);
+        });
+      }
+    );
+  };
+
+  const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setModalError("");
+
+    const formData = new FormData(e.currentTarget);
+    const isBulky = formData.get("isBulky") === "on";
+    const packageCount = Number(formData.get("packageCount"));
+    const selectedHub = formData.get("hub") as string;
+    const selectedDeliveryRegions = deliveryRegions.filter(Boolean);
+    const selectedNeededVehicles = neededVehicles.filter(Boolean);
+
+    if (packageCount < 20) {
+      sonnerToast.error(
+        "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (
+      !location ||
+      !selectedHub ||
+      selectedDeliveryRegions.length === 0 ||
+      selectedNeededVehicles.length === 0
+    ) {
+      setModalError("Por favor, preencha todos os campos obrigatórios.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
+      ", "
+    )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
+      isBulky ? "Contém pacote volumoso." : ""
+    }`;
+
+    try {
+      // 1. Obter o token de autenticação do usuário logado no Firebase
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("Usuário não autenticado. Faça login novamente.");
+      }
+      const token = await user.getIdToken();
+
+      // 2. Chamar o backend Express para gerar a descrição e criar o ticket no MongoDB
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/tickets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Envia o token para o middleware de autenticação
+        },
+        body: JSON.stringify({ prompt: informalDescription }),
+      });
+
+      if (!response.ok) {
+        // Se a resposta não for bem-sucedida, pega o erro do backend
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Falha ao criar o chamado no servidor."
+        );
+      }
+
+      // 3. Extrair a descrição profissional da resposta do backend
+      const responseData = await response.json();
+      const professionalDescription = responseData.description;
+
+      if (!professionalDescription) {
+        throw new Error("O servidor não retornou uma descrição válida.");
+      }
+
+      // 4. Usar a descrição para criar o chamado no Firestore (como antes)
+      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+
+      let urgency: UrgencyLevel = "BAIXA";
+      if (packageCount >= 100) urgency = "URGENTE";
+      else if (packageCount >= 90) urgency = "ALTA";
+      else if (packageCount >= 60) urgency = "MEDIA";
+
+      const newCallData = {
+        routeId: routeId,
+        description: professionalDescription,
+        urgency: urgency,
+        location: location,
+        status: "ABERTO" as const,
+        vehicleType: selectedNeededVehicles.join(", "),
+        isBulky: isBulky,
+        hub: selectedHub,
+      };
+
+      await addNewCall(newCallData); // Esta função salva no Firestore
+
+      // 5. Limpar o formulário e mostrar a mensagem de sucesso
+      setIsSupportModalOpen(false);
+      setShowSuccessModal(true);
+      setDeliveryRegions([""]);
+      setNeededVehicles([""]);
+    } catch (error: any) {
+      console.error("Erro detalhado ao criar chamado:", error);
+      setModalError(`Erro: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setModalError("Geolocalização não é suportada pelo seu navegador.");
+      return;
+    }
+    setIsLocating(true);
+    setModalError("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation(
+          `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`
+        );
+        setIsLocating(false);
+      },
+      () => {
+        setModalError("Não foi possível obter a sua localização.");
+        setIsLocating(false);
+      }
+    );
+  };
+
+  const filteredCalls = useMemo(() => {
+    const activeCalls = allMyCalls.filter((call) => {
+      const hubMatch =
+        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
+      return call.status !== "EXCLUIDO" && hubMatch;
+    });
+
+    if (historyFilter === "requester")
+      return activeCalls.filter((call) => call.solicitante.id === userId);
+    if (historyFilter === "provider")
+      return activeCalls.filter((call) => call.assignedTo === userId);
+    if (historyFilter === "inProgress")
+      return activeCalls.filter((call) =>
+        ["EM ANDAMENTO", "AGUARDANDO_APROVACAO"].includes(call.status)
+      );
+    return activeCalls;
+  }, [allMyCalls, historyFilter, userId, globalHubFilter]);
+
+  const filteredOpenCalls = useMemo(() => {
+    return openSupportCalls.filter((call) => {
+      const hubMatch =
+        globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
+      const searchMatch =
+        !routeIdSearch ||
+        (call.routeId
+          ? call.routeId.toLowerCase().includes(routeIdSearch.toLowerCase())
+          : false);
+      return hubMatch && searchMatch;
+    });
+  }, [openSupportCalls, routeIdSearch, globalHubFilter]);
+
+  const allHubs = useMemo(
     () =>
-      urgencyFilter === "TODOS"
-        ? openCalls
-        : openCalls.filter((call) => call.urgency === urgencyFilter),
-    [openCalls, urgencyFilter]
+      [
+        "Todos os Hubs",
+        ...new Set(allDrivers.map((d) => d.hub).filter(Boolean)),
+      ].sort(),
+    [allDrivers]
   );
 
-  const filterControls = (
-    <div className="flex flex-wrap gap-1">
-      {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
-        (level) => (
-          <button
-            key={level}
-            onClick={() => setUrgencyFilter(level)}
-            className={`px-2 py-0.5 text-xs rounded-md font-semibold transition-colors ${
-              urgencyFilter === level
-                ? "bg-orange-600 text-white"
-                : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-            }`}
-          >
-            {level === "TODOS"
-              ? "Todos"
-              : level.charAt(0) + level.slice(1).toLowerCase()}
-          </button>
-        )
-      )}
-    </div>
-  );
+  const filteredHubs = useMemo(() => {
+    if (!hubSearch) return hubs;
+    return hubs.filter((h) =>
+      h.toLowerCase().includes(hubSearch.toLowerCase())
+    );
+  }, [hubSearch]);
 
-  const driverFilterControls = (
-    <div className="flex flex-col gap-2 w-full">
-      <select
-        value={driverHubFilter}
-        onChange={(e) => setDriverHubFilter(e.target.value)}
-        className="w-full p-2 border rounded-md text-sm bg-white"
-      >
-        {availableDriverHubs.map((hub) => (
-          <option key={hub} value={hub}>
-            {hub}
-          </option>
-        ))}
-      </select>
-      <select
-        value={driverVehicleFilter}
-        onChange={(e) => setDriverVehicleFilter(e.target.value)}
-        className="w-full p-2 border rounded-md text-sm bg-white capitalize"
-      >
-        {vehicleTypes.map((v) => (
-          <option key={v} value={v} className="capitalize">
-            {v}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  const formatPhoneNumber = (value: string) => {
+    if (!value) return "";
+    const digits = value.replace(/\D/g, "");
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(
+      7,
+      11
+    )}`;
+  };
 
-  const activeCallForDriver = infoModalDriver
-    ? calls.find(
-        (c) =>
-          c.assignedTo === infoModalDriver.uid &&
-          (c.status === "EM ANDAMENTO" || c.status === "AGUARDANDO_APROVACAO")
+  const activeCallForDriver = useMemo(() => {
+    return (
+      allMyCalls.find(
+        (call) => call.solicitante.id === userId && call.status === "ABERTO"
       ) || null
-    : null;
-  const excludedCallNames = useMemo(
-    () => [...new Set(excludedCalls.map((c) => c.solicitante.name))],
-    [excludedCalls]
-  );
-  const excludedCallHubs = useMemo(
-    () =>
-      [...new Set(excludedCalls.map((c) => c.hub).filter(Boolean))] as string[],
-    [excludedCalls]
-  );
+    );
+  }, [allMyCalls, userId]);
+
+  const handleAddField = (
+    setter: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    setter((prev) => [...prev, ""]);
+  };
+
+  const handleRemoveField = (
+    index: number,
+    setter: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    setter((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFieldChange = (
+    index: number,
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    setter((prev) => {
+      const newValues = [...prev];
+      newValues[index] = value;
+      return newValues;
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchEndX.current = 0;
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === 0 || touchEndX.current === 0) return;
+    const threshold = 50;
+    const swipedLeft = touchStartX.current - touchEndX.current > threshold;
+    const swipedRight = touchEndX.current - touchStartX.current > threshold;
+    const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
+
+    if (swipedLeft && currentIndex < TABS.length - 1) {
+      setActiveTab(TABS[currentIndex + 1].id as TabId);
+    } else if (swipedRight && currentIndex > 0) {
+      setActiveTab(TABS[currentIndex - 1].id as TabId);
+    }
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
+
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    localStorage.setItem("notificationsMuted", String(newMutedState));
+    if (!newMutedState) {
+      const audio = new Audio("/shopee-ringtone.mp3");
+      audio.volume = 0;
+      audio.play().catch(() => {});
+    }
+    sonnerToast.success(
+      newMutedState
+        ? "Som das notificações desativado."
+        : "Som das notificações ativado."
+    );
+  };
+
+  const activeTabIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
   return (
-    <div className="bg-orange-100 min-h-screen font-sans flex flex-col">
-      <header className="p-6">
-        <div className="flex flex-wrap justify-between items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-orange-600">
-              Painel do Admin
-            </h1>
-            <p className="text-gray-900">Sistema de Apoio - SPX</p>
-          </div>
-          <div className="w-full sm:w-auto sm:min-w-[250px]">
-            <select
-              value={globalHubFilter}
-              onChange={(e) => setGlobalHubFilter(e.target.value)}
-              className="w-full p-2 border rounded-md text-sm bg-white shadow-sm"
-            >
-              {allHubsForFilter.map((hub) => (
-                <option key={hub} value={hub}>
-                  {hub}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </header>
-      <nav className="px-6 border-b border--200">
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setAdminView("kanban")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
-              adminView === "kanban"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
-            }`}
-          >
-            Acompanhamento de chamados
-          </button>
-          <button
-            onClick={() => setAdminView("approvals")}
-            className={`py-2 px-1 text-sm font-semibold relative transition-colors ${
-              adminView === "approvals"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
-            }`}
-          >
-            Aprovações Pendentes
-            {pendingApprovalCalls.length > 0 && (
-              <span className="absolute top-1 -right-3 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                {pendingApprovalCalls.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setAdminView("excluded")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
-              adminView === "excluded"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
-            }`}
-          >
-            Solicitações Excluídas
-          </button>
-          <button
-            onClick={() => setAdminView("history")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
-              adminView === "history"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
-            }`}
-          >
-            Histórico
-          </button>
-        </div>
-      </nav>
-
-      {adminView === "kanban" && (
-        <div className="p-6 flex-grow flex flex-col space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <SummaryCard
-              title="Chamados Abertos"
-              value={openCalls.length}
-              icon={<AlertTriangle />}
-              subtext="Aguardando atendimento"
-              colorClass="#F59E0B"
-            />
-            <SummaryCard
-              title="Em Andamento"
-              value={inProgressCalls.length}
-              icon={<Clock />}
-              subtext="Sendo atendidos"
-              colorClass="#3B82F6"
-            />
-            <SummaryCard
-              title="Concluídos"
-              value={concludedCalls.length}
-              icon={<CheckCircle />}
-              subtext="Finalizados hoje"
-              colorClass="#10B981"
-            />
-            <SummaryCard
-              title="Motoristas Disponíveis"
-              value={availableDrivers.length}
-              icon={<Users />}
-              subtext="Prontos para apoio"
-              colorClass="#8B5CF6"
-            />
-          </div>
-          <ResizablePanelGroup
-            direction="horizontal"
-            className="flex-grow rounded-lg border"
-          >
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-yellow-50 h-full rounded-lg p-2">
-                <KanbanColumn
-                  title="Chamados Abertos"
-                  count={filteredOpenCalls.length}
-                  colorClass="#F59E0B"
-                  headerControls={filterControls}
+    <>
+      <Toaster richColors position="top-center" />
+      <div className="bg-orange-50 min-h-dvh font-sans">
+        <div className="max-w-2xl mx-auto flex flex-col h-full">
+          {!isProfileComplete && isProfileWarningVisible && (
+            <div className="p-4 sticky top-0 z-10">
+              <div
+                className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md flex justify-between items-center"
+                role="alert"
+              >
+                <div>
+                  <p className="font-bold">Perfil Incompleto!</p>
+                  <p className="text-sm">
+                    Por favor, preencha todas as informações do seu perfil para
+                    poder solicitar ou prestar apoio.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsProfileWarningVisible(false)}
+                  className="p-1 rounded-full hover:bg-yellow-200"
                 >
-                  {filteredOpenCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
-                </KanbanColumn>
+                  <X size={20} />
+                </button>
               </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-blue-50 h-full rounded-lg p-2">
-                <KanbanColumn
-                  title="Em Andamento"
-                  count={inProgressCalls.length}
-                  colorClass="#3B82F6"
-                >
-                  {inProgressCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
-                </KanbanColumn>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-green-50 h-full rounded-lg p-2">
-                <KanbanColumn
-                  title="Concluídos"
-                  count={concludedCalls.length}
-                  colorClass="#10B981"
-                >
-                  {concludedCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
-                </KanbanColumn>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-purple-50 h-full rounded-lg p-2">
-                <KanbanColumn
-                  title="Motoristas Disponíveis"
-                  count={availableDrivers.length}
-                  colorClass="#8B5CF6"
-                  headerControls={driverFilterControls}
-                >
-                  {availableDrivers.map((driver) => (
-                    <EnhancedDriverCard
-                      key={driver.uid}
-                      driver={driver}
-                      onAction={handleAcionarDriver}
-                      onInfoClick={() => setInfoModalDriver(driver)}
-                    />
-                  ))}
-                </KanbanColumn>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
-      )}
-
-      {adminView === "approvals" && (
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Aprovações Pendentes
-          </h2>
-          <div className="space-y-4">
-            {pendingApprovalCalls.length > 0 ? (
-              pendingApprovalCalls.map((call) => (
-                <ApprovalCard
-                  key={call.id}
-                  call={call}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onDelete={handleDeleteClick}
-                  drivers={drivers}
-                />
-              ))
-            ) : (
-              <p className="text-center text-gray-500 pt-8">
-                Não há solicitações pendentes de aprovação.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {adminView === "history" && (
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Histórico de Solicitações
-          </h2>
-          <div className="bg-white p-4 rounded-lg shadow-md mb-4 flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Data Início
-              </label>
-              <input
-                type="date"
-                value={tempHistoryFilters.start}
-                onChange={(e) =>
-                  handleHistoryFilterChange("start", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
             </div>
-            <div>
+          )}
+          <div className="p-4 md:p-6">
+            <ProfileHeaderCard
+              driver={driver}
+              isUploading={isUploading}
+              onEditClick={() => fileInputRef.current?.click()}
+              activeCall={activeCallForDriver}
+            />
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarUpload}
+            className="hidden"
+            accept="image/*"
+          />
+
+          <div className="bg-white rounded-t-lg shadow-md flex-grow flex flex-col overflow-hidden min-h-0">
+            <div className="px-4 pt-4">
               <label className="text-sm font-medium text-gray-700">
-                Data Fim
+                Filtrar por Hub
               </label>
-              <input
-                type="date"
-                value={tempHistoryFilters.end}
-                onChange={(e) =>
-                  handleHistoryFilterChange("end", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Hub</label>
               <select
-                value={tempHistoryFilters.hub}
-                onChange={(e) =>
-                  handleHistoryFilterChange("hub", e.target.value)
-                }
-                className="w-full p-2 border rounded-md bg-white"
+                value={globalHubFilter}
+                onChange={(e) => setGlobalHubFilter(e.target.value)}
+                className="w-full p-2 mt-1 border rounded-md bg-white shadow-sm"
               >
                 {allHubs.map((hub) => (
                   <option key={hub} value={hub}>
@@ -1238,254 +1128,669 @@ export const AdminDashboard = ({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                ID da Rota
-              </label>
-              <input
-                type="text"
-                placeholder="Digite o ID da rota..."
-                value={tempHistoryFilters.routeId}
-                onChange={(e) =>
-                  handleHistoryFilterChange("routeId", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
+            <div className="border-b overflow-x-auto whitespace-nowrap mt-4">
+              <div className="flex">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      if (!isProfileComplete && tab.id !== "profile") {
+                        sonnerToast.error(
+                          "Complete seu perfil para acessar esta aba."
+                        );
+                        return;
+                      }
+                      setActiveTab(tab.id as TabId);
+                    }}
+                    disabled={!isProfileComplete && tab.id !== "profile"}
+                    className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-300 ${
+                      activeTab === tab.id
+                        ? "border-b-2 border-orange-600 text-orange-600"
+                        : "text-gray-500 hover:bg-gray-100"
+                    } ${
+                      !isProfileComplete && tab.id !== "profile"
+                        ? "cursor-not-allowed opacity-50"
+                        : ""
+                    }`}
+                  >
+                    {tab.icon}
+                    <span className="capitalize">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={tempHistoryFilters.status}
-                onChange={(e) =>
-                  handleHistoryFilterChange("status", e.target.value)
-                }
-                className="w-full p-2 border rounded-md bg-white"
+
+            <div
+              className="flex-1 overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <div
+                ref={swipeContainerRef}
+                className="flex h-full transition-transform duration-300 ease-in-out"
+                style={{ transform: `translateX(-${activeTabIndex * 100}%)` }}
               >
-                <option value="Todos">Todos</option>
-                <option value="Concluidas">Concluídas</option>
-                <option value="Nao Concluidas">Não Concluídas</option>
-              </select>
-            </div>
-            <button
-              onClick={handleApplyHistoryFilters}
-              className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
-            >
-              Filtrar
-            </button>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-500">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3">
-                    Solicitante
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Apoio
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Hub
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Data
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Aprovado Por
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredHistoryCalls.map((call) => {
-                  const assignedDriver = drivers.find(
-                    (d) => d.uid === call.assignedTo
-                  );
-                  const callTimestamp = call.timestamp;
-                  const formattedDate = callTimestamp
-                    ? format(
-                        callTimestamp instanceof Timestamp
-                          ? callTimestamp.toDate()
-                          : new Date((callTimestamp as any).seconds * 1000),
-                        "dd/MM/yy HH:mm"
-                      )
-                    : "N/A";
-
-                  return (
-                    <tr
-                      key={call.id}
-                      className="bg-white border-b hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                        {call.solicitante.name}
-                      </td>
-                      <td className="px-6 py-4">
-                        {assignedDriver?.name || "N/A"}
-                      </td>
-                      <td className="px-6 py-4">{call.hub || "N/A"}</td>
-                      <td className="px-6 py-4">{call.status}</td>
-                      <td className="px-6 py-4">{formattedDate}</td>
-                      <td className="px-6 py-4">
-                        {(call as any).approvedBy || "N/A"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {adminView === "excluded" && (
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Solicitações Excluídas
-          </h2>
-          {excludedCalls.length > 0 && (
-            <button
-              onClick={handleClearAllClick}
-              className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              <Trash2 size={14} /> Limpar Tudo
-            </button>
-          )}
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <SearchableComboBox
-              options={excludedCallNames}
-              value={excludedNameFilter}
-              onChange={setExcludedNameFilter}
-              placeholder="Filtrar por nome..."
-            />
-            <SearchableComboBox
-              options={excludedCallHubs}
-              value={excludedHubFilter}
-              onChange={setExcludedHubFilter}
-              placeholder="Filtrar por hub..."
-            />
-          </div>
-          <div className="space-y-4">
-            {excludedCalls.length > 0 ? (
-              excludedCalls
-                .filter((call) =>
-                  call.solicitante.name.includes(excludedNameFilter)
-                )
-                .filter((call) =>
-                  excludedHubFilter ? call.hub === excludedHubFilter : true
-                )
-                .map((call) => {
-                  const deletedTimestamp = call.deletedAt;
-                  const formattedDeletedDate = deletedTimestamp
-                    ? format(
-                        deletedTimestamp instanceof Timestamp
-                          ? deletedTimestamp.toDate()
-                          : new Date((deletedTimestamp as any).seconds * 1000),
-                        "dd/MM/yyyy 'às' HH:mm"
-                      )
-                    : "Data indisponível";
-                  return (
-                    <div
-                      key={call.id}
-                      className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-bold">{call.solicitante.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {call.description}
-                        </p>
-                        {call.deletedAt && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Excluído em: {formattedDeletedDate}
-                          </p>
-                        )}
+                {/* Availability Tab */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-6">
+                  <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+                    <h3 className="text-lg font-bold">
+                      Estou disponível para apoio?
+                    </h3>
+                    <div className="flex items-center justify-center space-x-4">
+                      <button
+                        onClick={() => handleAvailabilityChange(true)}
+                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                          driver.status === "DISPONIVEL"
+                            ? "bg-green-600 text-white"
+                            : "bg-gray-200"
+                        }`}
+                      >
+                        Sim
+                      </button>
+                      <button
+                        onClick={() => handleAvailabilityChange(false)}
+                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                          driver.status !== "DISPONIVEL"
+                            ? "bg-red-600 text-white"
+                            : "bg-gray-200"
+                        }`}
+                      >
+                        Não
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      Use estes botões para informar o seu status.
+                    </p>
+                  </div>
+                  {driver.status === "DISPONIVEL" && (
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800 mb-4">
+                        Chamados de Apoio Disponíveis
+                      </h3>
+                      <div className="relative mb-4">
+                        <Search
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          size={18}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Pesquisar por ID da Rota..."
+                          value={routeIdSearch}
+                          onChange={(e) => setRouteIdSearch(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                        />
                       </div>
-                      <div className="flex items-center gap-2">
+                      {filteredOpenCalls.length > 0 ? (
+                        <div className="space-y-4">
+                          {filteredOpenCalls.map((call) => (
+                            <OpenCallCard
+                              key={call.id}
+                              call={call}
+                              currentDriverName={driver.name}
+                              onAccept={handleAcceptCall}
+                              acceptingCallId={acceptingCallId}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-gray-500 pt-4">
+                          Nenhum chamado de apoio aberto.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Support Tab */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
+                  <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <AlertTriangle className="text-red-500" />
+                      <h3 className="text-lg font-bold">
+                        Solicitar Apoio de Transferência
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (hasActiveRequest) {
+                          sonnerToast.error(
+                            "Você já possui uma solicitação de apoio ativa.",
+                            {
+                              description:
+                                "Cancele a solicitação anterior para criar uma nova.",
+                            }
+                          );
+                          return;
+                        }
+                        if (!isProfileComplete) {
+                          sonnerToast.error(
+                            "Complete seu perfil para solicitar apoio."
+                          );
+                          setActiveTab("profile");
+                          return;
+                        }
+                        setModalError("");
+                        setIsSupportModalOpen(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!isProfileComplete || hasActiveRequest}
+                    >
+                      PRECISO DE APOIO
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Calls Tab */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-4">
+                  <h3 className="text-lg font-bold text-gray-800">
+                    Histórico de Chamados
+                  </h3>
+                  <div className="flex flex-wrap gap-2 border-b pb-2">
+                    <button
+                      onClick={() => setHistoryFilter("all")}
+                      className={`px-3 py-1 text-sm rounded-full ${
+                        historyFilter === "all"
+                          ? "bg-orange-600 text-white"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      onClick={() => setHistoryFilter("inProgress")}
+                      className={`px-3 py-1 text-sm rounded-full ${
+                        historyFilter === "inProgress"
+                          ? "bg-orange-600 text-white"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      Em Andamento
+                    </button>
+                    <button
+                      onClick={() => setHistoryFilter("requester")}
+                      className={`px-3 py-1 text-sm rounded-full ${
+                        historyFilter === "requester"
+                          ? "bg-orange-600 text-white"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      Meus Pedidos
+                    </button>
+                    <button
+                      onClick={() => setHistoryFilter("provider")}
+                      className={`px-3 py-1 text-sm rounded-full ${
+                        historyFilter === "provider"
+                          ? "bg-orange-600 text-white"
+                          : "bg-gray-200"
+                      }`}
+                    >
+                      Meus Apoios
+                    </button>
+                  </div>
+                  {filteredCalls.length > 0 ? (
+                    <div className="space-y-4">
+                      {filteredCalls.map((call) => (
+                        <DriverCallHistoryCard
+                          key={call.id}
+                          call={call}
+                          currentDriver={driver}
+                          allDrivers={allDrivers}
+                          onCancelSupport={handleCancelSupport}
+                          onDeleteSupportRequest={handleDeleteSupportRequest}
+                          onRequestApproval={handleRequestApproval}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 pt-4">
+                      Nenhum chamado encontrado.
+                    </p>
+                  )}
+                </div>
+
+                {/* Profile Tab */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
+                  <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-lg shadow-sm">
+                      <h3 className="text-lg font-semibold mb-4">
+                        Configurações
+                      </h3>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">
+                          Som das notificações
+                        </label>
                         <button
-                          onClick={() => handleRestore(call.id)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                          onClick={toggleMute}
+                          className="p-2 rounded-full hover:bg-gray-200"
                         >
-                          <RotateCcw size={14} /> Restaurar
-                        </button>
-                        <button
-                          onClick={() => handlePermanentDeleteClick(call)}
-                          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                          title="Excluir Permanentemente"
-                        >
-                          <Trash2 size={14} />
+                          {isMuted ? (
+                            <VolumeX size={20} />
+                          ) : (
+                            <Volume2 size={20} />
+                          )}
                         </button>
                       </div>
                     </div>
-                  );
-                })
-            ) : (
-              <p className="text-center text-gray-500">
-                Não há solicitações excluídas.
-              </p>
-            )}
+                    <div className="bg-white p-6 rounded-lg shadow-sm">
+                      <h3 className="text-lg font-semibold mb-4">
+                        Editar Perfil
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Nome Completo
+                          </label>
+                          <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full p-2 border rounded-md"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Telefone (WhatsApp)
+                          </label>
+                          <input
+                            type="text"
+                            value={formatPhoneNumber(phone)}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, "");
+                              if (digits.length <= 11) {
+                                setPhone(digits);
+                              }
+                            }}
+                            className="w-full p-2 border rounded-md"
+                            placeholder="(XX) XXXXX-XXXX"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Hub de Atuação
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={hubSearch}
+                              onChange={(e) => {
+                                setHubSearch(e.target.value);
+                                setIsHubDropdownOpen(true);
+                              }}
+                              onFocus={() => setIsHubDropdownOpen(true)}
+                              onBlur={() =>
+                                setTimeout(
+                                  () => setIsHubDropdownOpen(false),
+                                  150
+                                )
+                              }
+                              className="w-full p-2 border rounded-md pr-10"
+                              placeholder="Pesquisar Hub..."
+                            />
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            {isHubDropdownOpen && filteredHubs.length > 0 && (
+                              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                {filteredHubs.map((h) => (
+                                  <div
+                                    key={h}
+                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                    onClick={() => {
+                                      setHub(h);
+                                      setHubSearch(h);
+                                      setIsHubDropdownOpen(false);
+                                    }}
+                                  >
+                                    {h}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tipo de Veículo
+                          </label>
+                          <select
+                            value={vehicleType}
+                            onChange={(e) => setVehicleType(e.target.value)}
+                            className="w-full p-2 border rounded-md"
+                          >
+                            <option value="">Selecione seu veículo</option>
+                            {vehicleTypesList.map((v) => (
+                              <option key={v} value={v}>
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={handleUpdateProfile}
+                          className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600"
+                        >
+                          Salvar Alterações
+                        </button>
+                        <div className="mt-4 pt-4 border-t">
+                          <h3 className="text-lg font-semibold mb-2">
+                            Alterar Senha
+                          </h3>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Nova Senha
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="password"
+                                  value={newPassword}
+                                  onChange={(e) =>
+                                    setNewPassword(e.target.value)
+                                  }
+                                  className="w-full p-2 border rounded-md"
+                                  placeholder="Mínimo 6 caracteres"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                >
+                                  {showPassword ? (
+                                    <EyeOff size={18} />
+                                  ) : (
+                                    <Eye size={18} />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Confirmar Nova Senha
+                              </label>
+                              <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) =>
+                                  setConfirmPassword(e.target.value)
+                                }
+                                className="w-full p-2 border rounded-md"
+                                placeholder="Confirme a nova senha"
+                              />
+                            </div>
+                            <button
+                              onClick={handleChangePassword}
+                              className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 mt-2"
+                            >
+                              Alterar Senha
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow-sm">
+                      <button
+                        onClick={() => auth.signOut()}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600"
+                      >
+                        <LogOut size={16} />
+                        Sair da Conta
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {isSupportModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Solicitar Apoio de Transferência
+              </h2>
+              <button
+                onClick={() => setIsSupportModalOpen(false)}
+                className="p-1 rounded-full hover:bg-gray-200"
+              >
+                <X size={24} className="text-gray-600" />
+              </button>
+            </div>
+            <form onSubmit={handleSupportSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="hub"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Selecione o seu Hub
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <select
+                    id="hub"
+                    name="hub"
+                    value={hub}
+                    onChange={(e) => setHub(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    {hubs.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="currentLocation"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Sua Localização Atual
+                </label>
+                <div className="flex items-center space-x-2">
+                  <div className="relative flex-grow">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      id="currentLocation"
+                      name="currentLocation"
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Clique para obter ou digite"
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGetLocation}
+                    disabled={isLocating}
+                    className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                  >
+                    {isLocating ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <MapPin />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="packageCount"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Número de Pacotes
+                </label>
+                <div className="relative">
+                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="packageCount"
+                    name="packageCount"
+                    type="number"
+                    min="0"
+                    placeholder="Ex: 15"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Região de Entrega dos Pacotes
+                </label>
+                {deliveryRegions.map((region, index) => (
+                  <div key={index} className="flex items-center space-x-2 mb-2">
+                    <div className="relative flex-grow">
+                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={region}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            index,
+                            e.target.value,
+                            setDeliveryRegions
+                          )
+                        }
+                        placeholder="Ex: Zona Leste, São Paulo"
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                        required
+                      />
+                    </div>
+                    {deliveryRegions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRemoveField(index, setDeliveryRegions)
+                        }
+                        className="text-red-500"
+                      >
+                        <MinusCircle size={20} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleAddField(setDeliveryRegions)}
+                  className="flex items-center space-x-1 text-sm text-blue-600"
+                >
+                  <PlusCircle size={16} />
+                  <span>Adicionar outra região</span>
+                </button>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Veículo Necessário
+                </label>
+                {neededVehicles.map((vehicle, index) => (
+                  <div key={index} className="flex items-center space-x-2 mb-2">
+                    <div className="relative flex-grow">
+                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <select
+                        value={vehicle}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            index,
+                            e.target.value,
+                            setNeededVehicles
+                          )
+                        }
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg appearance-none"
+                        required
+                      >
+                        <option value="">Selecione seu veículo</option>
+                        {vehicleTypesList.map((v) => (
+                          <option key={v} value={v}>
+                            {v.charAt(0).toUpperCase() + v.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {neededVehicles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleRemoveField(index, setNeededVehicles)
+                        }
+                        className="text-red-500"
+                      >
+                        <MinusCircle size={20} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleAddField(setNeededVehicles)}
+                  className="flex items-center space-x-1 text-sm text-blue-600"
+                >
+                  <PlusCircle size={16} />
+                  <span>Adicionar outro veículo</span>
+                </button>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="isBulky"
+                  name="isBulky"
+                  type="checkbox"
+                  className="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                />
+                <label
+                  htmlFor="isBulky"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Contém pacote volumoso
+                </label>
+              </div>
+
+              {modalError && (
+                <p className="text-sm text-center text-red-600 bg-red-100 p-2 rounded-md">
+                  {modalError}
+                </p>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors disabled:bg-orange-300"
+                >
+                  {isSubmitting ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    "Enviar Solicitação"
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-
-      {infoModalDriver && (
-        <DriverInfoModal
-          driver={infoModalDriver}
-          call={activeCallForDriver}
-          onClose={() => setInfoModalDriver(null)}
-        />
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md text-center">
+            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Sucesso!</h2>
+            <p className="text-gray-600 mb-6">
+              Apoio solicitado com sucesso, aguarde o contato de um Driver ou
+              Monitor.
+            </p>
+            <button
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-2 px-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
-      <CallDetailsModal
-        call={selectedCall}
-        onClose={() => setSelectedCall(null)}
-        onUpdateStatus={updateCall}
-      />
-      <ConfirmationModal
-        isOpen={confirmationType === "soft-delete"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Confirmar Exclusão"
-        confirmText="Excluir"
-      >
-        <p>
-          Tem certeza de que deseja excluir a solicitação de{" "}
-          <strong>{callToConfirm?.solicitante.name}</strong>? Esta ação pode ser
-          revertida.
-        </p>
-      </ConfirmationModal>
-      <ConfirmationModal
-        isOpen={confirmationType === "permanent-delete"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Confirmar Exclusão Permanente"
-        confirmText="Excluir Permanentemente"
-        confirmColor="bg-red-800"
-      >
-        <p>
-          Tem certeza de que deseja excluir permanentemente a solicitação de{" "}
-          <strong>{callToConfirm?.solicitante.name}</strong>?
-        </p>
-        <p className="font-bold text-red-700 mt-2">
-          Esta ação não pode ser desfeita.
-        </p>
-      </ConfirmationModal>
-      <ConfirmationModal
-        isOpen={confirmationType === "clear-all"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Limpar Todas as Solicitações"
-        confirmText="Sim, Limpar Tudo"
-        confirmColor="bg-red-800"
-      >
-        <p>
-          Tem certeza de que deseja excluir permanentemente{" "}
-          <strong>todas</strong> as solicitações da lixeira?
-        </p>
-        <p className="font-bold text-red-700 mt-2">
-          Esta ação não pode ser desfeita.
-        </p>
-      </ConfirmationModal>
-    </div>
+    </>
   );
 };
+export default DriverInterface;

@@ -220,7 +220,7 @@ export const AuthPage = () => {
         setLoading(false);
         return;
       }
-      
+
       if (role === "admin") {
         if (!user.email?.endsWith("@shopee.com")) {
           setError("Acesso restrito a contas @shopee.com.");
@@ -239,7 +239,8 @@ export const AuthPage = () => {
           });
         }
         sonnerToast.success("Login de admin bem-sucedido!");
-      } else { // role === "driver"
+      } else {
+        // role === "driver"
         if (user.email?.endsWith("@shopee.com")) {
           setError("Contas @shopee.com devem fazer login na aba de Admin.");
           await signOut(auth);
@@ -258,7 +259,8 @@ export const AuthPage = () => {
           sonnerToast.success("Login de motorista bem-sucedido!");
         } else {
           sonnerToast.error("Motorista não cadastrado.", {
-            description: "Seu e-mail do Google não está associado a um motorista. Por favor, contate o administrador para ser cadastrado.",
+            description:
+              "Seu e-mail do Google não está associado a um motorista. Por favor, contate o administrador para ser cadastrado.",
           });
           await signOut(auth); // Desloga o usuário
         }
@@ -270,7 +272,6 @@ export const AuthPage = () => {
       setLoading(false);
     }
   };
-
 
   return (
     <div

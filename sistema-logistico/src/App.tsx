@@ -15,11 +15,10 @@ import {
   writeBatch,
   serverTimestamp,
   setDoc,
-  or,
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
-import { DriverInterface } from "./components/driver/DriverInterface"; // Caminho corrigido
+import DriverInterface from "./components/DriverInterface"; // Caminho corrigido
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
 import type {
   SupportCall as OriginalSupportCall,
