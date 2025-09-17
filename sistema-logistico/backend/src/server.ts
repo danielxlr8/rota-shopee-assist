@@ -7,6 +7,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Ticket } from "./ticket.model"; // Garanta que este caminho está correto
 import fs from "fs";
 import path from "path";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
 
 // Carrega variáveis de ambiente do arquivo .env na raiz do backend
 dotenv.config();
@@ -101,6 +103,17 @@ mongoose
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Usando o modelo mais recente
 
+// ✨ Configuração do Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// ✨ Configuração do Multer para upload de arquivos em memória
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
 // --- ROTAS DA API ---
 
 /**
@@ -114,11 +127,9 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   const userId = req.userId;
 
   if (!prompt || !userId) {
-    return res
-      .status(400)
-      .json({
-        error: "O 'prompt' é obrigatório e o usuário deve estar autenticado.",
-      });
+    return res.status(400).json({
+      error: "O 'prompt' é obrigatório e o usuário deve estar autenticado.",
+    });
   }
 
   try {
@@ -152,6 +163,52 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
+// Em /sistema-logistico/backend/src/server.ts
+
+app.post(
+  "/upload-avatar",
+  authMiddleware,
+  upload.single("avatar"),
+  async (req, res) => {
+    // Primeiro, vamos isolar o arquivo em uma variável.
+    const file = req.file;
+    const userId = req.userId;
+
+    // Agora, verificamos se a variável 'file' ou 'userId' não existem.
+    if (!file || !userId) {
+      return res
+        .status(400)
+        .json({ error: "Nenhum arquivo enviado ou usuário não autenticado." });
+    }
+
+    try {
+      // Como a verificação foi feita, o TypeScript sabe que 'file' existe aqui.
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: `avatares_shopee_apoio/${userId}`,
+            public_id: "avatar",
+            overwrite: true,
+            transformation: [{ width: 200, height: 200, crop: "fill" }],
+          },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        // Usamos a variável 'file' que já foi verificada.
+        uploadStream.end(file.buffer);
+      });
+
+      // @ts-ignore
+      const secureUrl = uploadResult.secure_url;
+      res.status(200).json({ avatarUrl: secureUrl });
+    } catch (error) {
+      console.error("Erro no upload para o Cloudinary:", error);
+      res.status(500).json({ error: "Falha ao fazer upload da imagem." });
+    }
+  }
+);
 // As outras rotas (GET /tickets) permanecem as mesmas, pois são para outras funcionalidades.
 // ... (seu código para GET /tickets e GET /tickets/:id) ...
 

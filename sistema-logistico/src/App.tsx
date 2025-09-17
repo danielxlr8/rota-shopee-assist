@@ -18,18 +18,13 @@ import {
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
-import DriverInterface from "./components/DriverInterface"; // Caminho corrigido
+import DriverInterface from "./components/DriverInterface";
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
 import type {
   SupportCall as OriginalSupportCall,
   Driver,
   CallStatus,
 } from "./types/logistics";
-// Removido o sonnerToast daqui para evitar conflitos, ele é importado e usado nos componentes
-// Removido a importação do Toaster, que será renderizado apenas no main.tsx
-// Removido a importação do logo, que deve ser feita no componente que o utiliza
-// import { Toaster } from "./components/ui/sonner";
-// import spxLogo from "/spx-logo.png";
 
 export type SupportCall = OriginalSupportCall & {
   deletedAt?: any;
@@ -73,10 +68,12 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setIsAdminUnverified(false);
+      setLoading(true); // Começa a carregar
       if (currentUser) {
         await currentUser.reload();
         let resolvedUserData: UserData | null = null;
         if (currentUser.email?.endsWith("@shopee.com")) {
+          // Lógica de Admin (permanece a mesma)
           if (!currentUser.emailVerified) {
             setUser(currentUser);
             setIsAdminUnverified(true);
@@ -98,35 +95,66 @@ function App() {
             resolvedUserData = newAdminData;
           }
         } else {
-          const driversRef = collection(db, "motoristas_pre_aprovados");
-          const qUid = query(driversRef, where("uid", "==", currentUser.uid));
-          const qGoogleUid = query(
-            driversRef,
-            where("googleUid", "==", currentUser.uid)
+          // --- ✅ LÓGICA CORRIGIDA E AUTOMÁTICA PARA MOTORISTAS ---
+          const driverDocRef = doc(
+            db,
+            "motoristas_pre_aprovados",
+            currentUser.uid
           );
-          const [uidSnapshot, googleUidSnapshot] = await Promise.all([
-            getDocs(qUid),
-            getDocs(qGoogleUid),
-          ]);
-          const driverDoc = uidSnapshot.docs[0] || googleUidSnapshot.docs[0];
-          if (driverDoc && driverDoc.exists()) {
-            const driverData = driverDoc.data() as Driver;
+          const driverDocSnap = await getDoc(driverDocRef);
+
+          if (driverDocSnap.exists()) {
+            // Se o motorista JÁ EXISTE, carrega seus dados
+            const driverData = driverDocSnap.data() as Driver;
             resolvedUserData = {
               uid: currentUser.uid,
               email: currentUser.email!,
               name: driverData.name,
               role: "driver",
             };
+          } else {
+            // Se o motorista NÃO EXISTE, CRIA um perfil básico para ele
+            console.log(
+              "Perfil de motorista não encontrado, criando um novo..."
+            );
+
+            const getInitials = (name: string | null) => {
+              if (!name) return currentUser.email?.[0].toUpperCase() ?? "??";
+              return name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()
+                .substring(0, 2);
+            };
+
+            const newDriverData: Partial<Driver> = {
+              uid: currentUser.uid,
+              email: currentUser.email!,
+              name: currentUser.displayName || "Novo Motorista",
+              status: "INDISPONIVEL", // Status inicial seguro
+              createdAt: serverTimestamp(),
+              initials: getInitials(currentUser.displayName),
+            };
+
+            await setDoc(driverDocRef, newDriverData);
+
+            resolvedUserData = {
+              uid: currentUser.uid,
+              email: currentUser.email!,
+              name: newDriverData.name!,
+              role: "driver",
+            };
           }
         }
+
         if (resolvedUserData) {
           setUserData(resolvedUserData);
           setUser(currentUser);
           setActiveView(resolvedUserData.role);
         } else {
-          console.error(
-            "Usuário não encontrado ou não autorizado. Fazendo logout."
-          );
+          // Este bloco agora só será alcançado em casos de erro real
+          console.error("Usuário não autorizado. Fazendo logout.");
           if (!isAdminUnverified) {
             await signOut(auth);
           }
@@ -164,6 +192,7 @@ function App() {
     }
   }, [user, userData, isAdminUnverified]);
 
+  // Funções de manipulação (handleUpdateCall, etc.) permanecem as mesmas...
   const handleUpdateCall = async (
     id: string,
     updates: Partial<Omit<SupportCall, "id">>
@@ -207,6 +236,7 @@ function App() {
     }
   };
 
+  // Lógica de renderização (renderContent) permanece a mesma...
   const renderContent = () => {
     if (loading) {
       return (

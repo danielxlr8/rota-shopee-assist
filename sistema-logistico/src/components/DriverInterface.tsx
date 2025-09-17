@@ -27,7 +27,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { auth, db, storage } from "../firebase";
+import { auth, db } from "../firebase";
 import {
   doc,
   onSnapshot,
@@ -41,12 +41,6 @@ import {
   Timestamp,
   deleteField,
 } from "firebase/firestore";
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
@@ -419,17 +413,19 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [hub, setHub] = useState("");
-  const [vehicleType, setVehicleType] = useState("");
+
+  // ✅ CORREÇÃO: Estados para os campos do formulário de perfil
+  const [name, setName] = useState(driver.name || "");
+  const [phone, setPhone] = useState(driver.phone || "");
+  const [hub, setHub] = useState(driver.hub || "");
+  const [vehicleType, setVehicleType] = useState(driver.vehicleType || "");
+  const [hubSearch, setHubSearch] = useState(driver.hub || "");
+
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [hubSearch, setHubSearch] = useState("");
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isProfileInitialized = useRef(false);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const swipeContainerRef = useRef<HTMLDivElement>(null);
@@ -439,6 +435,16 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
+
+  // ✅ CORREÇÃO: Este useEffect agora sincroniza o estado do formulário
+  // sempre que a prop 'driver' for atualizada pelo App.tsx.
+  useEffect(() => {
+    setName(driver.name || "");
+    setPhone(driver.phone || "");
+    setHub(driver.hub || "");
+    setVehicleType(driver.vehicleType || "");
+    setHubSearch(driver.hub || "");
+  }, [driver]);
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -466,23 +472,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
     }
   }, [driver, isProfileComplete, TABS]);
-
-  useEffect(() => {
-    if (driver && !isProfileInitialized.current) {
-      setName(driver.name || "");
-      setPhone(driver.phone || "");
-      const initialHub = driver.hub || "";
-      if (hubs.includes(initialHub)) {
-        setHub(initialHub);
-        setHubSearch(initialHub);
-      } else {
-        setHub("");
-        setHubSearch("");
-      }
-      setVehicleType(driver.vehicleType || "");
-      isProfileInitialized.current = true;
-    }
-  }, [driver]);
 
   const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
 
@@ -621,7 +610,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   ) => {
     if (!driver) return;
 
-    // Lógica para gerar iniciais caso não existam
     const getInitials = (name: string | undefined) => {
       if (!name) return "??";
       return name
@@ -638,7 +626,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       solicitante: {
         id: driver.uid,
         name: driver.name || "Nome não definido",
-        // ✅ CORREÇÃO: Usamos valores padrão caso os campos sejam undefined
         avatar: driver.avatar || null,
         initials: driver.initials || getInitials(driver.name),
         phone: driver.phone || null,
@@ -771,40 +758,44 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     setIsUploading(true);
 
-    if (driver.avatar) {
-      try {
-        const oldAvatarRef = ref(storage, driver.avatar);
-        await deleteObject(oldAvatarRef);
-      } catch (error) {
-        console.warn(
-          "Erro ao deletar avatar antigo. Pode ser que não exista, ignorando:",
-          error
-        );
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("Usuário não autenticado.");
       }
+      const token = await user.getIdToken();
+
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/upload-avatar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Falha no upload da imagem.");
+      }
+
+      const result = await response.json();
+      const newAvatarUrl = result.avatarUrl;
+
+      await updateDriver(driver.uid, { avatar: newAvatarUrl });
+
+      sonnerToast.success("Foto de perfil atualizada com sucesso!");
+    } catch (error: any) {
+      console.error("Falha no upload:", error);
+      sonnerToast.error("Falha no upload", { description: error.message });
+    } finally {
+      setIsUploading(false);
     }
-
-    const storageRef = ref(
-      storage,
-      `motoristas_pre_aprovados/${driver.uid}/avatar.jpg`
-    );
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      "state_changed",
-      () => {},
-      (error) => {
-        console.error("Falha no upload:", error);
-        sonnerToast.error("Falha no upload", { description: error.message });
-        setIsUploading(false);
-      },
-      () => {
-        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          updateDriver(driver.uid, { avatar: downloadURL });
-          sonnerToast.success("Foto de perfil atualizada com sucesso!");
-          setIsUploading(false);
-        });
-      }
-    );
   };
 
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -845,32 +836,28 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     }`;
 
     try {
-      // 1. Obter o token de autenticação do usuário logado no Firebase
       const user = auth.currentUser;
       if (!user) {
         throw new Error("Usuário não autenticado. Faça login novamente.");
       }
       const token = await user.getIdToken();
 
-      // 2. Chamar o backend Express para gerar a descrição e criar o ticket no MongoDB
       const response = await fetch(`${import.meta.env.VITE_API_URL}/tickets`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // Envia o token para o middleware de autenticação
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt: informalDescription }),
       });
 
       if (!response.ok) {
-        // Se a resposta não for bem-sucedida, pega o erro do backend
         const errorData = await response.json();
         throw new Error(
           errorData.error || "Falha ao criar o chamado no servidor."
         );
       }
 
-      // 3. Extrair a descrição profissional da resposta do backend
       const responseData = await response.json();
       const professionalDescription = responseData.description;
 
@@ -878,7 +865,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         throw new Error("O servidor não retornou uma descrição válida.");
       }
 
-      // 4. Usar a descrição para criar o chamado no Firestore (como antes)
       const routeId = `SPX-${Date.now().toString().slice(-6)}`;
 
       let urgency: UrgencyLevel = "BAIXA";
@@ -897,9 +883,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         hub: selectedHub,
       };
 
-      await addNewCall(newCallData); // Esta função salva no Firestore
+      await addNewCall(newCallData);
 
-      // 5. Limpar o formulário e mostrar a mensagem de sucesso
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
       setDeliveryRegions([""]);
@@ -922,9 +907,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setLocation(
-          `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`
-        );
+
+        setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
+
         setIsLocating(false);
       },
       () => {

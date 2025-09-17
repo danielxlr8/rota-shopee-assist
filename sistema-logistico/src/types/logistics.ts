@@ -12,12 +12,14 @@ export type CallStatus =
 export interface Driver {
   uid: string;
   name: string;
+  email: string;
   phone: string;
   status: "DISPONIVEL" | "INDISPONIVEL" | "EM_ROTA" | "OFFLINE";
   hub: string;
   vehicleType: string;
   avatar?: string;
   initials?: string;
+  createdAt?: any;
   googleUid?: string;
 }
 
