@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import type { User as FirebaseUser } from "firebase/auth";
@@ -18,12 +18,11 @@ import {
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
-import DriverInterface from "./components/DriverInterface";
+import { DriverInterface } from "./components/DriverInterface"; // <-- CORREÇÃO AQUI
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
 import type {
   SupportCall as OriginalSupportCall,
   Driver,
-  CallStatus,
 } from "./types/logistics";
 
 export type SupportCall = OriginalSupportCall & {
@@ -35,7 +34,7 @@ const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -61,27 +60,29 @@ function App() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdminUnverified, setIsAdminUnverified] = useState(false);
+
   const [calls, setCalls] = useState<SupportCall[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [activeView, setActiveView] = useState<"admin" | "driver" | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setIsAdminUnverified(false);
-      setLoading(true); // Começa a carregar
+
       if (currentUser) {
         await currentUser.reload();
         let resolvedUserData: UserData | null = null;
+
         if (currentUser.email?.endsWith("@shopee.com")) {
-          // Lógica de Admin (permanece a mesma)
           if (!currentUser.emailVerified) {
             setUser(currentUser);
             setIsAdminUnverified(true);
             setLoading(false);
             return;
           }
+
           const adminDocRef = doc(db, "admins_pre_aprovados", currentUser.uid);
           const adminDocSnap = await getDoc(adminDocRef);
+
           if (adminDocSnap.exists()) {
             resolvedUserData = adminDocSnap.data() as UserData;
           } else {
@@ -95,54 +96,26 @@ function App() {
             resolvedUserData = newAdminData;
           }
         } else {
-          // --- ✅ LÓGICA CORRIGIDA E AUTOMÁTICA PARA MOTORISTAS ---
-          const driverDocRef = doc(
-            db,
-            "motoristas_pre_aprovados",
-            currentUser.uid
+          const driversRef = collection(db, "motoristas_pre_aprovados");
+          const qUid = query(driversRef, where("uid", "==", currentUser.uid));
+          const qGoogleUid = query(
+            driversRef,
+            where("googleUid", "==", currentUser.uid)
           );
-          const driverDocSnap = await getDoc(driverDocRef);
 
-          if (driverDocSnap.exists()) {
-            // Se o motorista JÁ EXISTE, carrega seus dados
-            const driverData = driverDocSnap.data() as Driver;
+          const [uidSnapshot, googleUidSnapshot] = await Promise.all([
+            getDocs(qUid),
+            getDocs(qGoogleUid),
+          ]);
+
+          const driverDoc = uidSnapshot.docs[0] || googleUidSnapshot.docs[0];
+
+          if (driverDoc && driverDoc.exists()) {
+            const driverData = driverDoc.data() as Driver;
             resolvedUserData = {
               uid: currentUser.uid,
               email: currentUser.email!,
               name: driverData.name,
-              role: "driver",
-            };
-          } else {
-            // Se o motorista NÃO EXISTE, CRIA um perfil básico para ele
-            console.log(
-              "Perfil de motorista não encontrado, criando um novo..."
-            );
-
-            const getInitials = (name: string | null) => {
-              if (!name) return currentUser.email?.[0].toUpperCase() ?? "??";
-              return name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .toUpperCase()
-                .substring(0, 2);
-            };
-
-            const newDriverData: Partial<Driver> = {
-              uid: currentUser.uid,
-              email: currentUser.email!,
-              name: currentUser.displayName || "Novo Motorista",
-              status: "INDISPONIVEL", // Status inicial seguro
-              createdAt: serverTimestamp(),
-              initials: getInitials(currentUser.displayName),
-            };
-
-            await setDoc(driverDocRef, newDriverData);
-
-            resolvedUserData = {
-              uid: currentUser.uid,
-              email: currentUser.email!,
-              name: newDriverData.name!,
               role: "driver",
             };
           }
@@ -151,10 +124,10 @@ function App() {
         if (resolvedUserData) {
           setUserData(resolvedUserData);
           setUser(currentUser);
-          setActiveView(resolvedUserData.role);
         } else {
-          // Este bloco agora só será alcançado em casos de erro real
-          console.error("Usuário não autorizado. Fazendo logout.");
+          console.error(
+            "Usuário não encontrado ou não autorizado. Fazendo logout."
+          );
           if (!isAdminUnverified) {
             await signOut(auth);
           }
@@ -162,10 +135,10 @@ function App() {
       } else {
         setUser(null);
         setUserData(null);
-        setActiveView(null);
       }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, [isAdminUnverified]);
 
@@ -173,18 +146,21 @@ function App() {
     if (user && userData && !isAdminUnverified) {
       const callsCollection = collection(db, "supportCalls");
       const driversCollection = collection(db, "motoristas_pre_aprovados");
+
       const unsubCalls = onSnapshot(callsCollection, (snapshot) => {
         const callsData = snapshot.docs.map(
           (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
         );
         setCalls(callsData);
       });
+
       const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
         const driversData = snapshot.docs.map(
           (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
         );
         setDrivers(driversData);
       });
+
       return () => {
         unsubCalls();
         unsubDrivers();
@@ -192,14 +168,13 @@ function App() {
     }
   }, [user, userData, isAdminUnverified]);
 
-  // Funções de manipulação (handleUpdateCall, etc.) permanecem as mesmas...
   const handleUpdateCall = async (
     id: string,
     updates: Partial<Omit<SupportCall, "id">>
   ) => {
     const callDocRef = doc(db, "supportCalls", id);
     try {
-      await updateDoc(callDocRef, updates as any);
+      await updateDoc(callDocRef, updates);
     } catch (error) {
       console.error("Erro ao atualizar chamado: ", error);
     }
@@ -207,7 +182,7 @@ function App() {
 
   const handleDeleteCall = async (id: string) => {
     await handleUpdateCall(id, {
-      status: "EXCLUIDO" as CallStatus,
+      status: "EXCLUIDO",
       deletedAt: serverTimestamp(),
     });
   };
@@ -236,7 +211,6 @@ function App() {
     }
   };
 
-  // Lógica de renderização (renderContent) permanece a mesma...
   const renderContent = () => {
     if (loading) {
       return (
@@ -245,35 +219,49 @@ function App() {
         </div>
       );
     }
+
     if (user && isAdminUnverified) {
       return <VerifyEmailPage user={user} />;
     }
+
     if (!user || !userData) {
       return <AuthPage />;
     }
-    if (activeView === "admin") {
-      return (
-        <AdminDashboard
-          calls={calls}
-          drivers={drivers}
-          updateCall={handleUpdateCall}
-          onDeleteCall={handleDeleteCall}
-          onDeletePermanently={handlePermanentDeleteCall}
-          onDeleteAllExcluded={handleDeleteAllExcluded}
-        />
-      );
+
+    switch (userData.role) {
+      case "admin":
+        return (
+          <AdminDashboard
+            calls={calls}
+            drivers={drivers}
+            updateCall={handleUpdateCall}
+            onDeleteCall={handleDeleteCall}
+            onDeletePermanently={handlePermanentDeleteCall}
+            onDeleteAllExcluded={handleDeleteAllExcluded}
+          />
+        );
+      case "driver":
+        const currentUser = auth.currentUser;
+        if (!currentUser) return <AuthPage />;
+
+        const driverProfile = drivers.find(
+          (d) => d.uid === currentUser.uid || d.googleUid === currentUser.uid
+        );
+
+        if (driverProfile) {
+          // Passando o perfil do motorista como prop
+          return <DriverInterface driver={driverProfile} />;
+        }
+
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <p>Carregando perfil do motorista...</p>
+          </div>
+        );
+      default:
+        signOut(auth);
+        return <AuthPage />;
     }
-    if (activeView === "driver") {
-      const currentDriver = drivers.find((d) => d.uid === user.uid);
-      if (currentDriver) {
-        return <DriverInterface driver={currentDriver} />;
-      }
-    }
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Carregando perfil do usuário...</p>
-      </div>
-    );
   };
 
   return (

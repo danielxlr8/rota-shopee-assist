@@ -28,10 +28,8 @@ import {
   Phone,
   Hash,
   Calendar,
-  LoaderCircle,
 } from "lucide-react";
 import spxLogo from "/spx-logo.png";
-import { toast as sonnerToast } from "sonner";
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 48 48">
@@ -54,15 +52,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const hubs = [
-  "LM Hub_PR_Londrina_Parque ABC II",
-  "LM Hub_PR_Maringa",
-  "LM Hub_PR_Foz do Iguaçu",
-  "LM Hub_PR_Cascavel",
-];
-
-const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
-
 export const AuthPage = () => {
   const [isLoginView, setIsLoginView] = useState(true);
   const [activeTab, setActiveTab] = useState<"admin" | "driver">("driver");
@@ -78,6 +67,10 @@ export const AuthPage = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [isLinkingGoogleAccount, setIsLinkingGoogleAccount] = useState(false);
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [linkingError, setLinkingError] = useState("");
 
   const formatAndLimitPhone = (value: string) => {
     let digits = value.replace(/\D/g, "");
@@ -145,56 +138,34 @@ export const AuthPage = () => {
     }
 
     try {
+      // CORREÇÃO: Usando o driverId preenchido como chave do documento.
+      const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
+      const driverDoc = await getDoc(driverDocRef);
+
+      if (driverDoc.exists()) {
+        setError("ID de Motorista já cadastrado.");
+        setLoading(false);
+        return;
+      }
+
+      await setDoc(driverDocRef, {
+        name: `${name} ${lastName}`,
+        phone: phone.replace(/\D/g, ""),
+        email,
+        shopeeId: driverId,
+      });
+
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password
       );
-      const user = userCredential.user;
 
-      if (activeTab === "driver") {
-        const driversRef = collection(db, "motoristas_pre_aprovados");
-        const q = query(driversRef, where("driverId", "==", driverId));
-        const querySnapshot = await getDocs(q);
+      await updateDoc(driverDocRef, {
+        uid: userCredential.user.uid,
+      });
 
-        if (!querySnapshot.empty) {
-          const driverDoc = querySnapshot.docs[0];
-          if (driverDoc.data().uid) {
-            setError("ID de Motorista inválido ou já cadastrado.");
-            await user.delete();
-            setLoading(false);
-            return;
-          }
-
-          await updateDoc(driverDoc.ref, {
-            name: `${name} ${lastName}`,
-            phone: phone.replace(/\D/g, ""),
-            birthDate,
-            email,
-            uid: user.uid,
-          });
-          // O App.tsx cuidará do login automático após esta atualização
-        } else {
-          setError("ID de Motorista inválido ou não encontrado.");
-          await user.delete();
-        }
-      } else {
-        await sendEmailVerification(user);
-        const adminDocRef = doc(db, "admins_pre_aprovados", user.uid);
-        await setDoc(adminDocRef, {
-          uid: user.uid,
-          email: user.email,
-          name: `${name} ${lastName}`,
-          phone: phone.replace(/\D/g, ""),
-          birthDate,
-          role: "admin",
-        });
-        await signOut(auth);
-        setSuccessMessage(
-          "Conta criada! Um e-mail de verificação foi enviado. Por favor, confirme seu e-mail antes de fazer o login."
-        );
-        setIsLoginView(true);
-      }
+      // O App.tsx cuidará do login automático após esta atualização
     } catch (err: any) {
       setError(
         err.code === "auth/email-already-in-use"
@@ -209,7 +180,6 @@ export const AuthPage = () => {
   const handleGoogleSignIn = async (role: "admin" | "driver") => {
     setLoading(true);
     setError("");
-    setSuccessMessage("");
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -221,57 +191,136 @@ export const AuthPage = () => {
         return;
       }
 
+      try {
+        const token = await user.getIdToken(true);
+        console.log("TOKEN JWT:", token); // Copie este token no console do navegador (F12)
+      } catch (tokenErr) {
+        console.warn("Não foi possível obter idToken:", tokenErr);
+      }
+
       if (role === "admin") {
         if (!user.email?.endsWith("@shopee.com")) {
           setError("Acesso restrito a contas @shopee.com.");
           await signOut(auth);
-          setLoading(false);
-          return;
         }
-        const adminDocRef = doc(db, "admins_pre_aprovados", user.uid);
-        const adminDocSnap = await getDoc(adminDocRef);
-        if (!adminDocSnap.exists()) {
-          await setDoc(adminDocRef, {
-            uid: user.uid,
-            email: user.email,
-            name: user.displayName || "Admin Shopee",
-            role: "admin",
-          });
-        }
-        sonnerToast.success("Login de admin bem-sucedido!");
       } else {
-        // role === "driver"
         if (user.email?.endsWith("@shopee.com")) {
           setError("Contas @shopee.com devem fazer login na aba de Admin.");
           await signOut(auth);
           setLoading(false);
           return;
         }
-
         const driversRef = collection(db, "motoristas_pre_aprovados");
-        const q = query(driversRef, where("email", "==", user.email));
+        const q = query(driversRef, where("googleUid", "==", user.uid));
         const querySnapshot = await getDocs(q);
 
-        if (!querySnapshot.empty) {
-          const driverDoc = querySnapshot.docs[0];
-          // Atualiza o documento com o UID do Google para vincular
-          await updateDoc(driverDoc.ref, { uid: user.uid });
-          sonnerToast.success("Login de motorista bem-sucedido!");
-        } else {
-          sonnerToast.error("Motorista não cadastrado.", {
-            description:
-              "Seu e-mail do Google não está associado a um motorista. Por favor, contate o administrador para ser cadastrado.",
-          });
-          await signOut(auth); // Desloga o usuário
+        if (querySnapshot.empty) {
+          setGoogleUser(user);
+          setIsLinkingGoogleAccount(true);
         }
       }
     } catch (err: any) {
-      console.error(err);
       setError("Falha ao entrar com o Google.");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleLinkAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setLinkingError("");
+
+    if (!driverId.trim()) {
+      setLinkingError("Por favor, insira seu ID de motorista.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId.trim());
+      const driverDoc = await getDoc(driverDocRef);
+
+      if (!driverDoc.exists()) {
+        setLinkingError("ID de motorista não encontrado.");
+        setLoading(false);
+        return;
+      }
+
+      const driverData = driverDoc.data();
+      if (driverData.googleUid || driverData.uid) {
+        setLinkingError(
+          "Este ID de motorista já está vinculado a outra conta."
+        );
+        setLoading(false);
+        return;
+      }
+
+      await updateDoc(driverDoc.ref, {
+        googleUid: googleUser.uid,
+        email: googleUser.email,
+        name: driverData.name || googleUser.displayName,
+        avatar: driverData.avatar || googleUser.photoURL,
+      });
+
+      setIsLinkingGoogleAccount(false);
+      setGoogleUser(null);
+    } catch (err) {
+      setLinkingError("Ocorreu um erro ao vincular a conta.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isLinkingGoogleAccount) {
+    return (
+      <div
+        className="relative min-h-screen bg-cover bg-center"
+        style={{ backgroundImage: `url(/SP3.jpg)` }}
+      >
+        <div className="absolute inset-0 bg-black bg-opacity-50" />
+        <div className="relative flex items-center justify-center min-h-screen p-4">
+          <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+            <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
+              Vincular Conta Google
+            </h2>
+            <p className="text-center text-gray-600 mb-6">
+              Insira seu ID de motorista para vincularmos à sua conta Google.
+            </p>
+            <form onSubmit={handleLinkAccount} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="driverIdLink"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  ID de Motorista
+                </label>
+                <input
+                  id="driverIdLink"
+                  type="text"
+                  value={driverId}
+                  onChange={(e) => setDriverId(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                  placeholder="Seu ID único"
+                  required
+                />
+              </div>
+              {linkingError && (
+                <p className="text-sm text-red-600">{linkingError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700"
+              >
+                {loading ? "Verificando..." : "Vincular Conta"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -328,6 +377,7 @@ export const AuthPage = () => {
                   {successMessage}
                 </p>
               )}
+
               {isLoginView ? (
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="relative">

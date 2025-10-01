@@ -21,6 +21,7 @@ export interface Driver {
   initials?: string;
   createdAt?: any;
   googleUid?: string;
+  shopeeId?: string; // Propriedade para o ID interno da Shopee
 }
 
 export interface SupportCall {

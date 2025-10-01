@@ -40,6 +40,7 @@ import {
   or,
   Timestamp,
   deleteField,
+  getDocs,
 } from "firebase/firestore";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
@@ -311,7 +312,7 @@ const DriverCallHistoryCard = ({
   );
 };
 
-// Componente para a lista de chamados abertos (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
+// Componente para a lista de chamados abertos
 const OpenCallCard = ({
   call,
   currentDriverName,
@@ -414,12 +415,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
 
-  // ✅ CORREÇÃO: Estados para os campos do formulário de perfil
-  const [name, setName] = useState(driver.name || "");
-  const [phone, setPhone] = useState(driver.phone || "");
-  const [hub, setHub] = useState(driver.hub || "");
-  const [vehicleType, setVehicleType] = useState(driver.vehicleType || "");
-  const [hubSearch, setHubSearch] = useState(driver.hub || "");
+  // Estados para os campos do formulário de perfil
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [hub, setHub] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [hubSearch, setHubSearch] = useState("");
+  const [shopeeId, setShopeeId] = useState<string | null>(null); // ID de cadastro (documento)
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -435,16 +437,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
-
-  // ✅ CORREÇÃO: Este useEffect agora sincroniza o estado do formulário
-  // sempre que a prop 'driver' for atualizada pelo App.tsx.
-  useEffect(() => {
-    setName(driver.name || "");
-    setPhone(driver.phone || "");
-    setHub(driver.hub || "");
-    setVehicleType(driver.vehicleType || "");
-    setHubSearch(driver.hub || "");
-  }, [driver]);
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -471,7 +463,52 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     if (driver && !isProfileComplete) {
       setActiveTab("profile");
     }
-  }, [driver, isProfileComplete, TABS]);
+  }, [driver, isProfileComplete]);
+
+  useEffect(() => {
+    if (driver) {
+      // Preenche os dados do formulário
+      setName(driver.name || "");
+      setPhone(driver.phone || "");
+      setHub(driver.hub || "");
+      setVehicleType(driver.vehicleType || "");
+      setHubSearch(driver.hub || "");
+
+      // Busca o ID de cadastro (ID do documento)
+      const fetchShopeeId = async () => {
+        if (driver.uid) {
+          setShopeeId("Carregando...");
+          const driversRef = collection(db, "motoristas_pre_aprovados");
+          const q = query(
+            driversRef,
+            or(
+              where("uid", "==", driver.uid),
+              where("googleUid", "==", driver.uid)
+            )
+          );
+
+          try {
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              const driverDoc = querySnapshot.docs[0];
+              setShopeeId(driverDoc.id);
+            } else {
+              console.warn(
+                "Documento do motorista não encontrado para o UID:",
+                driver.uid
+              );
+              setShopeeId("Não encontrado");
+            }
+          } catch (error) {
+            console.error("Erro ao buscar ID de cadastro:", error);
+            setShopeeId("Erro ao buscar");
+          }
+        }
+      };
+
+      fetchShopeeId();
+    }
+  }, [driver]);
 
   const triggerNotificationRef = useRef((_newCall: SupportCall) => {});
 
@@ -728,12 +765,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    updateDriver(driver.uid, {
+    const updates = {
       name,
       phone: formattedPhone,
       hub,
       vehicleType,
-    });
+    };
+    updateDriver(driver.uid, updates);
     sonnerToast.success("Perfil atualizado com sucesso!");
     setIsProfileWarningVisible(false);
   };
@@ -829,7 +867,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
+    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${deliveryRegions.join(
       ", "
     )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
@@ -838,7 +876,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     try {
       const user = auth.currentUser;
       if (!user) {
-        throw new Error("Usuário não autenticado. Faça login novamente.");
+        throw new Error("Usuário não autenticado.");
       }
       const token = await user.getIdToken();
 
@@ -1158,18 +1196,19 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               >
                 {/* Availability Tab */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-6">
-                  <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+                  <div className="bg-white p-6 rounded-lg shadow-sm text-center space-y-4">
                     <h3 className="text-lg font-bold">
                       Estou disponível para apoio?
                     </h3>
                     <div className="flex items-center justify-center space-x-4">
                       <button
                         onClick={() => handleAvailabilityChange(true)}
+                        disabled={!isProfileComplete}
                         className={`w-24 py-2 text-sm font-semibold rounded-lg ${
                           driver.status === "DISPONIVEL"
                             ? "bg-green-600 text-white"
                             : "bg-gray-200"
-                        }`}
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         Sim
                       </button>
@@ -1229,7 +1268,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
                 {/* Support Tab */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4">
-                  <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+                  <div className="bg-white p-6 rounded-lg shadow-sm space-y-4">
                     <div className="flex items-center space-x-2">
                       <AlertTriangle className="text-red-500" />
                       <h3 className="text-lg font-bold">
@@ -1362,6 +1401,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         Editar Perfil
                       </h3>
                       <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            ID de Motorista
+                          </label>
+                          <input
+                            type="text"
+                            value={shopeeId || "Aguardando cadastro..."}
+                            readOnly
+                            className="w-full p-2 border rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
+                            title="Seu ID de cadastro na plataforma"
+                          />
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Nome Completo
@@ -1778,4 +1829,3 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     </>
   );
 };
-export default DriverInterface;
