@@ -689,9 +689,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
       return;
     }
-    if (!driver) return;
+    // CORREÇÃO: Usar o shopeeId para a atualização de status
+    if (!driver || !shopeeId || shopeeId.includes("...")) {
+      sonnerToast.error(
+        "Não foi possível identificar seu perfil. Tente recarregar a página."
+      );
+      return;
+    }
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-    updateDriver(driver.uid, { status: newStatus });
+    updateDriver(shopeeId, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
@@ -713,7 +719,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setAcceptingCallId(callId);
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
-      await updateDriver(userId, { status: "EM_ROTA" });
+      // CORREÇÃO: Usar o shopeeId para a atualização de status
+      if (shopeeId && !shopeeId.includes("...")) {
+        await updateDriver(shopeeId, { status: "EM_ROTA" });
+      }
     } catch (error) {
       console.error("Erro ao aceitar chamado:", error);
       sonnerToast.error("Erro", {
@@ -740,7 +749,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       assignedTo: deleteField(),
       status: "ABERTO",
     } as any);
-    await updateDriver(userId, { status: "DISPONIVEL" });
+    // CORREÇÃO: Usar o shopeeId para a atualização de status
+    if (shopeeId && !shopeeId.includes("...")) {
+      await updateDriver(shopeeId, { status: "DISPONIVEL" });
+    }
     sonnerToast.success("Apoio cancelado com sucesso.");
   };
 
@@ -749,7 +761,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const callToCancel = allMyCalls.find((c) => c.id === callId);
 
     if (callToCancel && callToCancel.assignedTo) {
-      await updateDriver(callToCancel.assignedTo, { status: "DISPONIVEL" });
+      // Aqui precisamos do ID do documento do outro motorista
+      const assignedDriverDoc = allDrivers.find(
+        (d) => d.uid === callToCancel.assignedTo
+      );
+      if (assignedDriverDoc) {
+        await updateDriver(assignedDriverDoc.uid, { status: "DISPONIVEL" });
+      }
     }
 
     await updateCall(callId, {
