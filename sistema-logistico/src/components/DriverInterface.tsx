@@ -440,8 +440,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-    return !!(driver.hub && driver.vehicleType && driver.phone && driver.name);
-  }, [driver]);
+    // CORREÇÃO: Adicionado a verificação do shopeeId (ID de Cadastro) e dos outros campos.
+    return !!(
+      driver.hub &&
+      driver.vehicleType &&
+      driver.phone &&
+      driver.name &&
+      shopeeId &&
+      shopeeId !== "Carregando..." &&
+      shopeeId !== "Não encontrado" &&
+      shopeeId !== "Erro ao buscar"
+    );
+  }, [driver, shopeeId]); // Adicionado shopeeId às dependências
 
   const hasActiveRequest = useMemo(() => {
     return allMyCalls.some(
@@ -750,7 +760,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleUpdateProfile = () => {
-    if (!driver) return;
+    // CORREÇÃO: Usar o shopeeId (ID do documento) para atualizar
+    if (!driver || !shopeeId || shopeeId.includes("...")) {
+      sonnerToast.error(
+        "Não foi possível identificar seu perfil. Tente recarregar a página."
+      );
+      return;
+    }
 
     const formattedPhone = phone.replace(/\D/g, "");
     if (formattedPhone.length !== 11) {
@@ -771,7 +787,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       hub,
       vehicleType,
     };
-    updateDriver(driver.uid, updates);
+    updateDriver(shopeeId, updates);
     sonnerToast.success("Perfil atualizado com sucesso!");
     setIsProfileWarningVisible(false);
   };
