@@ -27,7 +27,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { auth, db } from "../firebase";
+import { auth, db, storage } from "../firebase";
 import {
   doc,
   onSnapshot,
@@ -42,6 +42,17 @@ import {
   deleteField,
   getDocs,
 } from "firebase/firestore";
+import {
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+} from "firebase/auth";
+import {
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 
@@ -400,7 +411,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     []
   );
   type TabId = "availability" | "support" | "activeCalls" | "profile";
-  const [activeTab, setActiveTab] = useState<TabId>("availability");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [initialTabSet, setInitialTabSet] = useState(false);
 
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -438,9 +450,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
 
+  // --- CORREÇÃO: Estados para o modal de reautenticação ---
+  const [isReauthModalOpen, setIsReauthModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [reauthError, setReauthError] = useState("");
+  const [isReauthenticating, setIsReauthenticating] = useState(false);
+
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-    // CORREÇÃO: Adicionado a verificação do shopeeId (ID de Cadastro) e dos outros campos.
     return !!(
       driver.hub &&
       driver.vehicleType &&
@@ -451,7 +468,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       shopeeId !== "Não encontrado" &&
       shopeeId !== "Erro ao buscar"
     );
-  }, [driver, shopeeId]); // Adicionado shopeeId às dependências
+  }, [driver, shopeeId]);
 
   const hasActiveRequest = useMemo(() => {
     return allMyCalls.some(
@@ -470,21 +487,23 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   }, []);
 
   useEffect(() => {
-    if (driver && !isProfileComplete) {
+    if (isProfileComplete && !initialTabSet) {
+      setActiveTab("availability");
+      setInitialTabSet(true);
+    } else if (!isProfileComplete && !initialTabSet) {
       setActiveTab("profile");
+      setInitialTabSet(true);
     }
-  }, [driver, isProfileComplete]);
+  }, [isProfileComplete, initialTabSet]);
 
   useEffect(() => {
     if (driver) {
-      // Preenche os dados do formulário
       setName(driver.name || "");
       setPhone(driver.phone || "");
       setHub(driver.hub || "");
       setVehicleType(driver.vehicleType || "");
       setHubSearch(driver.hub || "");
 
-      // Busca o ID de cadastro (ID do documento)
       const fetchShopeeId = async () => {
         if (driver.uid) {
           setShopeeId("Carregando...");
@@ -503,10 +522,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               const driverDoc = querySnapshot.docs[0];
               setShopeeId(driverDoc.id);
             } else {
-              console.warn(
-                "Documento do motorista não encontrado para o UID:",
-                driver.uid
-              );
               setShopeeId("Não encontrado");
             }
           } catch (error) {
@@ -689,7 +704,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
       return;
     }
-    // CORREÇÃO: Usar o shopeeId para a atualização de status
     if (!driver || !shopeeId || shopeeId.includes("...")) {
       sonnerToast.error(
         "Não foi possível identificar seu perfil. Tente recarregar a página."
@@ -706,7 +720,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
       return;
     }
-    if (!userId || !driver) return;
+    if (!userId || !driver || !shopeeId) return;
 
     if (driver.status === "EM_ROTA") {
       sonnerToast.error("Ação não permitida", {
@@ -719,7 +733,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setAcceptingCallId(callId);
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
-      // CORREÇÃO: Usar o shopeeId para a atualização de status
       if (shopeeId && !shopeeId.includes("...")) {
         await updateDriver(shopeeId, { status: "EM_ROTA" });
       }
@@ -744,12 +757,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleCancelSupport = async (callId: string) => {
-    if (!userId) return;
+    if (!userId || !shopeeId) return;
     await updateCall(callId, {
       assignedTo: deleteField(),
       status: "ABERTO",
     } as any);
-    // CORREÇÃO: Usar o shopeeId para a atualização de status
     if (shopeeId && !shopeeId.includes("...")) {
       await updateDriver(shopeeId, { status: "DISPONIVEL" });
     }
@@ -761,12 +773,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const callToCancel = allMyCalls.find((c) => c.id === callId);
 
     if (callToCancel && callToCancel.assignedTo) {
-      // Aqui precisamos do ID do documento do outro motorista
-      const assignedDriverDoc = allDrivers.find(
+      const assignedDriver = allDrivers.find(
         (d) => d.uid === callToCancel.assignedTo
       );
-      if (assignedDriverDoc) {
-        await updateDriver(assignedDriverDoc.uid, { status: "DISPONIVEL" });
+      if (assignedDriver) {
+        await updateDriver(assignedDriver.uid, { status: "DISPONIVEL" });
       }
     }
 
@@ -778,7 +789,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleUpdateProfile = () => {
-    // CORREÇÃO: Usar o shopeeId (ID do documento) para atualizar
     if (!driver || !shopeeId || shopeeId.includes("...")) {
       sonnerToast.error(
         "Não foi possível identificar seu perfil. Tente recarregar a página."
@@ -810,6 +820,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setIsProfileWarningVisible(false);
   };
 
+  // CORREÇÃO: Inicia o fluxo de reautenticação
   const handleChangePassword = () => {
     if (newPassword !== confirmPassword) {
       sonnerToast.error("As novas senhas não coincidem.");
@@ -819,55 +830,95 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error("A nova senha deve ter no mínimo 6 caracteres.");
       return;
     }
-    sonnerToast.info(
-      "Funcionalidade de alteração de senha a ser implementada com reautenticação."
-    );
+
+    const user = auth.currentUser;
+    if (user && !user.providerData.some((p) => p.providerId === "password")) {
+      sonnerToast.error(
+        "Você não pode alterar a senha de contas logadas com o Google."
+      );
+      return;
+    }
+
+    setIsReauthModalOpen(true);
+  };
+
+  // CORREÇÃO: Nova função para lidar com a reautenticação e a troca de senha
+  const handleReauthenticateAndChange = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      setReauthError(
+        "Usuário não encontrado. Por favor, faça login novamente."
+      );
+      return;
+    }
+
+    setIsReauthenticating(true);
+    setReauthError("");
+
+    try {
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      sonnerToast.success("Senha alterada com sucesso!");
+      setIsReauthModalOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      if (error.code === "auth/wrong-password") {
+        setReauthError("Senha atual incorreta. Tente novamente.");
+      } else {
+        setReauthError("Ocorreu um erro. Tente novamente mais tarde.");
+        console.error("Erro na reautenticação:", error);
+      }
+    } finally {
+      setIsReauthenticating(false);
+    }
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !driver || !driver.uid) return;
+    if (!file || !driver || !shopeeId) return;
 
     setIsUploading(true);
 
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error("Usuário não autenticado.");
+    if (driver.avatar) {
+      try {
+        const oldAvatarRef = ref(storage, driver.avatar);
+        await deleteObject(oldAvatarRef);
+      } catch (error) {
+        console.warn(
+          "Erro ao deletar avatar antigo. Pode ser que não exista, ignorando:",
+          error
+        );
       }
-      const token = await user.getIdToken();
-
-      const formData = new FormData();
-      formData.append("avatar", file);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/upload-avatar`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Falha no upload da imagem.");
-      }
-
-      const result = await response.json();
-      const newAvatarUrl = result.avatarUrl;
-
-      await updateDriver(driver.uid, { avatar: newAvatarUrl });
-
-      sonnerToast.success("Foto de perfil atualizada com sucesso!");
-    } catch (error: any) {
-      console.error("Falha no upload:", error);
-      sonnerToast.error("Falha no upload", { description: error.message });
-    } finally {
-      setIsUploading(false);
     }
+
+    const storageRef = ref(storage, `avatars/${shopeeId}/avatar.jpg`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      "state_changed",
+      () => {},
+      (error) => {
+        console.error("Falha no upload:", error);
+        sonnerToast.error("Falha no upload", { description: error.message });
+        setIsUploading(false);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+          if (shopeeId) {
+            updateDriver(shopeeId, { avatar: downloadURL });
+          }
+          sonnerToast.success("Foto de perfil atualizada com sucesso!");
+          setIsUploading(false);
+        });
+      }
+    );
   };
 
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -901,13 +952,20 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${deliveryRegions.join(
+    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
       ", "
     )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
     try {
+      // --- SOLUÇÃO TEMPORÁRIA ---
+      // A chamada para o backend (`/tickets`) está retornando um erro 500.
+      // Para evitar que a aplicação quebre, usaremos a descrição informal diretamente.
+      // O ideal é corrigir o backend para que ele processe a chamada à API do Gemini corretamente.
+      const professionalDescription = informalDescription;
+      /*
+      // CÓDIGO ORIGINAL QUE CHAMA O BACKEND (DESATIVADO TEMPORARIAMENTE)
       const user = auth.currentUser;
       if (!user) {
         throw new Error("Usuário não autenticado.");
@@ -936,13 +994,19 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       if (!professionalDescription) {
         throw new Error("O servidor não retornou uma descrição válida.");
       }
+      */
+      // --- FIM DA SOLUÇÃO TEMPORÁRIA ---
 
       const routeId = `SPX-${Date.now().toString().slice(-6)}`;
 
       let urgency: UrgencyLevel = "BAIXA";
-      if (packageCount >= 100) urgency = "URGENTE";
-      else if (packageCount >= 90) urgency = "ALTA";
-      else if (packageCount >= 60) urgency = "MEDIA";
+      if (packageCount >= 100) {
+        urgency = "URGENTE";
+      } else if (packageCount >= 90) {
+        urgency = "ALTA";
+      } else if (packageCount >= 60) {
+        urgency = "MEDIA";
+      }
 
       const newCallData = {
         routeId: routeId,
@@ -1238,23 +1302,23 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       <button
                         onClick={() => handleAvailabilityChange(true)}
                         disabled={!isProfileComplete}
-                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
                           driver.status === "DISPONIVEL"
                             ? "bg-green-600 text-white"
                             : "bg-gray-200"
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        Sim
+                        Disponível
                       </button>
                       <button
                         onClick={() => handleAvailabilityChange(false)}
-                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
                           driver.status !== "DISPONIVEL"
                             ? "bg-red-600 text-white"
                             : "bg-gray-200"
                         }`}
                       >
-                        Não
+                        Indisponível
                       </button>
                     </div>
                     <p className="text-xs text-gray-400">
@@ -1551,7 +1615,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                               </label>
                               <div className="relative">
                                 <input
-                                  type="password"
+                                  type={showPassword ? "text" : "password"}
                                   value={newPassword}
                                   onChange={(e) =>
                                     setNewPassword(e.target.value)
@@ -1577,7 +1641,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                                 Confirmar Nova Senha
                               </label>
                               <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={confirmPassword}
                                 onChange={(e) =>
                                   setConfirmPassword(e.target.value)
@@ -1613,6 +1677,58 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           </div>
         </div>
       </div>
+      {isReauthModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold text-gray-800 mb-2">
+              Confirme sua identidade
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Para sua segurança, por favor, insira sua senha atual para
+              continuar.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="currentPassword"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Senha Atual
+                </label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                  required
+                />
+              </div>
+              {reauthError && (
+                <p className="text-sm text-red-600">{reauthError}</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsReauthModalOpen(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+                  disabled={isReauthenticating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReauthenticateAndChange}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-blue-300"
+                  disabled={isReauthenticating}
+                >
+                  {isReauthenticating ? "Confirmando..." : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {isSupportModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">

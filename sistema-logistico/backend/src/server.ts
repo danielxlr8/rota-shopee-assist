@@ -14,9 +14,15 @@ import multer from "multer";
 dotenv.config();
 
 // Validação crítica das variáveis de ambiente
-if (!process.env.MONGO_URI || !process.env.GEMINI_API_KEY) {
+if (
+  !process.env.MONGO_URI ||
+  !process.env.GEMINI_API_KEY ||
+  !process.env.CLOUD_NAME ||
+  !process.env.CLOUDINARY_API_KEY ||
+  !process.env.CLOUDINARY_API_SECRET
+) {
   console.error(
-    "FATAL ERROR: As variáveis de ambiente MONGO_URI e GEMINI_API_KEY são obrigatórias."
+    "FATAL ERROR: Verifique se todas as variáveis de ambiente necessárias estão definidas: MONGO_URI, GEMINI_API_KEY, CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET."
   );
   process.exit(1); // Encerra a aplicação se as chaves não estiverem presentes
 }
@@ -101,7 +107,7 @@ mongoose
 
 // ✨ Inicialização da API Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Usando o modelo mais recente
+const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Usando o modelo estável 'gemini-pro'
 
 // ✨ Configuração do Cloudinary
 cloudinary.config({
@@ -133,12 +139,20 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 
   try {
-    // Prompt otimizado para o Gemini
+    // CORREÇÃO: Prompt ajustado para gerar a descrição com mais espaçamento e destaque.
     const geminiPrompt = `
       Você é um assistente de logística da Shopee Express.
-      Sua tarefa é converter uma solicitação informal de um motorista em uma descrição profissional e concisa para um chamado de suporte interno.
-      A descrição final deve ter no máximo 100 caracteres.
-      Solicitação do motorista: "${prompt}"
+      Sua tarefa é extrair as informações de uma solicitação de motorista e formatá-la em um resumo claro e profissional.
+      Use o formato exato abaixo, preenchendo as informações. Use "N/A" se uma informação não for encontrada.
+
+      --- SOLICITAÇÃO DE TRANSFERÊNCIA ---
+      Região(ões): XXXX
+      Nº de Pacotes: XXX
+      Veículo Necessário: XXXX
+      ------------------------------------
+      Localização: XXXX
+
+      Texto da solicitação do motorista: "${prompt}"
     `;
 
     const result = await model.generateContent(geminiPrompt);
@@ -153,7 +167,6 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
 
     await newTicket.save();
 
-    // ✨ ALTERAÇÃO PRINCIPAL: Retorna apenas a descrição para o frontend.
     res.status(201).json({ description: newTicket.description });
   } catch (error) {
     console.error("Erro ao criar ticket:", error);
@@ -163,18 +176,19 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
-// Em /sistema-logistico/backend/src/server.ts
-
+/**
+ * @route   POST /upload-avatar
+ * @desc    Faz upload do avatar de um usuário para o Cloudinary.
+ * @access  Privado (requer autenticação)
+ */
 app.post(
   "/upload-avatar",
   authMiddleware,
   upload.single("avatar"),
   async (req, res) => {
-    // Primeiro, vamos isolar o arquivo em uma variável.
     const file = req.file;
     const userId = req.userId;
 
-    // Agora, verificamos se a variável 'file' ou 'userId' não existem.
     if (!file || !userId) {
       return res
         .status(400)
@@ -182,8 +196,7 @@ app.post(
     }
 
     try {
-      // Como a verificação foi feita, o TypeScript sabe que 'file' existe aqui.
-      const uploadResult = await new Promise((resolve, reject) => {
+      const uploadResult: any = await new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             folder: `avatares_shopee_apoio/${userId}`,
@@ -196,11 +209,9 @@ app.post(
             resolve(result);
           }
         );
-        // Usamos a variável 'file' que já foi verificada.
         uploadStream.end(file.buffer);
       });
 
-      // @ts-ignore
       const secureUrl = uploadResult.secure_url;
       res.status(200).json({ avatarUrl: secureUrl });
     } catch (error) {
@@ -209,8 +220,44 @@ app.post(
     }
   }
 );
-// As outras rotas (GET /tickets) permanecem as mesmas, pois são para outras funcionalidades.
-// ... (seu código para GET /tickets e GET /tickets/:id) ...
+
+/**
+ * @route   GET /tickets
+ * @desc    Busca todos os tickets de um usuário.
+ * @access  Privado (requer autenticação)
+ */
+app.get("/tickets", authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.userId;
+
+  try {
+    const tickets = await Ticket.find({ userId }).sort({ createdAt: -1 });
+    res.status(200).send(tickets);
+  } catch (error) {
+    console.error("Erro ao buscar tickets:", error);
+    res.status(500).send({ error: "Erro ao buscar tickets." });
+  }
+});
+
+/**
+ * @route   GET /tickets/:id
+ * @desc    Busca um ticket específico de um usuário.
+ * @access  Privado (requer autenticação)
+ */
+app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  try {
+    const ticket = await Ticket.findOne({ _id: id, userId });
+    if (!ticket) {
+      return res.status(404).send({ error: "Ticket não encontrado." });
+    }
+    res.status(200).send(ticket);
+  } catch (error) {
+    console.error("Erro ao buscar ticket:", error);
+    res.status(500).send({ error: "Erro ao buscar ticket." });
+  }
+});
 
 app.listen(port, () => {
   console.log(`🚀 Servidor rodando na porta: ${port}`);
