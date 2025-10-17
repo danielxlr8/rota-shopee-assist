@@ -82,17 +82,26 @@ const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 const sessionNotifiedCallIds = new Set<string>();
 
 // Função para extrair detalhes da descrição
-const parseDescription = (description: string) => {
-  const regionMatch = description.match(/Região\(ões\):\s*(.*)/);
-  const packagesMatch = description.match(/Nº de Pacotes:\s*(.*)/);
-  const vehicleMatch = description.match(/Veículo Necessário:\s*(.*)/);
-  const locationMatch = description.match(/Localização:\s*(.*)/);
-
+const parseDescription = (description: string): { [key: string]: string } => {
+  const lines = description.split("\n");
+  const details: { [key: string]: string } = {};
+  lines.forEach((line) => {
+    const parts = line.split(":");
+    if (parts.length > 1) {
+      const key = parts[0]
+        .trim()
+        .toLowerCase()
+        .replace(/\*/g, "")
+        .replace(/ /g, "-");
+      details[key] = parts.slice(1).join(":").trim();
+    }
+  });
   return {
-    region: regionMatch ? regionMatch[1].trim() : "N/A",
-    packages: packagesMatch ? packagesMatch[1].trim() : "N/A",
-    vehicle: vehicleMatch ? vehicleMatch[1].trim() : "N/A",
-    location: locationMatch ? locationMatch[1].trim() : "N/A",
+    hub: details.hub || "N/A",
+    "bairro-de-entrega": details["bairro-de-entrega"] || "N/A",
+    "número-de-pacotes": details["número-de-pacotes"] || "N/A",
+    "veículo-necessário": details["veículo-necessário"] || "N/A",
+    "contém-volumoso": details["contém-volumoso"] || "Não",
   };
 };
 
@@ -264,30 +273,26 @@ const DriverCallHistoryCard = ({
         <Badge variant={statusColor}>{statusText}</Badge>
       </CardHeader>
       <CardContent className="p-4 text-sm text-gray-700 space-y-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="font-semibold text-gray-500">Região(ões)</p>
-            <p>{details.region}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
-            <p>{details.packages}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="font-semibold text-gray-500">Veículo Necessário</p>
-            <p>{details.vehicle}</p>
-          </div>
+        <div className="space-y-2">
+          {Object.entries(details).map(([key, value]) => (
+            <p key={key}>
+              <span className="font-semibold capitalize">
+                {key.replace(/-/g, " ")}:
+              </span>{" "}
+              {value}
+            </p>
+          ))}
         </div>
         <hr className="my-3 border-gray-200" />
         <div className="space-y-1">
           <p className="font-semibold text-gray-500">Localização</p>
           <a
-            href={details.location}
+            href={call.location}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline flex items-center gap-1 break-all"
           >
-            {details.location} <ExternalLink size={14} />
+            {call.location} <ExternalLink size={14} />
           </a>
         </div>
       </CardContent>
@@ -369,30 +374,26 @@ const OpenCallCard = ({
         <CardTitle>Apoio para {call.solicitante.name}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 text-sm text-gray-700 space-y-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="font-semibold text-gray-500">Região(ões)</p>
-            <p>{details.region}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
-            <p>{details.packages}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="font-semibold text-gray-500">Veículo Necessário</p>
-            <p>{details.vehicle}</p>
-          </div>
+        <div className="space-y-2">
+          {Object.entries(details).map(([key, value]) => (
+            <p key={key}>
+              <span className="font-semibold capitalize">
+                {key.replace(/-/g, " ")}:
+              </span>{" "}
+              {value}
+            </p>
+          ))}
         </div>
         <hr className="my-3 border-gray-200" />
         <div className="space-y-1">
           <p className="font-semibold text-gray-500">Localização</p>
           <a
-            href={details.location}
+            href={call.location}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline flex items-center gap-1 break-all"
           >
-            {details.location} <ExternalLink size={14} />
+            {call.location} <ExternalLink size={14} />
           </a>
         </div>
       </CardContent>
@@ -450,6 +451,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
+  const [isBulky, setIsBulky] = useState(false);
+  const [bulkyPackageCount, setBulkyPackageCount] = useState("");
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -689,6 +692,35 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     await updateDoc(callDocRef, updates as any);
   };
 
+  const addNewCall = async (
+    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
+  ) => {
+    if (!driver || !shopeeId) return;
+
+    const getInitials = (name: string) => {
+      if (!name) return "??";
+      const names = name.trim().split(" ");
+      if (names.length > 1) {
+        return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+      }
+      return name.substring(0, 2).toUpperCase();
+    };
+
+    const callToAdd = {
+      ...newCall,
+      timestamp: serverTimestamp(),
+      solicitante: {
+        id: driver.uid,
+        name: driver.name || "Desconhecido",
+        avatar: driver.avatar || "",
+        initials: driver.initials || getInitials(driver.name),
+        phone: driver.phone || "",
+        shopeeId: shopeeId,
+      },
+    };
+    await addDoc(collection(db, "supportCalls"), callToAdd as any);
+  };
+
   const handleAvailabilityChange = (isAvailable: boolean) => {
     if (!isProfileComplete) {
       sonnerToast.error(
@@ -916,24 +948,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setIsSubmitting(true);
     setModalError("");
 
-    const user = auth.currentUser;
-    if (!user || !driver) {
-      setModalError("Erro: Usuário não autenticado. Faça login novamente.");
-      setIsSubmitting(false);
-      return;
-    }
-
     const formData = new FormData(e.currentTarget);
-    const isBulky = formData.get("isBulky") === "on";
+    const isBulkyChecked = isBulky;
     const packageCount = Number(formData.get("packageCount"));
+    const bulkyCount = formData.get("bulkyPackageCount") as string;
     const selectedHub = formData.get("hub") as string;
     const selectedDeliveryRegions = deliveryRegions.filter(Boolean);
     const selectedNeededVehicles = neededVehicles.filter(Boolean);
 
-    if (packageCount < 20) {
-      sonnerToast.error(
-        "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
-      );
+    if (packageCount < 1) {
+      sonnerToast.error("O número de pacotes deve ser pelo menos 1.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (isBulkyChecked && (!bulkyCount || Number(bulkyCount) < 1)) {
+      setModalError("Por favor, informe a quantidade de pacotes volumosos.");
       setIsSubmitting(false);
       return;
     }
@@ -949,79 +979,50 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
-      ", "
-    )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
-      isBulky ? "Contém pacote volumoso." : ""
-    }`;
-
-    const solicitanteData = {
-      id: driver.uid,
-      name: driver.name || "Nome não definido",
-      avatar: driver.avatar || null,
-      initials: driver.initials || "??",
-      phone: driver.phone || null,
-      // --- ALTERAÇÃO AQUI: Adicionando o shopeeId ao solicitante ---
-      shopeeId: shopeeId,
-    };
-
-    const routeId = `SPX-${Date.now().toString().slice(-6)}`;
-    let urgency: UrgencyLevel = "BAIXA";
-    if (packageCount >= 100) {
-      urgency = "URGENTE";
-    } else if (packageCount >= 90) {
-      urgency = "ALTA";
-    } else if (packageCount >= 60) {
-      urgency = "MEDIA";
-    }
-
-    const ticketPayload = {
-      prompt: informalDescription,
-      solicitante: solicitanteData,
-      location: location,
-      hub: selectedHub,
-      vehicleType: selectedNeededVehicles.join(", "),
-      isBulky: isBulky,
-      routeId: routeId,
-      urgency: urgency,
-      // --- ALTERAÇÃO AQUI: Adicionando campos estruturados ---
-      packageCount: packageCount,
-      deliveryRegions: selectedDeliveryRegions,
-      // --- FIM DA ALTERAÇÃO ---
-    };
-
     try {
-      const idToken = await user.getIdToken();
-      const apiUrl = import.meta.env.VITE_API_URL;
+      const description = [
+        `**Hub:** ${selectedHub}`,
+        `**Bairro de entrega:** ${selectedDeliveryRegions.join(", ")}`,
+        `**Número de pacotes:** ${packageCount}`,
+        `**Veículo necessário:** ${selectedNeededVehicles.join(", ")}`,
+        `**Contém volumoso:** ${
+          isBulkyChecked ? `Sim > quantos volumosos: ${bulkyCount}` : "Não"
+        }`,
+      ].join("\n");
 
-      if (!apiUrl) {
-        setModalError(
-          "Erro: VITE_API_URL não está configurada no .env do frontend."
-        );
-        setIsSubmitting(false);
-        return;
+      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+
+      let urgency: UrgencyLevel = "BAIXA";
+      if (packageCount >= 100) {
+        urgency = "URGENTE";
+      } else if (packageCount >= 90) {
+        urgency = "ALTA";
+      } else if (packageCount >= 60) {
+        urgency = "MEDIA";
       }
 
-      const response = await fetch(`${apiUrl}/tickets`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(ticketPayload),
-      });
+      const newCallData = {
+        routeId,
+        description,
+        urgency,
+        location,
+        status: "ABERTO" as const,
+        vehicleType: selectedNeededVehicles.join(", "),
+        isBulky: isBulkyChecked,
+        hub: selectedHub,
+        packageCount: packageCount,
+        deliveryRegions: selectedDeliveryRegions,
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || "Falha ao criar o ticket no backend."
-        );
-      }
+      await addNewCall(newCallData as any);
 
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
       setDeliveryRegions([""]);
       setNeededVehicles([""]);
+      setLocation("");
+      setBulkyPackageCount("");
+      setIsBulky(false);
     } catch (error: any) {
       console.error("Erro detalhado ao criar chamado:", error);
       setModalError(`Erro: ${error.message}`);
@@ -1040,10 +1041,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        // --- CORREÇÃO APLICADA AQUI ---
-        // A URL para o Google Maps estava incorreta.
-        // A linha abaixo gera um link funcional que abre o mapa
-        // com um marcador na localização correta.
         setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
         setIsLocating(false);
       },
@@ -1924,6 +1921,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   id="isBulky"
                   name="isBulky"
                   type="checkbox"
+                  checked={isBulky}
+                  onChange={(e) => setIsBulky(e.target.checked)}
                   className="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
                 />
                 <label
@@ -1933,6 +1932,31 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   Contém pacote volumoso
                 </label>
               </div>
+
+              {isBulky && (
+                <div>
+                  <label
+                    htmlFor="bulkyPackageCount"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Quantos Pacotes Volumosos?
+                  </label>
+                  <div className="relative">
+                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      id="bulkyPackageCount"
+                      name="bulkyPackageCount"
+                      type="number"
+                      min="1"
+                      placeholder="Ex: 2"
+                      value={bulkyPackageCount}
+                      onChange={(e) => setBulkyPackageCount(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               {modalError && (
                 <p className="text-sm text-center text-red-600 bg-red-100 p-2 rounded-md">
