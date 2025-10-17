@@ -26,6 +26,7 @@ import {
   Ticket,
   Volume2,
   VolumeX,
+  ExternalLink,
 } from "lucide-react";
 import { auth, db, storage } from "../firebase";
 import {
@@ -55,6 +56,14 @@ import {
 } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "./ui/card";
+import { Badge } from "./ui/Badge";
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
@@ -72,7 +81,22 @@ const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
 const sessionNotifiedCallIds = new Set<string>();
 
-// Card de Cabeçalho do Perfil (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
+// Função para extrair detalhes da descrição
+const parseDescription = (description: string) => {
+  const regionMatch = description.match(/Região\(ões\):\s*(.*)/);
+  const packagesMatch = description.match(/Nº de Pacotes:\s*(.*)/);
+  const vehicleMatch = description.match(/Veículo Necessário:\s*(.*)/);
+  const locationMatch = description.match(/Localização:\s*(.*)/);
+
+  return {
+    region: regionMatch ? regionMatch[1].trim() : "N/A",
+    packages: packagesMatch ? packagesMatch[1].trim() : "N/A",
+    vehicle: vehicleMatch ? vehicleMatch[1].trim() : "N/A",
+    location: locationMatch ? locationMatch[1].trim() : "N/A",
+  };
+};
+
+// Card de Cabeçalho do Perfil
 const ProfileHeaderCard = ({
   driver,
   onEditClick,
@@ -170,7 +194,6 @@ const ProfileHeaderCard = ({
   );
 };
 
-// Componente para o cartão de histórico (SEU CÓDIGO ORIGINAL - SEM ALTERAÇÕES)
 const DriverCallHistoryCard = ({
   call,
   currentDriver,
@@ -186,46 +209,40 @@ const DriverCallHistoryCard = ({
   onDeleteSupportRequest: (callId: string) => void;
   onRequestApproval: (callId: string) => void;
 }) => {
+  const details = parseDescription(call.description);
   const isRequester = call.solicitante.id === currentDriver.uid;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
   const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
   let statusText = "Status desconhecido",
-    statusColor = "bg-gray-200",
-    icon = <HelpCircle size={20} />,
+    statusColor: "default" | "destructive" | "outline" | "secondary" =
+      "default",
     title = "Chamado";
 
   if (isRequester) {
     title = "Pedido de Apoio";
     if (call.status === "ABERTO") {
       statusText = "Aguardando Apoio";
-      statusColor = "bg-yellow-200 text-yellow-800";
-      icon = <HelpCircle size={20} className="text-yellow-500" />;
+      statusColor = "default";
     } else if (call.status === "AGUARDANDO_APROVACAO") {
       statusText = "Aguardando Aprovação";
-      statusColor = "bg-purple-200 text-purple-800";
-      icon = <Clock size={20} className="text-purple-500" />;
+      statusColor = "secondary";
     } else if (call.status === "EM ANDAMENTO") {
       statusText = `Recebendo Apoio`;
-      statusColor = "bg-blue-200 text-blue-800";
-      icon = (
-        <Truck size={20} className="text-blue-500 transform -scale-x-100" />
-      );
+      statusColor = "default";
     }
   } else {
     title = `Apoio a ${call.solicitante.name}`;
     if (call.status === "EM ANDAMENTO") {
       statusText = "Prestando Apoio";
-      statusColor = "bg-green-200 text-green-800";
-      icon = <Truck size={20} className="text-green-500" />;
+      statusColor = "default";
     } else if (call.status === "AGUARDANDO_APROVACAO") {
       statusText = "Aguardando Aprovação";
-      statusColor = "bg-purple-200 text-purple-800";
-      icon = <Clock size={20} className="text-purple-500" />;
+      statusColor = "secondary";
     }
   }
   if (call.status === "CONCLUIDO") {
     statusText = "Concluído";
-    statusColor = "bg-gray-200 text-gray-800";
+    statusColor = "outline";
   }
 
   const handleWhatsAppClick = () => {
@@ -241,34 +258,43 @@ const DriverCallHistoryCard = ({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          {icon}
+    <Card className="overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between bg-gray-50 p-4">
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <Badge variant={statusColor}>{statusText}</Badge>
+      </CardHeader>
+      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
-            <p className="font-bold text-gray-800">{title}</p>
-            <p className="text-sm text-gray-500">{call.description}</p>
+            <p className="font-semibold text-gray-500">Região(ões)</p>
+            <p>{details.region}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
+            <p>{details.packages}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="font-semibold text-gray-500">Veículo Necessário</p>
+            <p>{details.vehicle}</p>
           </div>
         </div>
-        <div
-          className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColor} self-end sm:self-center`}
-        >
-          {statusText}
+        <hr className="my-3 border-gray-200" />
+        <div className="space-y-1">
+          <p className="font-semibold text-gray-500">Localização</p>
+          <a
+            href={details.location}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
+          >
+            {details.location} <ExternalLink size={14} />
+          </a>
         </div>
-      </div>
-
-      <div className="mt-3 pt-3 border-t text-xs text-gray-600">
-        <p className="flex items-center gap-2">
-          <Ticket size={14} />
-          <span className="font-semibold">ID da Rota:</span>{" "}
-          {call.routeId || "N/A"}
-        </p>
-      </div>
-
+      </CardContent>
       {(call.status === "EM ANDAMENTO" ||
         call.status === "AGUARDANDO_APROVACAO" ||
         call.status === "ABERTO") && (
-        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
+        <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
           {otherParty && (
             <button
               onClick={handleWhatsAppClick}
@@ -283,43 +309,28 @@ const DriverCallHistoryCard = ({
                 onClick={() => onRequestApproval(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
               >
-                <Clock size={14} /> Aguardando Aprovação
+                <Clock size={14} /> Aprovação
               </button>
               <button
                 onClick={() => onCancelSupport(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
               >
-                <XCircle size={14} /> Cancelar Apoio
+                <XCircle size={14} /> Cancelar
               </button>
             </>
           )}
-          {isRequester && call.status === "ABERTO" && (
-            <button
-              onClick={() => onDeleteSupportRequest(call.id)}
-              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-            >
-              <XCircle size={14} /> Cancelar Solicitação
-            </button>
-          )}
-          {isRequester && call.status === "EM ANDAMENTO" && (
-            <>
-              <button
-                onClick={() => onRequestApproval(call.id)}
-                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
-              >
-                <Clock size={14} /> Aguardando Aprovação
-              </button>
+          {isRequester &&
+            (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
               <button
                 onClick={() => onDeleteSupportRequest(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
               >
-                <XCircle size={14} /> Cancelar Solicitação
+                <XCircle size={14} /> Cancelar
               </button>
-            </>
-          )}
-        </div>
+            )}
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 };
 
@@ -335,6 +346,7 @@ const OpenCallCard = ({
   onAccept: (callId: string) => void;
   acceptingCallId: string | null;
 }) => {
+  const details = parseDescription(call.description);
   const requesterPhone = call.solicitante.phone || "";
   const isAcceptingThisCall = acceptingCallId === call.id;
 
@@ -352,46 +364,58 @@ const OpenCallCard = ({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <p className="font-bold text-gray-800">
-            Apoio para {call.solicitante.name}
-          </p>
-          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
+    <Card className="overflow-hidden">
+      <CardHeader className="p-4 bg-gray-50">
+        <CardTitle>Apoio para {call.solicitante.name}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div>
+            <p className="font-semibold text-gray-500">Região(ões)</p>
+            <p>{details.region}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
+            <p>{details.packages}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="font-semibold text-gray-500">Veículo Necessário</p>
+            <p>{details.vehicle}</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 self-end sm:self-center">
-          <button
-            onClick={handleWhatsAppClick}
-            className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+        <hr className="my-3 border-gray-200" />
+        <div className="space-y-1">
+          <p className="font-semibold text-gray-500">Localização</p>
+          <a
+            href={details.location}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
           >
-            <Phone size={16} />
-          </button>
-          <button
-            onClick={() => onAccept(call.id)}
-            disabled={!!acceptingCallId}
-            className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
-          >
-            {isAcceptingThisCall ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              "Aceitar Apoio"
-            )}
-          </button>
+            {details.location} <ExternalLink size={14} />
+          </a>
         </div>
-      </div>
-      <div className="mt-3 pt-3 border-t text-xs text-gray-600 space-y-1">
-        <p className="flex items-center gap-2">
-          <Ticket size={14} />
-          <span className="font-semibold">ID da Rota:</span>{" "}
-          {call.routeId || "N/A"}
-        </p>
-        <p className="flex items-center gap-2">
-          <MapPin size={14} />
-          <span className="font-semibold">Local:</span> {call.location}
-        </p>
-      </div>
-    </div>
+      </CardContent>
+      <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
+        <button
+          onClick={handleWhatsAppClick}
+          className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+        >
+          <Phone size={16} />
+        </button>
+        <button
+          onClick={() => onAccept(call.id)}
+          disabled={!!acceptingCallId}
+          className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
+        >
+          {isAcceptingThisCall ? (
+            <LoaderCircle className="animate-spin" />
+          ) : (
+            "Aceitar Apoio"
+          )}
+        </button>
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -427,13 +451,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
 
-  // Estados para os campos do formulário de perfil
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [hub, setHub] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [hubSearch, setHubSearch] = useState("");
-  const [shopeeId, setShopeeId] = useState<string | null>(null); // ID de cadastro (documento)
+  const [shopeeId, setShopeeId] = useState<string | null>(null);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -450,7 +473,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
 
-  // --- CORREÇÃO: Estados para o modal de reautenticação ---
   const [isReauthModalOpen, setIsReauthModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [reauthError, setReauthError] = useState("");
@@ -585,7 +607,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
+        (doc) => ({ ...doc.data(), uid: doc.id } as Driver)
       );
       setAllDrivers(driversData);
     });
@@ -667,41 +689,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     await updateDoc(callDocRef, updates as any);
   };
 
-  const addNewCall = async (
-    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
-  ) => {
-    if (!driver) return;
-
-    const getInitials = (name: string | undefined) => {
-      if (!name) return "??";
-      return name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2);
-    };
-
-    const callToAdd = {
-      ...newCall,
-      timestamp: serverTimestamp(),
-      solicitante: {
-        id: driver.uid,
-        name: driver.name || "Nome não definido",
-        avatar: driver.avatar || null,
-        initials: driver.initials || getInitials(driver.name),
-        phone: driver.phone || null,
-      },
-    };
-    await addDoc(collection(db, "supportCalls"), callToAdd as any);
-  };
-
   const handleAvailabilityChange = (isAvailable: boolean) => {
     if (!isProfileComplete) {
       sonnerToast.error(
         "Complete seu perfil para alterar sua disponibilidade."
       );
-      setActiveTab("profile");
       return;
     }
     if (!driver || !shopeeId || shopeeId.includes("...")) {
@@ -820,7 +812,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setIsProfileWarningVisible(false);
   };
 
-  // CORREÇÃO: Inicia o fluxo de reautenticação
   const handleChangePassword = () => {
     if (newPassword !== confirmPassword) {
       sonnerToast.error("As novas senhas não coincidem.");
@@ -842,7 +833,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setIsReauthModalOpen(true);
   };
 
-  // CORREÇÃO: Nova função para lidar com a reautenticação e a troca de senha
   const handleReauthenticateAndChange = async () => {
     const user = auth.currentUser;
     if (!user || !user.email) {
@@ -926,6 +916,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setIsSubmitting(true);
     setModalError("");
 
+    const user = auth.currentUser;
+    if (!user || !driver) {
+      setModalError("Erro: Usuário não autenticado. Faça login novamente.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
     const isBulky = formData.get("isBulky") === "on";
     const packageCount = Number(formData.get("packageCount"));
@@ -958,68 +955,62 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
-    try {
-      // --- SOLUÇÃO TEMPORÁRIA ---
-      // A chamada para o backend (`/tickets`) está retornando um erro 500.
-      // Para evitar que a aplicação quebre, usaremos a descrição informal diretamente.
-      // O ideal é corrigir o backend para que ele processe a chamada à API do Gemini corretamente.
-      const professionalDescription = informalDescription;
-      /*
-      // CÓDIGO ORIGINAL QUE CHAMA O BACKEND (DESATIVADO TEMPORARIAMENTE)
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error("Usuário não autenticado.");
-      }
-      const token = await user.getIdToken();
+    const solicitanteData = {
+      id: driver.uid,
+      name: driver.name || "Nome não definido",
+      avatar: driver.avatar || null,
+      initials: driver.initials || "??",
+      phone: driver.phone || null,
+    };
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/tickets`, {
+    const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+    let urgency: UrgencyLevel = "BAIXA";
+    if (packageCount >= 100) {
+      urgency = "URGENTE";
+    } else if (packageCount >= 90) {
+      urgency = "ALTA";
+    } else if (packageCount >= 60) {
+      urgency = "MEDIA";
+    }
+
+    const ticketPayload = {
+      prompt: informalDescription,
+      solicitante: solicitanteData,
+      location: location,
+      hub: selectedHub,
+      vehicleType: selectedNeededVehicles.join(", "),
+      isBulky: isBulky,
+      routeId: routeId,
+      urgency: urgency,
+    };
+
+    try {
+      const idToken = await user.getIdToken();
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        setModalError(
+          "Erro: VITE_API_URL não está configurada no .env do frontend."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/tickets`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ prompt: informalDescription }),
+        body: JSON.stringify(ticketPayload),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          errorData.error || "Falha ao criar o chamado no servidor."
+          errorData.error || "Falha ao criar o ticket no backend."
         );
       }
-
-      const responseData = await response.json();
-      const professionalDescription = responseData.description;
-
-      if (!professionalDescription) {
-        throw new Error("O servidor não retornou uma descrição válida.");
-      }
-      */
-      // --- FIM DA SOLUÇÃO TEMPORÁRIA ---
-
-      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
-
-      let urgency: UrgencyLevel = "BAIXA";
-      if (packageCount >= 100) {
-        urgency = "URGENTE";
-      } else if (packageCount >= 90) {
-        urgency = "ALTA";
-      } else if (packageCount >= 60) {
-        urgency = "MEDIA";
-      }
-
-      const newCallData = {
-        routeId: routeId,
-        description: professionalDescription,
-        urgency: urgency,
-        location: location,
-        status: "ABERTO" as const,
-        vehicleType: selectedNeededVehicles.join(", "),
-        isBulky: isBulky,
-        hub: selectedHub,
-      };
-
-      await addNewCall(newCallData);
 
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
@@ -1043,9 +1034,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-
+        // --- CORREÇÃO APLICADA AQUI ---
+        // A URL para o Google Maps estava incorreta.
+        // A linha abaixo gera um link funcional que abre o mapa
+        // com um marcador na localização correta.
         setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
-
         setIsLocating(false);
       },
       () => {

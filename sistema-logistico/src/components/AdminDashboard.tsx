@@ -4,7 +4,7 @@ import type {
   Driver,
   UrgencyLevel,
   CallStatus,
-} from "../types/logistics";
+} from "@/types/logistics";
 import {
   AlertTriangle,
   Clock,
@@ -23,15 +23,24 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
-import { Timestamp, doc, updateDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  Timestamp,
+  doc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "@/firebase";
 import {
   AvatarComponent,
   UrgencyBadge,
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
-} from "./UI";
+} from "@/components/UI";
 import {
   Panel as ResizablePanel,
   PanelGroup as ResizablePanelGroup,
@@ -174,8 +183,6 @@ const SearchableComboBox = ({
     </div>
   );
 };
-
-// --- COMPONENTES AUXILIARES ---
 
 const ConfirmationModal = ({
   isOpen,
@@ -482,7 +489,6 @@ const ApprovalCard = ({
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
 interface AdminDashboardProps {
-  calls: SupportCall[];
   drivers: Driver[];
   updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
   onDeleteCall: (id: string) => void;
@@ -491,13 +497,16 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard = ({
-  calls,
   drivers,
   updateCall,
   onDeleteCall,
   onDeletePermanently,
   onDeleteAllExcluded,
 }: AdminDashboardProps) => {
+  const [activeCalls, setActiveCalls] = useState<SupportCall[]>([]);
+  const [historicalCalls, setHistoricalCalls] = useState<SupportCall[]>([]);
+  const [calls, setCalls] = useState<SupportCall[]>([]); // Estado combinado para a UI
+
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
@@ -538,6 +547,63 @@ export const AdminDashboard = ({
 
   const [globalHubFilter, setGlobalHubFilter] =
     useState<string>("Todos os Hubs");
+
+  // Lógica otimizada para buscar dados do Firestore
+
+  // Efeito para buscar chamados ATIVOS (que mudam de status) em tempo real
+  useEffect(() => {
+    const activeStatus: CallStatus[] = [
+      "ABERTO",
+      "EM ANDAMENTO",
+      "AGUARDANDO_APROVACAO",
+    ];
+    const activeCallsQuery = query(
+      collection(db, "supportCalls"),
+      where("status", "in", activeStatus)
+    );
+
+    const unsubscribe = onSnapshot(activeCallsQuery, (snapshot) => {
+      const callsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as SupportCall[];
+      setActiveCalls(callsData);
+    });
+
+    return () => unsubscribe(); // Limpa o listener para evitar memory leaks
+  }, []);
+
+  // Efeito para buscar chamados HISTÓRICOS (que não mudam) apenas uma vez
+  useEffect(() => {
+    const fetchHistoricalCalls = async () => {
+      const historicalStatus: CallStatus[] = [
+        "CONCLUIDO",
+        "ARQUIVADO",
+        "EXCLUIDO",
+      ];
+      try {
+        const historicalCallsQuery = query(
+          collection(db, "supportCalls"),
+          where("status", "in", historicalStatus)
+        );
+        const querySnapshot = await getDocs(historicalCallsQuery);
+        const callsData = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as SupportCall[];
+        setHistoricalCalls(callsData);
+      } catch (error) {
+        console.error("Erro ao buscar chamados históricos:", error);
+      }
+    };
+
+    fetchHistoricalCalls();
+  }, []);
+
+  // Efeito para combinar os dados para a UI
+  useEffect(() => {
+    setCalls([...activeCalls, ...historicalCalls]);
+  }, [activeCalls, historicalCalls]);
 
   const updateDriver = async (
     driverUid: string,
@@ -762,7 +828,7 @@ export const AdminDashboard = ({
     );
   }, [drivers, globalHubFilter]);
 
-  const activeCalls = useMemo(
+  const activeCallsFromMemo = useMemo(
     () =>
       filteredCalls.filter(
         (c) => !["EXCLUIDO", "ARQUIVADO"].includes(c.status)
@@ -774,20 +840,21 @@ export const AdminDashboard = ({
     [filteredCalls]
   );
   const openCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "ABERTO"),
-    [activeCalls]
+    () => activeCallsFromMemo.filter((c) => c.status === "ABERTO"),
+    [activeCallsFromMemo]
   );
   const inProgressCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
-    [activeCalls]
+    () => activeCallsFromMemo.filter((c) => c.status === "EM ANDAMENTO"),
+    [activeCallsFromMemo]
   );
   const concludedCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
-    [activeCalls]
+    () => activeCallsFromMemo.filter((c) => c.status === "CONCLUIDO"),
+    [activeCallsFromMemo]
   );
   const pendingApprovalCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
-    [activeCalls]
+    () =>
+      activeCallsFromMemo.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
+    [activeCallsFromMemo]
   );
 
   const availableDriverHubs = useMemo(

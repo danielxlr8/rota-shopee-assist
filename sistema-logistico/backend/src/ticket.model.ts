@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-// Interface for the Ticket document
+// Interface para o documento Ticket
 export interface ITicket extends Document {
   userId: string;
   prompt: string;
@@ -8,7 +8,7 @@ export interface ITicket extends Document {
   createdAt: Date;
 }
 
-// Ticket Schema
+// Schema do Ticket
 const TicketSchema: Schema = new Schema({
   userId: { type: String, required: true },
   prompt: { type: String, required: true },
@@ -16,5 +16,5 @@ const TicketSchema: Schema = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// Export the model
+// Exporta o modelo
 export const Ticket = mongoose.model<ITicket>("Ticket", TicketSchema);

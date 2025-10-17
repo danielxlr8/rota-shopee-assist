@@ -4,64 +4,44 @@ import dotenv from "dotenv";
 import cors from "cors";
 import * as admin from "firebase-admin";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Ticket } from "./ticket.model"; // Garanta que este caminho está correto
+import { Ticket } from "./ticket.model";
 import fs from "fs";
-import path from "path";
-import { v2 as cloudinary } from "cloudinary";
-import multer from "multer";
 
-// Carrega variáveis de ambiente do arquivo .env na raiz do backend
+// Carrega variáveis de ambiente
 dotenv.config();
 
-// Validação crítica das variáveis de ambiente
-if (
-  !process.env.MONGO_URI ||
-  !process.env.GEMINI_API_KEY ||
-  !process.env.CLOUD_NAME ||
-  !process.env.CLOUDINARY_API_KEY ||
-  !process.env.CLOUDINARY_API_SECRET
-) {
+// Validação das variáveis de ambiente
+if (!process.env.MONGO_URI || !process.env.GEMINI_API_KEY) {
   console.error(
-    "FATAL ERROR: Verifique se todas as variáveis de ambiente necessárias estão definidas: MONGO_URI, GEMINI_API_KEY, CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET."
+    "Erro: Variáveis de ambiente MONGO_URI e GEMINI_API_KEY são obrigatórias."
   );
-  process.exit(1); // Encerra a aplicação se as chaves não estiverem presentes
+  process.exit(1);
 }
 
-// 🔹 Inicializa o Firebase Admin SDK
+// 🔹 Inicializa o Firebase Admin SDK a partir de um arquivo local service-account.json
 try {
-  // Caminho para o arquivo de credenciais
-  const serviceAccountPath = path.resolve(__dirname, "../service-account.json");
-  if (!fs.existsSync(serviceAccountPath)) {
-    throw new Error(
-      `Arquivo service-account.json não encontrado em: ${serviceAccountPath}`
-    );
-  }
   const serviceAccount = JSON.parse(
-    fs.readFileSync(serviceAccountPath, "utf-8")
+    fs.readFileSync("./service-account.json", "utf-8")
   );
-
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
-  console.log("✅ Firebase Admin SDK inicializado com sucesso.");
+  console.log("Firebase Admin SDK inicializado com sucesso.");
 } catch (error) {
-  console.error("❌ Erro ao inicializar o Firebase Admin SDK:", error);
+  console.error("Erro ao carregar service-account.json:", error);
   process.exit(1);
 }
 
 const app: Express = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
-// Middleware de CORS - Configurado para aceitar requisições do seu frontend
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
-  optionsSuccessStatus: 200,
-};
+// Middleware de CORS
+app.use(cors());
 
-app.use(cors(corsOptions));
-app.use(express.json()); // Middleware para parse de JSON
+// Middleware para processar JSON
+app.use(express.json());
 
-// 🔹 Tipagem para adicionar `userId` ao objeto Request do Express
+// 🔹 Tipagem para req.userId
 declare global {
   namespace Express {
     interface Request {
@@ -70,7 +50,7 @@ declare global {
   }
 }
 
-// 🔐 Middleware de Autenticação
+// Middleware de autenticação
 const authMiddleware = async (
   req: Request,
   res: Response,
@@ -79,153 +59,117 @@ const authMiddleware = async (
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res
-      .status(401)
-      .json({ error: "Não autorizado: Nenhum token fornecido." });
+    return res.status(401).send({ error: "Unauthorized: No token provided." });
   }
 
   const idToken = authHeader.split("Bearer ")[1];
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.userId = decodedToken.uid; // Adiciona o UID do usuário à requisição
+    req.userId = decodedToken.uid;
     next();
   } catch (error) {
-    console.error("Erro na validação do token:", error);
-    return res.status(401).json({ error: "Não autorizado: Token inválido." });
+    console.error("Erro ao validar token:", error);
+    return res.status(401).send({ error: "Unauthorized: Invalid token." });
   }
 };
 
-// 🍃 Conexão com o MongoDB
+// Conecta ao MongoDB
 mongoose
-  .connect(process.env.MONGO_URI as string)
-  .then(() => console.log("🍃 Conectado ao MongoDB com sucesso!"))
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("Conectado ao MongoDB Atlas!"))
   .catch((err) => {
-    console.error("❌ Erro de conexão com o MongoDB:", err);
+    console.error("Erro de conexão com MongoDB:", err);
     process.exit(1);
   });
 
-// ✨ Inicialização da API Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Usando o modelo estável 'gemini-pro'
-
-// ✨ Configuração do Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+// Inicializa a API Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash-preview-05-20", // Modelo atualizado para um mais recente
 });
 
-// ✨ Configuração do Multer para upload de arquivos em memória
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+// --- Rotas da API ---
 
-// --- ROTAS DA API ---
-
-/**
- * @route   POST /tickets
- * @desc    Cria um novo ticket de suporte. Recebe um "prompt" informal, usa o Gemini para
- * gerar uma descrição profissional, e salva ambos no MongoDB.
- * @access  Privado (requer autenticação)
- */
+// Criar ticket
 app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
-  const { prompt } = req.body;
+  // --- CORREÇÃO INICIA AQUI ---
+
+  // 1. Receber o payload completo do frontend, não apenas o 'prompt'.
+  const {
+    prompt,
+    solicitante,
+    location,
+    hub,
+    vehicleType,
+    isBulky,
+    routeId,
+    urgency,
+  } = req.body;
   const userId = req.userId;
 
-  if (!prompt || !userId) {
-    return res.status(400).json({
-      error: "O 'prompt' é obrigatório e o usuário deve estar autenticado.",
-    });
+  // 2. Validar se todos os campos necessários foram recebidos.
+  if (!prompt || !solicitante || !location || !hub || !urgency || !routeId) {
+    return res.status(400).send({ error: "Dados da solicitação incompletos." });
   }
 
   try {
-    // CORREÇÃO: Prompt ajustado para gerar a descrição com mais espaçamento e destaque.
-    const geminiPrompt = `
-      Você é um assistente de logística da Shopee Express.
-      Sua tarefa é extrair as informações de uma solicitação de motorista e formatá-la em um resumo claro e profissional.
-      Use o formato exato abaixo, preenchendo as informações. Use "N/A" se uma informação não for encontrada.
-
-      --- SOLICITAÇÃO DE TRANSFERÊNCIA ---
-      Região(ões): XXXX
-      Nº de Pacotes: XXX
-      Veículo Necessário: XXXX
-      ------------------------------------
-      Localização: XXXX
-
-      Texto da solicitação do motorista: "${prompt}"
-    `;
+    const geminiPrompt = `Gere uma descrição curta e profissional para um chamado de suporte com base no seguinte texto, não ultrapasse 100 caracteres: "${prompt}"`;
 
     const result = await model.generateContent(geminiPrompt);
-    const professionalDescription = result.response.text();
+    const description = result.response.text().substring(0, 100);
 
+    // 3. Criar o ticket no MongoDB com todos os dados.
     const newTicket = new Ticket({
       userId,
       prompt,
-      description: professionalDescription, // A descrição gerada pelo Gemini
+      description,
+      solicitante,
+      location,
+      hub,
+      vehicleType,
+      isBulky,
+      routeId,
+      urgency,
+      status: "ABERTO", // Definir status inicial
+      timestamp: new Date(),
       createdAt: new Date(),
     });
-
     await newTicket.save();
 
-    res.status(201).json({ description: newTicket.description });
+    // 4. (NOVO) Criar um registro correspondente no Firestore.
+    // É isso que fará o chamado aparecer no painel do admin.
+    const firestoreDb = admin.firestore();
+    const supportCallRef = firestoreDb.collection("supportCalls").doc(); // Cria uma nova referência de documento
+
+    const firestoreData = {
+      id: supportCallRef.id, // Adiciona o ID do documento do Firestore
+      description: description,
+      solicitante: solicitante,
+      location: location,
+      hub: hub,
+      vehicleType: vehicleType,
+      isBulky: isBulky,
+      routeId: routeId,
+      urgency: urgency,
+      status: "ABERTO",
+      timestamp: admin.firestore.FieldValue.serverTimestamp(), // Usa o timestamp do servidor do Firestore
+      // Adicione outros campos que o admin panel possa precisar
+    };
+
+    await supportCallRef.set(firestoreData);
+    console.log("Chamado salvo no Firestore com ID:", supportCallRef.id);
+
+    // 5. Retornar a resposta de sucesso.
+    res.status(201).send(newTicket);
   } catch (error) {
     console.error("Erro ao criar ticket:", error);
-    res
-      .status(500)
-      .json({ error: "Ocorreu um erro ao processar a solicitação." });
+    res.status(500).send({ error: "Erro ao processar a solicitação." });
   }
+  // --- CORREÇÃO TERMINA AQUI ---
 });
 
-/**
- * @route   POST /upload-avatar
- * @desc    Faz upload do avatar de um usuário para o Cloudinary.
- * @access  Privado (requer autenticação)
- */
-app.post(
-  "/upload-avatar",
-  authMiddleware,
-  upload.single("avatar"),
-  async (req, res) => {
-    const file = req.file;
-    const userId = req.userId;
-
-    if (!file || !userId) {
-      return res
-        .status(400)
-        .json({ error: "Nenhum arquivo enviado ou usuário não autenticado." });
-    }
-
-    try {
-      const uploadResult: any = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: `avatares_shopee_apoio/${userId}`,
-            public_id: "avatar",
-            overwrite: true,
-            transformation: [{ width: 200, height: 200, crop: "fill" }],
-          },
-          (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-          }
-        );
-        uploadStream.end(file.buffer);
-      });
-
-      const secureUrl = uploadResult.secure_url;
-      res.status(200).json({ avatarUrl: secureUrl });
-    } catch (error) {
-      console.error("Erro no upload para o Cloudinary:", error);
-      res.status(500).json({ error: "Falha ao fazer upload da imagem." });
-    }
-  }
-);
-
-/**
- * @route   GET /tickets
- * @desc    Busca todos os tickets de um usuário.
- * @access  Privado (requer autenticação)
- */
+// Buscar todos os tickets do usuário
 app.get("/tickets", authMiddleware, async (req: Request, res: Response) => {
   const userId = req.userId;
 
@@ -238,11 +182,7 @@ app.get("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @route   GET /tickets/:id
- * @desc    Busca um ticket específico de um usuário.
- * @access  Privado (requer autenticação)
- */
+// Buscar um ticket específico
 app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
   const { id } = req.params;
   const userId = req.userId;
@@ -260,5 +200,5 @@ app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
 });
 
 app.listen(port, () => {
-  console.log(`🚀 Servidor rodando na porta: ${port}`);
+  console.log(`Servidor rodando em http://localhost:${port}`);
 });
