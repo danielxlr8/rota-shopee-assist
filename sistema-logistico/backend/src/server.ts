@@ -86,18 +86,14 @@ mongoose
 // Inicializa a API Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash-preview-05-20", // Modelo atualizado para um mais recente
+  model: "gemini-2.5-flash-preview-05-20",
 });
 
 // --- Rotas da API ---
 
 // Criar ticket
 app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
-  // --- CORREÇÃO INICIA AQUI ---
-
-  // 1. Receber o payload completo do frontend, não apenas o 'prompt'.
   const {
-    prompt,
     solicitante,
     location,
     hub,
@@ -105,24 +101,42 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
     isBulky,
     routeId,
     urgency,
+    packageCount,
+    deliveryRegions,
   } = req.body;
   const userId = req.userId;
 
-  // 2. Validar se todos os campos necessários foram recebidos.
-  if (!prompt || !solicitante || !location || !hub || !urgency || !routeId) {
+  if (
+    !solicitante ||
+    !location ||
+    !hub ||
+    !urgency ||
+    !routeId ||
+    !packageCount ||
+    !deliveryRegions
+  ) {
     return res.status(400).send({ error: "Dados da solicitação incompletos." });
   }
 
   try {
-    const geminiPrompt = `Gere uma descrição curta e profissional para um chamado de suporte com base no seguinte texto, não ultrapasse 100 caracteres: "${prompt}"`;
+    // --- ALTERAÇÃO FINAL: Construção do prompt detalhado para a Gemini ---
+    const bulkyText = isBulky ? ` Contém pacote volumoso.` : "";
+    const geminiPrompt = `Crie uma descrição profissional para um chamado de apoio logístico com as seguintes informações, mantendo um tom natural:
+- Ação: "Solicito transferência"
+- HUB de Origem: "${hub}"
+- Rotas de Entrega: "${deliveryRegions.join(", ")}"
+- Quantidade de Pacotes: ${packageCount}
+- Informação Adicional: "${bulkyText}"
+- Veículo(s) Necessário(s): "${vehicleType}"
+
+Exemplo de resultado esperado: "Solicito transferência. Sou do HUB de Maringá, a rota de entrega é na Zona Leste. São 32 pacotes. Contém pacote volumoso. Necessário carro de passeio ou utilitário."`;
 
     const result = await model.generateContent(geminiPrompt);
-    const description = result.response.text().substring(0, 100);
+    const description = result.response.text();
 
-    // 3. Criar o ticket no MongoDB com todos os dados.
     const newTicket = new Ticket({
       userId,
-      prompt,
+      prompt: geminiPrompt, // Salva o prompt detalhado para referência
       description,
       solicitante,
       location,
@@ -131,19 +145,19 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
       isBulky,
       routeId,
       urgency,
-      status: "ABERTO", // Definir status inicial
+      packageCount,
+      deliveryRegions,
+      status: "ABERTO",
       timestamp: new Date(),
       createdAt: new Date(),
     });
     await newTicket.save();
 
-    // 4. (NOVO) Criar um registro correspondente no Firestore.
-    // É isso que fará o chamado aparecer no painel do admin.
     const firestoreDb = admin.firestore();
-    const supportCallRef = firestoreDb.collection("supportCalls").doc(); // Cria uma nova referência de documento
+    const supportCallRef = firestoreDb.collection("supportCalls").doc();
 
     const firestoreData = {
-      id: supportCallRef.id, // Adiciona o ID do documento do Firestore
+      id: supportCallRef.id,
       description: description,
       solicitante: solicitante,
       location: location,
@@ -153,20 +167,19 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
       routeId: routeId,
       urgency: urgency,
       status: "ABERTO",
-      timestamp: admin.firestore.FieldValue.serverTimestamp(), // Usa o timestamp do servidor do Firestore
-      // Adicione outros campos que o admin panel possa precisar
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      packageCount: packageCount,
+      deliveryRegions: deliveryRegions,
     };
 
     await supportCallRef.set(firestoreData);
     console.log("Chamado salvo no Firestore com ID:", supportCallRef.id);
 
-    // 5. Retornar a resposta de sucesso.
     res.status(201).send(newTicket);
   } catch (error) {
     console.error("Erro ao criar ticket:", error);
     res.status(500).send({ error: "Erro ao processar a solicitação." });
   }
-  // --- CORREÇÃO TERMINA AQUI ---
 });
 
 // Buscar todos os tickets do usuário

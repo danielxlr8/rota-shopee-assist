@@ -32,6 +32,8 @@ export interface SupportCall {
     avatar?: string;
     initials?: string;
     phone?: string;
+    // --- ALTERAÇÃO 1: Adicionado shopeeId ao solicitante ---
+    shopeeId?: string;
   };
   assignedTo?: string;
   description: string;
@@ -45,4 +47,7 @@ export interface SupportCall {
   hub?: string;
   approvedBy?: string;
   deletedAt?: any;
+  // --- ALTERAÇÃO 2: Adicionados campos para o prompt detalhado ---
+  packageCount?: number;
+  deliveryRegions?: string[];
 }

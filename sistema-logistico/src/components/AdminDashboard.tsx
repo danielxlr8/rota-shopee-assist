@@ -48,6 +48,7 @@ import {
 } from "react-resizable-panels";
 import { toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
+import SupportCallCard from "@/components/ui/SupportCallCard";
 
 // --- NOVO COMPONENTE: EnhancedDriverCard ---
 const EnhancedDriverCard = ({
@@ -331,82 +332,6 @@ const CallDetailsModal = ({
   );
 };
 
-const CallCard = ({
-  call,
-  onDelete,
-  onClick,
-}: {
-  call: SupportCall;
-  onDelete: (call: SupportCall) => void;
-  onClick: (call: SupportCall) => void;
-}) => {
-  const formatTimestamp = (timestamp: any): string => {
-    if (!timestamp) return "Horário indisponível";
-    let date;
-    if (timestamp instanceof Timestamp) {
-      date = timestamp.toDate();
-    } else if (timestamp && typeof timestamp.seconds === "number") {
-      date = new Date(timestamp.seconds * 1000);
-    } else {
-      return "Data inválida";
-    }
-    if (isNaN(date.getTime())) return "Data inválida";
-    return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
-  };
-  const timeAgo = formatTimestamp(call.timestamp);
-
-  return (
-    <div
-      className="bg-white p-4 rounded-lg shadow-md border border-gray-200 space-y-3 hover:shadow-lg transition-shadow cursor-pointer"
-      onClick={() => onClick(call)}
-    >
-      <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <AvatarComponent user={call.solicitante} />
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-bold text-gray-800">{call.solicitante.name}</p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(call);
-                }}
-                className="p-1 rounded-full text-gray-400 hover:bg-red-100 hover:text-red-600 transition-colors"
-                title="Excluir Solicitação"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500">Solicitante</p>
-          </div>
-        </div>
-        <UrgencyBadge urgency={call.urgency} />
-      </div>
-      <div className="text-sm text-gray-600 space-y-2">
-        <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-gray-400" />
-          <span>{call.routeId || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Building size={16} className="text-gray-400" />
-          <span>{call.hub || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Clock size={16} className="text-gray-400" />
-          <span>{timeAgo}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <MapPin size={16} className="text-gray-400" />
-          <span>{call.location}</span>
-        </div>
-      </div>
-      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-        {call.description}
-      </p>
-    </div>
-  );
-};
-
 const ApprovalCard = ({
   call,
   onApprove,
@@ -423,7 +348,7 @@ const ApprovalCard = ({
   const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500 space-y-3">
+    <div className="bg-white p-4 rounded-lg shadow-md border-2 border-purple-500 space-y-3">
       <div className="flex justify-between items-start">
         <div className="flex items-center space-x-3">
           <AvatarComponent user={call.solicitante} />
@@ -814,6 +739,22 @@ export const AdminDashboard = ({
     updateCall(callId, { status: "ABERTO" });
   };
 
+  const handleContactDriver = (phone: string) => {
+    if (!phone) {
+      sonnerToast.error("Número de telefone não disponível.");
+      return;
+    }
+    const message = encodeURIComponent(
+      `Olá, preciso de informações sobre um chamado de apoio.`
+    );
+    window.open(`https://wa.me/55${phone}?text=${message}`, "_blank");
+  };
+
+  const handleUpdateStatus = (callId: string, newStatus: CallStatus) => {
+    updateCall(callId, { status: newStatus });
+    sonnerToast.info(`Chamado movido para ${newStatus.replace("_", " ")}`);
+  };
+
   const filteredCalls = useMemo(() => {
     return calls.filter(
       (call) =>
@@ -1152,14 +1093,26 @@ export const AdminDashboard = ({
                   colorClass="#F59E0B"
                   headerControls={filterControls}
                 >
-                  {filteredOpenCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
+                  {filteredOpenCalls.map((call) => {
+                    const requester = drivers.find(
+                      (d) => d.uid === call.solicitante.id
+                    );
+                    const assignedDriver = call.assignedTo
+                      ? drivers.find((d) => d.uid === call.assignedTo)
+                      : undefined;
+                    return (
+                      <SupportCallCard
+                        key={call.id}
+                        call={call}
+                        requester={requester}
+                        assignedDriver={assignedDriver}
+                        onContactRequester={handleContactDriver}
+                        onContactAssigned={handleContactDriver}
+                        onUpdateStatus={handleUpdateStatus}
+                        statusColorClass="border-orange-500"
+                      />
+                    );
+                  })}
                 </KanbanColumn>
               </div>
             </ResizablePanel>
@@ -1173,14 +1126,26 @@ export const AdminDashboard = ({
                   count={inProgressCalls.length}
                   colorClass="#3B82F6"
                 >
-                  {inProgressCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
+                  {inProgressCalls.map((call) => {
+                    const requester = drivers.find(
+                      (d) => d.uid === call.solicitante.id
+                    );
+                    const assignedDriver = call.assignedTo
+                      ? drivers.find((d) => d.uid === call.assignedTo)
+                      : undefined;
+                    return (
+                      <SupportCallCard
+                        key={call.id}
+                        call={call}
+                        requester={requester}
+                        assignedDriver={assignedDriver}
+                        onContactRequester={handleContactDriver}
+                        onContactAssigned={handleContactDriver}
+                        onUpdateStatus={handleUpdateStatus}
+                        statusColorClass="border-blue-500"
+                      />
+                    );
+                  })}
                 </KanbanColumn>
               </div>
             </ResizablePanel>
@@ -1194,14 +1159,26 @@ export const AdminDashboard = ({
                   count={concludedCalls.length}
                   colorClass="#10B981"
                 >
-                  {concludedCalls.map((call) => (
-                    <CallCard
-                      key={call.id}
-                      call={call}
-                      onDelete={handleDeleteClick}
-                      onClick={setSelectedCall}
-                    />
-                  ))}
+                  {concludedCalls.map((call) => {
+                    const requester = drivers.find(
+                      (d) => d.uid === call.solicitante.id
+                    );
+                    const assignedDriver = call.assignedTo
+                      ? drivers.find((d) => d.uid === call.assignedTo)
+                      : undefined;
+                    return (
+                      <SupportCallCard
+                        key={call.id}
+                        call={call}
+                        requester={requester}
+                        assignedDriver={assignedDriver}
+                        onContactRequester={handleContactDriver}
+                        onContactAssigned={handleContactDriver}
+                        onUpdateStatus={handleUpdateStatus}
+                        statusColorClass="border-green-500"
+                      />
+                    );
+                  })}
                 </KanbanColumn>
               </div>
             </ResizablePanel>

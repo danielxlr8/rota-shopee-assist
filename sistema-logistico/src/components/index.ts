@@ -25,7 +25,7 @@ export const generateDescription = https.onRequest(
       }
 
       const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash-preview-05-20",
       });
       const promptText = `Gere uma breve e concisa descrição para um chamado de suporte logístico da Shopee, com base no seguinte texto, em Português: "${prompt}". A descrição deve ter no máximo 100 caracteres.`;
 

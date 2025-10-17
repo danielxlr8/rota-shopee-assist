@@ -961,6 +961,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       avatar: driver.avatar || null,
       initials: driver.initials || "??",
       phone: driver.phone || null,
+      // --- ALTERAÇÃO AQUI: Adicionando o shopeeId ao solicitante ---
+      shopeeId: shopeeId,
     };
 
     const routeId = `SPX-${Date.now().toString().slice(-6)}`;
@@ -982,6 +984,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       isBulky: isBulky,
       routeId: routeId,
       urgency: urgency,
+      // --- ALTERAÇÃO AQUI: Adicionando campos estruturados ---
+      packageCount: packageCount,
+      deliveryRegions: selectedDeliveryRegions,
+      // --- FIM DA ALTERAÇÃO ---
     };
 
     try {
