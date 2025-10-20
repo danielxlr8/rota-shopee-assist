@@ -36,8 +36,9 @@ interface SupportCallCardProps {
   assignedDriver?: Driver;
   onContactRequester: (phone: string) => void;
   onContactAssigned: (phone: string) => void;
-  onUpdateStatus: (callId: string, newStatus: CallStatus) => void;
+  onUpdateStatus?: (id: string, newStatus: CallStatus) => void; // ✅ agora opcional
   statusColorClass?: string;
+  onCardClick?: () => void;
 }
 
 const priorityColors: { [key in UrgencyLevel]: string } = {
@@ -56,7 +57,6 @@ const statusColors: { [key: string]: string } = {
   ARQUIVADO: "bg-gray-400",
 };
 
-// Cores para as bordas dos itens do menu dropdown
 const statusBorderColors: { [key in CallStatus]?: string } = {
   ABERTO: "border-orange-500 hover:bg-orange-500/10 text-orange-400",
   "EM ANDAMENTO": "border-blue-500 hover:bg-blue-500/10 text-blue-400",
@@ -72,7 +72,8 @@ export default function SupportCallCard({
   onContactRequester,
   onContactAssigned,
   onUpdateStatus,
-  statusColorClass = "border-gray-200", // Cor padrão
+  statusColorClass = "border-gray-200",
+  onCardClick,
 }: SupportCallCardProps) {
   const formatTimestamp = (timestamp: any): string => {
     if (!timestamp) return "Horário indisponível";
@@ -130,10 +131,11 @@ export default function SupportCallCard({
   return (
     <Card
       className={cn(
-        "w-full border-2 hover:shadow-lg transition-all duration-300",
-        statusColorClass, // Aplicando a cor da borda
+        "w-full border-2 hover:shadow-lg transition-all duration-300 cursor-pointer",
+        statusColorClass,
         isCritical && "animate-pulse shadow-lg shadow-red-600/20"
       )}
+      onClick={onCardClick}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
@@ -152,6 +154,7 @@ export default function SupportCallCard({
               </Badge>
             )}
           </div>
+
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
@@ -173,7 +176,7 @@ export default function SupportCallCard({
               >
                 {nextStatus && (
                   <DropdownMenuItem
-                    onClick={() => onUpdateStatus(call.id, nextStatus)}
+                    onClick={() => onUpdateStatus?.(call.id, nextStatus)} // ✅ safe call
                     className={cn(
                       "border-l-4 focus:bg-gray-800 focus:text-gray-50",
                       statusBorderColors[nextStatus]
@@ -185,7 +188,7 @@ export default function SupportCallCard({
                 )}
                 {prevStatus && (
                   <DropdownMenuItem
-                    onClick={() => onUpdateStatus(call.id, prevStatus)}
+                    onClick={() => onUpdateStatus?.(call.id, prevStatus)} // ✅ safe call
                     className={cn(
                       "border-l-4 focus:bg-gray-800 focus:text-gray-50",
                       statusBorderColors[prevStatus]
@@ -211,7 +214,7 @@ export default function SupportCallCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Solicitante com ID */}
+        {/* Solicitante */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
@@ -232,7 +235,10 @@ export default function SupportCallCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onContactRequester(requester.phone)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onContactRequester(requester.phone);
+              }}
               className="h-8 w-8 p-0"
               title={`Contatar ${requester.name}`}
             >
@@ -241,7 +247,7 @@ export default function SupportCallCard({
           )}
         </div>
 
-        {/* Motorista Designado com ID */}
+        {/* Apoio (assigned driver) */}
         {assignedDriver && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -263,7 +269,10 @@ export default function SupportCallCard({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => onContactAssigned(assignedDriver.phone)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onContactAssigned(assignedDriver.phone);
+                }}
                 className="h-8 w-8 p-0"
                 title={`Contatar ${assignedDriver.name}`}
               >
@@ -273,7 +282,7 @@ export default function SupportCallCard({
           </div>
         )}
 
-        {/* Localização com link clicável aprimorado */}
+        {/* Localização */}
         <div className="flex items-center gap-2">
           <MapPin size={16} className="text-muted-foreground flex-shrink-0" />
           {isGoogleLink(call.location) ? (
@@ -283,6 +292,7 @@ export default function SupportCallCard({
               rel="noopener noreferrer"
               className="text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 border border-blue-200 p-2 rounded-lg flex items-center gap-2 transition-all duration-200"
               title="Abrir no Google Maps"
+              onClick={(e) => e.stopPropagation()}
             >
               Abrir localização no Mapa
               <ExternalLink className="h-4 w-4 opacity-70 group-hover:opacity-100" />

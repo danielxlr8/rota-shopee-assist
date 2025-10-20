@@ -4,7 +4,7 @@ import type {
   Driver,
   UrgencyLevel,
   CallStatus,
-} from "@/types/logistics";
+} from "../types/logistics";
 import {
   AlertTriangle,
   Clock,
@@ -12,7 +12,6 @@ import {
   Users,
   Trash2,
   RotateCcw,
-  MapPin,
   ArrowRight,
   ArrowLeft,
   X,
@@ -22,25 +21,16 @@ import {
   Ticket,
 } from "lucide-react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale/pt-BR";
-import {
-  Timestamp,
-  doc,
-  updateDoc,
-  collection,
-  query,
-  where,
-  onSnapshot,
-  getDocs,
-} from "firebase/firestore";
-import { db } from "@/firebase";
+import { ptBR } from "date-fns/locale";
+import { Timestamp, doc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase";
 import {
   AvatarComponent,
   UrgencyBadge,
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
-} from "@/components/UI";
+} from "./UI";
 import {
   Panel as ResizablePanel,
   PanelGroup as ResizablePanelGroup,
@@ -414,6 +404,7 @@ const ApprovalCard = ({
 // --- COMPONENTE PRINCIPAL DO PAINEL ---
 
 interface AdminDashboardProps {
+  calls: SupportCall[];
   drivers: Driver[];
   updateCall: (id: string, updates: Partial<Omit<SupportCall, "id">>) => void;
   onDeleteCall: (id: string) => void;
@@ -421,17 +412,14 @@ interface AdminDashboardProps {
   onDeleteAllExcluded: () => void;
 }
 
-export const AdminDashboard = ({
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  calls,
   drivers,
   updateCall,
   onDeleteCall,
   onDeletePermanently,
   onDeleteAllExcluded,
-}: AdminDashboardProps) => {
-  const [activeCalls, setActiveCalls] = useState<SupportCall[]>([]);
-  const [historicalCalls, setHistoricalCalls] = useState<SupportCall[]>([]);
-  const [calls, setCalls] = useState<SupportCall[]>([]); // Estado combinado para a UI
-
+}) => {
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
@@ -472,63 +460,6 @@ export const AdminDashboard = ({
 
   const [globalHubFilter, setGlobalHubFilter] =
     useState<string>("Todos os Hubs");
-
-  // Lógica otimizada para buscar dados do Firestore
-
-  // Efeito para buscar chamados ATIVOS (que mudam de status) em tempo real
-  useEffect(() => {
-    const activeStatus: CallStatus[] = [
-      "ABERTO",
-      "EM ANDAMENTO",
-      "AGUARDANDO_APROVACAO",
-    ];
-    const activeCallsQuery = query(
-      collection(db, "supportCalls"),
-      where("status", "in", activeStatus)
-    );
-
-    const unsubscribe = onSnapshot(activeCallsQuery, (snapshot) => {
-      const callsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as SupportCall[];
-      setActiveCalls(callsData);
-    });
-
-    return () => unsubscribe(); // Limpa o listener para evitar memory leaks
-  }, []);
-
-  // Efeito para buscar chamados HISTÓRICOS (que não mudam) apenas uma vez
-  useEffect(() => {
-    const fetchHistoricalCalls = async () => {
-      const historicalStatus: CallStatus[] = [
-        "CONCLUIDO",
-        "ARQUIVADO",
-        "EXCLUIDO",
-      ];
-      try {
-        const historicalCallsQuery = query(
-          collection(db, "supportCalls"),
-          where("status", "in", historicalStatus)
-        );
-        const querySnapshot = await getDocs(historicalCallsQuery);
-        const callsData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as SupportCall[];
-        setHistoricalCalls(callsData);
-      } catch (error) {
-        console.error("Erro ao buscar chamados históricos:", error);
-      }
-    };
-
-    fetchHistoricalCalls();
-  }, []);
-
-  // Efeito para combinar os dados para a UI
-  useEffect(() => {
-    setCalls([...activeCalls, ...historicalCalls]);
-  }, [activeCalls, historicalCalls]);
 
   const updateDriver = async (
     driverUid: string,
@@ -750,9 +681,13 @@ export const AdminDashboard = ({
     window.open(`https://wa.me/55${phone}?text=${message}`, "_blank");
   };
 
-  const handleUpdateStatus = (callId: string, newStatus: CallStatus) => {
-    updateCall(callId, { status: newStatus });
-    sonnerToast.info(`Chamado movido para ${newStatus.replace("_", " ")}`);
+  const handleUpdateStatus = (
+    callId: string,
+    updates: Partial<Omit<SupportCall, "id">>
+  ) => {
+    updateCall(callId, updates);
+    const status = (updates.status || "").replace("_", " ");
+    sonnerToast.info(`Chamado movido para ${status}`);
   };
 
   const filteredCalls = useMemo(() => {
@@ -1097,6 +1032,7 @@ export const AdminDashboard = ({
                     const requester = drivers.find(
                       (d) => d.uid === call.solicitante.id
                     );
+                    if (!requester) return null;
                     const assignedDriver = call.assignedTo
                       ? drivers.find((d) => d.uid === call.assignedTo)
                       : undefined;
@@ -1106,9 +1042,15 @@ export const AdminDashboard = ({
                         call={call}
                         requester={requester}
                         assignedDriver={assignedDriver}
-                        onContactRequester={handleContactDriver}
-                        onContactAssigned={handleContactDriver}
-                        onUpdateStatus={handleUpdateStatus}
+                        onContactRequester={() =>
+                          requester.phone &&
+                          handleContactDriver(requester.phone)
+                        }
+                        onContactAssigned={() =>
+                          assignedDriver?.phone &&
+                          handleContactDriver(assignedDriver.phone)
+                        }
+                        onCardClick={() => setSelectedCall(call)}
                         statusColorClass="border-orange-500"
                       />
                     );
@@ -1130,6 +1072,7 @@ export const AdminDashboard = ({
                     const requester = drivers.find(
                       (d) => d.uid === call.solicitante.id
                     );
+                    if (!requester) return null;
                     const assignedDriver = call.assignedTo
                       ? drivers.find((d) => d.uid === call.assignedTo)
                       : undefined;
@@ -1139,9 +1082,15 @@ export const AdminDashboard = ({
                         call={call}
                         requester={requester}
                         assignedDriver={assignedDriver}
-                        onContactRequester={handleContactDriver}
-                        onContactAssigned={handleContactDriver}
-                        onUpdateStatus={handleUpdateStatus}
+                        onContactRequester={() =>
+                          requester.phone &&
+                          handleContactDriver(requester.phone)
+                        }
+                        onContactAssigned={() =>
+                          assignedDriver?.phone &&
+                          handleContactDriver(assignedDriver.phone)
+                        }
+                        onCardClick={() => setSelectedCall(call)}
                         statusColorClass="border-blue-500"
                       />
                     );
@@ -1163,6 +1112,7 @@ export const AdminDashboard = ({
                     const requester = drivers.find(
                       (d) => d.uid === call.solicitante.id
                     );
+                    if (!requester) return null;
                     const assignedDriver = call.assignedTo
                       ? drivers.find((d) => d.uid === call.assignedTo)
                       : undefined;
@@ -1172,9 +1122,15 @@ export const AdminDashboard = ({
                         call={call}
                         requester={requester}
                         assignedDriver={assignedDriver}
-                        onContactRequester={handleContactDriver}
-                        onContactAssigned={handleContactDriver}
-                        onUpdateStatus={handleUpdateStatus}
+                        onContactRequester={() =>
+                          requester.phone &&
+                          handleContactDriver(requester.phone)
+                        }
+                        onContactAssigned={() =>
+                          assignedDriver?.phone &&
+                          handleContactDriver(assignedDriver.phone)
+                        }
+                        onCardClick={() => setSelectedCall(call)}
                         statusColorClass="border-green-500"
                       />
                     );
@@ -1354,7 +1310,8 @@ export const AdminDashboard = ({
                         callTimestamp instanceof Timestamp
                           ? callTimestamp.toDate()
                           : new Date((callTimestamp as any).seconds * 1000),
-                        "dd/MM/yy HH:mm"
+                        "dd/MM/yy HH:mm",
+                        { locale: ptBR }
                       )
                     : "N/A";
 
@@ -1429,7 +1386,8 @@ export const AdminDashboard = ({
                         deletedTimestamp instanceof Timestamp
                           ? deletedTimestamp.toDate()
                           : new Date((deletedTimestamp as any).seconds * 1000),
-                        "dd/MM/yyyy 'às' HH:mm"
+                        "dd/MM/yyyy 'às' HH:mm",
+                        { locale: ptBR }
                       )
                     : "Data indisponível";
                   return (
@@ -1485,7 +1443,7 @@ export const AdminDashboard = ({
       <CallDetailsModal
         call={selectedCall}
         onClose={() => setSelectedCall(null)}
-        onUpdateStatus={updateCall}
+        onUpdateStatus={handleUpdateStatus}
       />
       <ConfirmationModal
         isOpen={confirmationType === "soft-delete"}

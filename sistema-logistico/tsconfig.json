@@ -9,8 +9,8 @@
       "@/*": ["./src/*"]
     },
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": false,
-    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true, // <--- ALTERADO PARA true (recomendado para Vite)
+    "resolveJsonModule": true, // <--- CORRETO! Mantido como true
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
