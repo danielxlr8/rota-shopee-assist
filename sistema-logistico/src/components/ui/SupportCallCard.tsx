@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import {
   Clock,
   MapPin,
-  MessageCircle,
+  MessageCircle, // Mantido caso queira usar para o Apoio
   AlertTriangle,
   FileText,
   MoreVertical,
@@ -36,7 +36,7 @@ interface SupportCallCardProps {
   assignedDriver?: Driver;
   onContactRequester: (phone: string) => void;
   onContactAssigned: (phone: string) => void;
-  onUpdateStatus?: (id: string, newStatus: CallStatus) => void; // ✅ agora opcional
+  onUpdateStatus?: (id: string, newStatus: CallStatus) => void;
   statusColorClass?: string;
   onCardClick?: () => void;
 }
@@ -138,6 +138,7 @@ export default function SupportCallCard({
       onClick={onCardClick}
     >
       <CardHeader className="pb-3">
+        {/* ... (Header content - Status, Urgency, Dropdown - Sem alterações) ... */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Badge
@@ -149,8 +150,7 @@ export default function SupportCallCard({
             </Badge>
             {isCritical && (
               <Badge className="bg-red-600 text-white animate-pulse">
-                <AlertTriangle size={12} className="mr-1" />
-                URGENTE
+                <AlertTriangle size={12} className="mr-1" /> URGENTE
               </Badge>
             )}
           </div>
@@ -176,25 +176,31 @@ export default function SupportCallCard({
               >
                 {nextStatus && (
                   <DropdownMenuItem
-                    onClick={() => onUpdateStatus?.(call.id, nextStatus)} // ✅ safe call
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateStatus?.(call.id, nextStatus);
+                    }}
                     className={cn(
                       "border-l-4 focus:bg-gray-800 focus:text-gray-50",
                       statusBorderColors[nextStatus]
                     )}
                   >
-                    <ArrowRight className="mr-2 h-4 w-4" />
+                    <ArrowRight className="mr-2 h-4 w-4" />{" "}
                     <span>Mover para {nextStatus.replace("_", " ")}</span>
                   </DropdownMenuItem>
                 )}
                 {prevStatus && (
                   <DropdownMenuItem
-                    onClick={() => onUpdateStatus?.(call.id, prevStatus)} // ✅ safe call
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateStatus?.(call.id, prevStatus);
+                    }}
                     className={cn(
                       "border-l-4 focus:bg-gray-800 focus:text-gray-50",
                       statusBorderColors[prevStatus]
                     )}
                   >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    <ArrowLeft className="mr-2 h-4 w-4" />{" "}
                     <span>Mover para {prevStatus.replace("_", " ")}</span>
                   </DropdownMenuItem>
                 )}
@@ -208,8 +214,7 @@ export default function SupportCallCard({
             isCritical ? "text-red-600 font-medium" : "text-muted-foreground"
           }`}
         >
-          <Clock size={14} />
-          <span>{timeAgo}</span>
+          <Clock size={14} /> <span>{timeAgo}</span>
         </div>
       </CardHeader>
 
@@ -233,16 +238,21 @@ export default function SupportCallCard({
           </div>
           {requester.phone && (
             <Button
-              size="sm"
+              size="icon"
               variant="outline"
               onClick={(e) => {
                 e.stopPropagation();
                 onContactRequester(requester.phone);
               }}
-              className="h-8 w-8 p-0"
-              title={`Contatar ${requester.name}`}
+              className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0" // Padding removido
+              title={`Contatar ${requester.name} via WhatsApp`}
             >
-              <MessageCircle size={14} />
+              <img
+                src="/whatsapp-logo.png"
+                alt="WhatsApp"
+                // --- Aumentar tamanho da imagem ---
+                className="h-9 w-9" // Aumentado para h-7 w-7
+              />
             </Button>
           )}
         </div>
@@ -267,16 +277,22 @@ export default function SupportCallCard({
             </div>
             {assignedDriver.phone && (
               <Button
-                size="sm"
+                size="icon"
                 variant="outline"
                 onClick={(e) => {
                   e.stopPropagation();
                   onContactAssigned(assignedDriver.phone);
                 }}
-                className="h-8 w-8 p-0"
-                title={`Contatar ${assignedDriver.name}`}
+                className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0" // Padding removido
+                title={`Contatar ${assignedDriver.name} via WhatsApp`}
               >
-                <MessageCircle size={14} />
+                <img
+                  src="/whatsapp-logo.png"
+                  alt="WhatsApp"
+                  // --- Aumentar tamanho da imagem ---
+                  className="h-7 w-7" // Aumentado para h-7 w-7
+                />
+                {/* <MessageCircle size={14} /> */}
               </Button>
             )}
           </div>
@@ -294,7 +310,7 @@ export default function SupportCallCard({
               title="Abrir no Google Maps"
               onClick={(e) => e.stopPropagation()}
             >
-              Abrir localização no Mapa
+              Abrir localização no Mapa{" "}
               <ExternalLink className="h-4 w-4 opacity-70 group-hover:opacity-100" />
             </a>
           ) : (
@@ -308,8 +324,7 @@ export default function SupportCallCard({
         {call.description && (
           <div className="bg-gray-50 rounded-lg p-3 border">
             <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <FileText size={12} />
-              <span>Descrição Gerada</span>
+              <FileText size={12} /> <span>Descrição Gerada</span>
             </div>
             <p className="text-sm text-gray-800">{call.description}</p>
           </div>

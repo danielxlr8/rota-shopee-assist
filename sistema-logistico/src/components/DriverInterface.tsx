@@ -26,6 +26,7 @@ import {
   Ticket,
   Volume2,
   VolumeX,
+  ExternalLink,
 } from "lucide-react";
 import { auth, db, storage } from "../firebase";
 import {
@@ -40,8 +41,13 @@ import {
   or,
   Timestamp,
   deleteField,
+  getDocs,
 } from "firebase/firestore";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import {
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+} from "firebase/auth";
 import {
   ref,
   uploadBytesResumable,
@@ -50,6 +56,14 @@ import {
 } from "firebase/storage";
 import { Toaster, toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "./ui/card";
+import { Badge } from "./ui/Badge";
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
@@ -66,6 +80,21 @@ const hubs = [
 const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
 const sessionNotifiedCallIds = new Set<string>();
+
+// Função para extrair detalhes da descrição
+const parseDescription = (description: string) => {
+  const regionMatch = description.match(/Região\(ões\):\s*(.*)/);
+  const packagesMatch = description.match(/Nº de Pacotes:\s*(.*)/);
+  const vehicleMatch = description.match(/Veículo Necessário:\s*(.*)/);
+  const locationMatch = description.match(/Localização:\s*(.*)/);
+
+  return {
+    region: regionMatch ? regionMatch[1].trim() : "N/A",
+    packages: packagesMatch ? packagesMatch[1].trim() : "N/A",
+    vehicle: vehicleMatch ? vehicleMatch[1].trim() : "N/A",
+    location: locationMatch ? locationMatch[1].trim() : "N/A",
+  };
+};
 
 // Card de Cabeçalho do Perfil
 const ProfileHeaderCard = ({
@@ -165,7 +194,6 @@ const ProfileHeaderCard = ({
   );
 };
 
-// Componente para o cartão de histórico
 const DriverCallHistoryCard = ({
   call,
   currentDriver,
@@ -181,46 +209,40 @@ const DriverCallHistoryCard = ({
   onDeleteSupportRequest: (callId: string) => void;
   onRequestApproval: (callId: string) => void;
 }) => {
+  const details = parseDescription(call.description);
   const isRequester = call.solicitante.id === currentDriver.uid;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
   const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
   let statusText = "Status desconhecido",
-    statusColor = "bg-gray-200",
-    icon = <HelpCircle size={20} />,
+    statusColor: "default" | "destructive" | "outline" | "secondary" =
+      "default",
     title = "Chamado";
 
   if (isRequester) {
     title = "Pedido de Apoio";
     if (call.status === "ABERTO") {
       statusText = "Aguardando Apoio";
-      statusColor = "bg-yellow-200 text-yellow-800";
-      icon = <HelpCircle size={20} className="text-yellow-500" />;
+      statusColor = "default";
     } else if (call.status === "AGUARDANDO_APROVACAO") {
       statusText = "Aguardando Aprovação";
-      statusColor = "bg-purple-200 text-purple-800";
-      icon = <Clock size={20} className="text-purple-500" />;
+      statusColor = "secondary";
     } else if (call.status === "EM ANDAMENTO") {
       statusText = `Recebendo Apoio`;
-      statusColor = "bg-blue-200 text-blue-800";
-      icon = (
-        <Truck size={20} className="text-blue-500 transform -scale-x-100" />
-      );
+      statusColor = "default";
     }
   } else {
     title = `Apoio a ${call.solicitante.name}`;
     if (call.status === "EM ANDAMENTO") {
       statusText = "Prestando Apoio";
-      statusColor = "bg-green-200 text-green-800";
-      icon = <Truck size={20} className="text-green-500" />;
+      statusColor = "default";
     } else if (call.status === "AGUARDANDO_APROVACAO") {
       statusText = "Aguardando Aprovação";
-      statusColor = "bg-purple-200 text-purple-800";
-      icon = <Clock size={20} className="text-purple-500" />;
+      statusColor = "secondary";
     }
   }
   if (call.status === "CONCLUIDO") {
     statusText = "Concluído";
-    statusColor = "bg-gray-200 text-gray-800";
+    statusColor = "outline";
   }
 
   const handleWhatsAppClick = () => {
@@ -236,34 +258,43 @@ const DriverCallHistoryCard = ({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          {icon}
+    <Card className="overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between bg-gray-50 p-4">
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <Badge variant={statusColor}>{statusText}</Badge>
+      </CardHeader>
+      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
-            <p className="font-bold text-gray-800">{title}</p>
-            <p className="text-sm text-gray-500">{call.description}</p>
+            <p className="font-semibold text-gray-500">Região(ões)</p>
+            <p>{details.region}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
+            <p>{details.packages}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="font-semibold text-gray-500">Veículo Necessário</p>
+            <p>{details.vehicle}</p>
           </div>
         </div>
-        <div
-          className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColor} self-end sm:self-center`}
-        >
-          {statusText}
+        <hr className="my-3 border-gray-200" />
+        <div className="space-y-1">
+          <p className="font-semibold text-gray-500">Localização</p>
+          <a
+            href={details.location}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
+          >
+            {details.location} <ExternalLink size={14} />
+          </a>
         </div>
-      </div>
-
-      <div className="mt-3 pt-3 border-t text-xs text-gray-600">
-        <p className="flex items-center gap-2">
-          <Ticket size={14} />
-          <span className="font-semibold">ID da Rota:</span>{" "}
-          {call.routeId || "N/A"}
-        </p>
-      </div>
-
+      </CardContent>
       {(call.status === "EM ANDAMENTO" ||
         call.status === "AGUARDANDO_APROVACAO" ||
         call.status === "ABERTO") && (
-        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 justify-end">
+        <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
           {otherParty && (
             <button
               onClick={handleWhatsAppClick}
@@ -278,43 +309,28 @@ const DriverCallHistoryCard = ({
                 onClick={() => onRequestApproval(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
               >
-                <Clock size={14} /> Aguardando Aprovação
+                <Clock size={14} /> Aprovação
               </button>
               <button
                 onClick={() => onCancelSupport(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
               >
-                <XCircle size={14} /> Cancelar Apoio
+                <XCircle size={14} /> Cancelar
               </button>
             </>
           )}
-          {isRequester && call.status === "ABERTO" && (
-            <button
-              onClick={() => onDeleteSupportRequest(call.id)}
-              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-            >
-              <XCircle size={14} /> Cancelar Solicitação
-            </button>
-          )}
-          {isRequester && call.status === "EM ANDAMENTO" && (
-            <>
-              <button
-                onClick={() => onRequestApproval(call.id)}
-                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
-              >
-                <Clock size={14} /> Aguardando Aprovação
-              </button>
+          {isRequester &&
+            (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
               <button
                 onClick={() => onDeleteSupportRequest(call.id)}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
               >
-                <XCircle size={14} /> Cancelar Solicitação
+                <XCircle size={14} /> Cancelar
               </button>
-            </>
-          )}
-        </div>
+            )}
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 };
 
@@ -330,6 +346,7 @@ const OpenCallCard = ({
   onAccept: (callId: string) => void;
   acceptingCallId: string | null;
 }) => {
+  const details = parseDescription(call.description);
   const requesterPhone = call.solicitante.phone || "";
   const isAcceptingThisCall = acceptingCallId === call.id;
 
@@ -347,46 +364,58 @@ const OpenCallCard = ({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500">
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-        <div>
-          <p className="font-bold text-gray-800">
-            Apoio para {call.solicitante.name}
-          </p>
-          <p className="text-sm text-gray-500 mt-1">{call.description}</p>
+    <Card className="overflow-hidden">
+      <CardHeader className="p-4 bg-gray-50">
+        <CardTitle>Apoio para {call.solicitante.name}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div>
+            <p className="font-semibold text-gray-500">Região(ões)</p>
+            <p>{details.region}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
+            <p>{details.packages}</p>
+          </div>
+          <div className="col-span-2">
+            <p className="font-semibold text-gray-500">Veículo Necessário</p>
+            <p>{details.vehicle}</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 self-end sm:self-center">
-          <button
-            onClick={handleWhatsAppClick}
-            className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+        <hr className="my-3 border-gray-200" />
+        <div className="space-y-1">
+          <p className="font-semibold text-gray-500">Localização</p>
+          <a
+            href={details.location}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
           >
-            <Phone size={16} />
-          </button>
-          <button
-            onClick={() => onAccept(call.id)}
-            disabled={!!acceptingCallId}
-            className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
-          >
-            {isAcceptingThisCall ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              "Aceitar Apoio"
-            )}
-          </button>
+            {details.location} <ExternalLink size={14} />
+          </a>
         </div>
-      </div>
-      <div className="mt-3 pt-3 border-t text-xs text-gray-600 space-y-1">
-        <p className="flex items-center gap-2">
-          <Ticket size={14} />
-          <span className="font-semibold">ID da Rota:</span>{" "}
-          {call.routeId || "N/A"}
-        </p>
-        <p className="flex items-center gap-2">
-          <MapPin size={14} />
-          <span className="font-semibold">Local:</span> {call.location}
-        </p>
-      </div>
-    </div>
+      </CardContent>
+      <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
+        <button
+          onClick={handleWhatsAppClick}
+          className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
+        >
+          <Phone size={16} />
+        </button>
+        <button
+          onClick={() => onAccept(call.id)}
+          disabled={!!acceptingCallId}
+          className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
+        >
+          {isAcceptingThisCall ? (
+            <LoaderCircle className="animate-spin" />
+          ) : (
+            "Aceitar Apoio"
+          )}
+        </button>
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -406,7 +435,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     []
   );
   type TabId = "availability" | "support" | "activeCalls" | "profile";
-  const [activeTab, setActiveTab] = useState<TabId>("availability");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [initialTabSet, setInitialTabSet] = useState(false);
 
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -420,17 +450,19 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [hub, setHub] = useState("");
   const [vehicleType, setVehicleType] = useState("");
+  const [hubSearch, setHubSearch] = useState("");
+  const [shopeeId, setShopeeId] = useState<string | null>(null);
+
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [hubSearch, setHubSearch] = useState("");
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isProfileInitialized = useRef(false);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
   const swipeContainerRef = useRef<HTMLDivElement>(null);
@@ -439,12 +471,26 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [routeIdSearch, setRouteIdSearch] = useState("");
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
-  const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true); // Estado para o aviso
+  const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
+
+  const [isReauthModalOpen, setIsReauthModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [reauthError, setReauthError] = useState("");
+  const [isReauthenticating, setIsReauthenticating] = useState(false);
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-    return !!(driver.hub && driver.vehicleType && driver.phone && driver.name);
-  }, [driver]);
+    return !!(
+      driver.hub &&
+      driver.vehicleType &&
+      driver.phone &&
+      driver.name &&
+      shopeeId &&
+      shopeeId !== "Carregando..." &&
+      shopeeId !== "Não encontrado" &&
+      shopeeId !== "Erro ao buscar"
+    );
+  }, [driver, shopeeId]);
 
   const hasActiveRequest = useMemo(() => {
     return allMyCalls.some(
@@ -463,25 +509,51 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   }, []);
 
   useEffect(() => {
-    if (driver && !isProfileComplete) {
+    if (isProfileComplete && !initialTabSet) {
+      setActiveTab("availability");
+      setInitialTabSet(true);
+    } else if (!isProfileComplete && !initialTabSet) {
       setActiveTab("profile");
+      setInitialTabSet(true);
     }
-  }, [driver, isProfileComplete]);
+  }, [isProfileComplete, initialTabSet]);
 
   useEffect(() => {
-    if (driver && !isProfileInitialized.current) {
+    if (driver) {
       setName(driver.name || "");
       setPhone(driver.phone || "");
-      const initialHub = driver.hub || "";
-      if (hubs.includes(initialHub)) {
-        setHub(initialHub);
-        setHubSearch(initialHub);
-      } else {
-        setHub("");
-        setHubSearch(""); // Garante que o campo de busca fique vazio se o hub não for válido
-      }
+      setHub(driver.hub || "");
       setVehicleType(driver.vehicleType || "");
-      isProfileInitialized.current = true;
+      setHubSearch(driver.hub || "");
+
+      const fetchShopeeId = async () => {
+        if (driver.uid) {
+          setShopeeId("Carregando...");
+          const driversRef = collection(db, "motoristas_pre_aprovados");
+          const q = query(
+            driversRef,
+            or(
+              where("uid", "==", driver.uid),
+              where("googleUid", "==", driver.uid)
+            )
+          );
+
+          try {
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+              const driverDoc = querySnapshot.docs[0];
+              setShopeeId(driverDoc.id);
+            } else {
+              setShopeeId("Não encontrado");
+            }
+          } catch (error) {
+            console.error("Erro ao buscar ID de cadastro:", error);
+            setShopeeId("Erro ao buscar");
+          }
+        }
+      };
+
+      fetchShopeeId();
     }
   }, [driver]);
 
@@ -532,11 +604,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   useEffect(() => {
     if (!userId) return;
 
-    // CORREÇÃO: A coleção de onde buscamos todos os motoristas
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ uid: doc.id, ...doc.data() } as Driver)
+        (doc) => ({ ...doc.data(), uid: doc.id } as Driver)
       );
       setAllDrivers(driversData);
     });
@@ -606,7 +677,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     updates: Partial<Omit<Driver, "uid">>
   ) => {
     if (!driverId) return;
-    // CORREÇÃO: A coleção que atualizamos
     const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
     await updateDoc(driverDocRef, updates);
   };
@@ -619,19 +689,35 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     await updateDoc(callDocRef, updates as any);
   };
 
+  // ESTA FUNÇÃO NÃO É MAIS USADA PELO BOTÃO 'SUBMIT',
+  // MAS PODE SER ÚTIL PARA OUTRAS COISAS NO FUTURO.
+  // DEIXAMOS ELA AQUI.
   const addNewCall = async (
     newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
   ) => {
     if (!driver) return;
+
+    const getInitials = (name: string) => {
+      if (!name) return "??";
+      return name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .substring(0, 2);
+    };
+
+    const driverName = driver.name || "Nome não definido";
+
     const callToAdd = {
       ...newCall,
       timestamp: serverTimestamp(),
       solicitante: {
         id: driver.uid,
-        name: driver.name,
-        avatar: driver.avatar,
-        initials: driver.initials,
-        phone: driver.phone,
+        name: driverName,
+        avatar: driver.avatar || null,
+        initials: driver.initials || getInitials(driverName),
+        phone: driver.phone || null,
       },
     };
     await addDoc(collection(db, "supportCalls"), callToAdd as any);
@@ -642,12 +728,16 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Complete seu perfil para alterar sua disponibilidade."
       );
-      setActiveTab("profile");
       return;
     }
-    if (!driver) return;
+    if (!driver || !shopeeId || shopeeId.includes("...")) {
+      sonnerToast.error(
+        "Não foi possível identificar seu perfil. Tente recarregar a página."
+      );
+      return;
+    }
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-    updateDriver(driver.uid, { status: newStatus });
+    updateDriver(shopeeId, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
@@ -656,7 +746,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setActiveTab("profile");
       return;
     }
-    if (!userId || !driver) return;
+    if (!userId || !driver || !shopeeId) return;
 
     if (driver.status === "EM_ROTA") {
       sonnerToast.error("Ação não permitida", {
@@ -669,7 +759,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setAcceptingCallId(callId);
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
-      await updateDriver(userId, { status: "EM_ROTA" });
+      if (shopeeId && !shopeeId.includes("...")) {
+        await updateDriver(shopeeId, { status: "EM_ROTA" });
+      }
     } catch (error) {
       console.error("Erro ao aceitar chamado:", error);
       sonnerToast.error("Erro", {
@@ -691,12 +783,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleCancelSupport = async (callId: string) => {
-    if (!userId) return;
+    if (!userId || !shopeeId) return;
     await updateCall(callId, {
       assignedTo: deleteField(),
       status: "ABERTO",
     } as any);
-    await updateDriver(userId, { status: "DISPONIVEL" });
+    if (shopeeId && !shopeeId.includes("...")) {
+      await updateDriver(shopeeId, { status: "DISPONIVEL" });
+    }
     sonnerToast.success("Apoio cancelado com sucesso.");
   };
 
@@ -705,7 +799,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const callToCancel = allMyCalls.find((c) => c.id === callId);
 
     if (callToCancel && callToCancel.assignedTo) {
-      await updateDriver(callToCancel.assignedTo, { status: "DISPONIVEL" });
+      const assignedDriver = allDrivers.find(
+        (d) => d.uid === callToCancel.assignedTo
+      );
+      if (assignedDriver) {
+        await updateDriver(assignedDriver.uid, { status: "DISPONIVEL" });
+      }
     }
 
     await updateCall(callId, {
@@ -716,7 +815,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   const handleUpdateProfile = () => {
-    if (!driver) return;
+    if (!driver || !shopeeId || shopeeId.includes("...")) {
+      sonnerToast.error(
+        "Não foi possível identificar seu perfil. Tente recarregar a página."
+      );
+      return;
+    }
 
     const formattedPhone = phone.replace(/\D/g, "");
     if (formattedPhone.length !== 11) {
@@ -731,12 +835,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    updateDriver(driver.uid, {
+    const updates = {
       name,
       phone: formattedPhone,
       hub,
       vehicleType,
-    });
+    };
+    updateDriver(shopeeId, updates);
     sonnerToast.success("Perfil atualizado com sucesso!");
     setIsProfileWarningVisible(false);
   };
@@ -750,14 +855,58 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error("A nova senha deve ter no mínimo 6 caracteres.");
       return;
     }
-    sonnerToast.info(
-      "Funcionalidade de alteração de senha a ser implementada com reautenticação."
-    );
+
+    const user = auth.currentUser;
+    if (user && !user.providerData.some((p) => p.providerId === "password")) {
+      sonnerToast.error(
+        "Você não pode alterar a senha de contas logadas com o Google."
+      );
+      return;
+    }
+
+    setIsReauthModalOpen(true);
+  };
+
+  const handleReauthenticateAndChange = async () => {
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      setReauthError(
+        "Usuário não encontrado. Por favor, faça login novamente."
+      );
+      return;
+    }
+
+    setIsReauthenticating(true);
+    setReauthError("");
+
+    try {
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        currentPassword
+      );
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      sonnerToast.success("Senha alterada com sucesso!");
+      setIsReauthModalOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      if (error.code === "auth/wrong-password") {
+        setReauthError("Senha atual incorreta. Tente novamente.");
+      } else {
+        setReauthError("Ocorreu um erro. Tente novamente mais tarde.");
+        console.error("Erro na reautenticação:", error);
+      }
+    } finally {
+      setIsReauthenticating(false);
+    }
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !driver || !driver.uid) return;
+    if (!file || !driver || !shopeeId) return;
 
     setIsUploading(true);
 
@@ -773,10 +922,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       }
     }
 
-    const storageRef = ref(
-      storage,
-      `motoristas_pre_aprovados/${driver.uid}/avatar.jpg`
-    );
+    const storageRef = ref(storage, `avatars/${shopeeId}/avatar.jpg`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
@@ -789,7 +935,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-          updateDriver(driver.uid, { avatar: downloadURL });
+          if (shopeeId) {
+            updateDriver(shopeeId, { avatar: downloadURL });
+          }
           sonnerToast.success("Foto de perfil atualizada com sucesso!");
           setIsUploading(false);
         });
@@ -797,11 +945,23 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   };
 
+  // =================================================================
+  // FUNÇÃO DE SUBMISSÃO CORRIGIDA
+  // =================================================================
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setModalError("");
 
+    // 1. Obter o token de autenticação do usuário logado
+    const user = auth.currentUser;
+    if (!user || !driver) {
+      setModalError("Erro: Usuário não autenticado. Faça login novamente.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // 2. Obter dados do formulário (lógica existente)
     const formData = new FormData(e.currentTarget);
     const isBulky = formData.get("isBulky") === "on";
     const packageCount = Number(formData.get("packageCount"));
@@ -828,46 +988,83 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
+    // 3. Montar o "prompt" informal (lógica existente)
     const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
       ", "
     )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
+    // 4. Montar o objeto 'solicitante'
+    const solicitanteData = {
+      id: driver.uid,
+      name: driver.name || "Nome não definido",
+      avatar: driver.avatar || null,
+      initials: driver.initials || "??",
+      phone: driver.phone || null,
+    };
+
+    // 5. Calcular Urgência e RouteId
+    const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+    let urgency: UrgencyLevel = "BAIXA";
+    if (packageCount >= 100) {
+      urgency = "URGENTE";
+    } else if (packageCount >= 90) {
+      urgency = "ALTA";
+    } else if (packageCount >= 60) {
+      urgency = "MEDIA";
+    }
+
+    // 6. Montar o payload final para o backend
+    // ESTE OBJETO CONTÉM TUDO QUE O BACKEND PRECISA
+    const ticketPayload = {
+      prompt: informalDescription,
+      solicitante: solicitanteData,
+      location: location,
+      hub: selectedHub,
+      vehicleType: selectedNeededVehicles.join(", "),
+      isBulky: isBulky,
+      routeId: routeId,
+      urgency: urgency,
+    };
+
     try {
-      // CORREÇÃO: Chamando a Firebase Function em vez de acessar a API diretamente
-      const functions = getFunctions();
-      const generateDescription = httpsCallable(
-        functions,
-        "generateDescription"
-      );
-      const result = await generateDescription({
-        supportCallDescription: informalDescription,
-      });
-      const professionalDescription = (result.data as any).description;
+      // --- ESTA É A MUDANÇA PRINCIPAL ---
 
-      const routeId = `SPX-${Date.now().toString().slice(-6)}`;
+      // 7. Obter o token e a URL da API
+      const idToken = await user.getIdToken();
+      const apiUrl = import.meta.env.VITE_API_URL; // 'http://localhost:3000'
 
-      let urgency: UrgencyLevel = "BAIXA";
-      if (packageCount >= 100) {
-        urgency = "URGENTE";
-      } else if (packageCount >= 90) {
-        urgency = "ALTA";
-      } else if (packageCount >= 60) {
-        urgency = "MEDIA";
+      if (!apiUrl) {
+        setModalError(
+          "Erro: VITE_API_URL não está configurada no .env do frontend."
+        );
+        setIsSubmitting(false);
+        return;
       }
 
-      const newCallData = {
-        routeId: routeId,
-        description: professionalDescription,
-        urgency: urgency,
-        location: location,
-        status: "ABERTO" as const,
-        vehicleType: selectedNeededVehicles.join(", "),
-        isBulky: isBulky,
-        hub: selectedHub,
-      };
-      await addNewCall(newCallData);
+      // 8. Enviar a requisição para o backend Node/Mongo (server.ts)
+      // ENVIANDO O PAYLOAD COMPLETO
+      const response = await fetch(`${apiUrl}/tickets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(ticketPayload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Falha ao criar o ticket no backend."
+        );
+      }
+
+      // 9. Se tudo deu certo, o backend já salvou no Mongo E no Firestore.
+      // O Firestore vai atualizar a UI automaticamente (via onSnapshot).
+      // NÃO PRECISAMOS MAIS CHAMAR addNewCall() AQUI.
+
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
       setDeliveryRegions([""]);
@@ -880,6 +1077,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     }
   };
 
+  // =================================================================
+  // FUNÇÃO DE LOCALIZAÇÃO CORRIGIDA
+  // =================================================================
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       setModalError("Geolocalização não é suportada pelo seu navegador.");
@@ -890,9 +1090,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
+
+        // CORREÇÃO: A URL estava errada, faltava o "?q="
         setLocation(
-          `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`
+          `http://googleusercontent.com/maps.google.com/3{latitude},${longitude}`
         );
+
         setIsLocating(false);
       },
       () => {
@@ -1141,30 +1344,31 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               >
                 {/* Availability Tab */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-6">
-                  <div className="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+                  <div className="bg-white p-6 rounded-lg shadow-sm text-center space-y-4">
                     <h3 className="text-lg font-bold">
                       Estou disponível para apoio?
                     </h3>
                     <div className="flex items-center justify-center space-x-4">
                       <button
                         onClick={() => handleAvailabilityChange(true)}
-                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                        disabled={!isProfileComplete}
+                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
                           driver.status === "DISPONIVEL"
                             ? "bg-green-600 text-white"
                             : "bg-gray-200"
-                        }`}
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        Sim
+                        Disponível
                       </button>
                       <button
                         onClick={() => handleAvailabilityChange(false)}
-                        className={`w-24 py-2 text-sm font-semibold rounded-lg ${
+                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
                           driver.status !== "DISPONIVEL"
                             ? "bg-red-600 text-white"
                             : "bg-gray-200"
                         }`}
                       >
-                        Não
+                        Indisponível
                       </button>
                     </div>
                     <p className="text-xs text-gray-400">
@@ -1212,7 +1416,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
                 {/* Support Tab */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4">
-                  <div className="bg-white p-6 rounded-lg shadow-md space-y-4">
+                  <div className="bg-white p-6 rounded-lg shadow-sm space-y-4">
                     <div className="flex items-center space-x-2">
                       <AlertTriangle className="text-red-500" />
                       <h3 className="text-lg font-bold">
@@ -1347,6 +1551,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
+                            ID de Motorista
+                          </label>
+                          <input
+                            type="text"
+                            value={shopeeId || "Aguardando cadastro..."}
+                            readOnly
+                            className="w-full p-2 border rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
+                            title="Seu ID de cadastro na plataforma"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             Nome Completo
                           </label>
                           <input
@@ -1449,7 +1665,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                               </label>
                               <div className="relative">
                                 <input
-                                  type="password"
+                                  type={showPassword ? "text" : "password"}
                                   value={newPassword}
                                   onChange={(e) =>
                                     setNewPassword(e.target.value)
@@ -1475,7 +1691,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                                 Confirmar Nova Senha
                               </label>
                               <input
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 value={confirmPassword}
                                 onChange={(e) =>
                                   setConfirmPassword(e.target.value)
@@ -1511,6 +1727,58 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           </div>
         </div>
       </div>
+      {isReauthModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold text-gray-800 mb-2">
+              Confirme sua identidade
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Para sua segurança, por favor, insira sua senha atual para
+              continuar.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="currentPassword"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Senha Atual
+                </label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full p-2 border rounded-md"
+                  required
+                />
+              </div>
+              {reauthError && (
+                <p className="text-sm text-red-600">{reauthError}</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsReauthModalOpen(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+                  disabled={isReauthenticating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReauthenticateAndChange}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-blue-300"
+                  disabled={isReauthenticating}
+                >
+                  {isReauthenticating ? "Confirmando..." : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {isSupportModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">
