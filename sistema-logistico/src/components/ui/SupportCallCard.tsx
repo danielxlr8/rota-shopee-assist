@@ -11,13 +11,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
 import {
   Clock,
   MapPin,
-  MessageCircle, // Mantido caso queira usar para o Apoio
+  MessageCircle,
   AlertTriangle,
   FileText,
   MoreVertical,
   ArrowLeft,
   ArrowRight,
   ExternalLink,
+  Trash2, // <-- 1. ÍCONE DE LIXEIRA IMPORTADO
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,6 +38,7 @@ interface SupportCallCardProps {
   onContactRequester: (phone: string) => void;
   onContactAssigned: (phone: string) => void;
   onUpdateStatus?: (id: string, newStatus: CallStatus) => void;
+  onDelete?: (id: string) => void; // <-- 2. NOVA PROPRIEDADE PARA EXCLUIR
   statusColorClass?: string;
   onCardClick?: () => void;
 }
@@ -72,6 +74,7 @@ export default function SupportCallCard({
   onContactRequester,
   onContactAssigned,
   onUpdateStatus,
+  onDelete, // <-- 3. PROP DESESTRUTURADA
   statusColorClass = "border-gray-200",
   onCardClick,
 }: SupportCallCardProps) {
@@ -133,12 +136,12 @@ export default function SupportCallCard({
       className={cn(
         "w-full border-2 hover:shadow-lg transition-all duration-300 cursor-pointer",
         statusColorClass,
-        isCritical && "animate-pulse shadow-lg shadow-red-600/20"
+        // <-- 4. ANIMAÇÃO ALTERADA DE 'animate-pulse' PARA 'blink-critical' -->
+        isCritical && "blink-critical shadow-lg shadow-red-600/20"
       )}
       onClick={onCardClick}
     >
       <CardHeader className="pb-3">
-        {/* ... (Header content - Status, Urgency, Dropdown - Sem alterações) ... */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Badge
@@ -204,6 +207,20 @@ export default function SupportCallCard({
                     <span>Mover para {prevStatus.replace("_", " ")}</span>
                   </DropdownMenuItem>
                 )}
+
+                {/* <-- 5. NOVO ITEM DE MENU ADICIONADO --> */}
+                {onDelete && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(call.id);
+                    }}
+                    className="focus:bg-red-900/50 focus:text-red-400 text-red-500"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Mover para Lixeira</span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -244,14 +261,13 @@ export default function SupportCallCard({
                 e.stopPropagation();
                 onContactRequester(requester.phone);
               }}
-              className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0" // Padding removido
+              className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0"
               title={`Contatar ${requester.name} via WhatsApp`}
             >
               <img
                 src="/whatsapp-logo.png"
                 alt="WhatsApp"
-                // --- Aumentar tamanho da imagem ---
-                className="h-9 w-9" // Aumentado para h-7 w-7
+                className="h-9 w-9"
               />
             </Button>
           )}
@@ -283,16 +299,14 @@ export default function SupportCallCard({
                   e.stopPropagation();
                   onContactAssigned(assignedDriver.phone);
                 }}
-                className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0" // Padding removido
+                className="h-9 w-9 rounded-full hover:bg-green-100 flex items-center justify-center p-0"
                 title={`Contatar ${assignedDriver.name} via WhatsApp`}
               >
                 <img
                   src="/whatsapp-logo.png"
                   alt="WhatsApp"
-                  // --- Aumentar tamanho da imagem ---
-                  className="h-7 w-7" // Aumentado para h-7 w-7
+                  className="h-7 w-7"
                 />
-                {/* <MessageCircle size={14} /> */}
               </Button>
             )}
           </div>

@@ -304,9 +304,7 @@ export const AuthPage = () => {
   // --- TELA DE VINCULAR CONTA ---
   if (isLinkingGoogleAccount) {
     return (
-      // ------ MODIFICAÇÃO AQUI PARA A TELA DE VINCULAÇÃO ------
       <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB]">
-        {/* ------ FIM DA MODIFICAÇÃO ------ */}
         <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
             Vincular Conta Google
@@ -330,8 +328,8 @@ export const AuthPage = () => {
                 className="mt-1 block w-full input-style"
                 placeholder="Seu ID único"
                 required
+                autoComplete="off"
               />{" "}
-              {/* Classe genérica */}
             </div>
             {linkingError && (
               <p className="text-sm text-red-600 text-center">{linkingError}</p>
@@ -366,28 +364,17 @@ export const AuthPage = () => {
 
   // --- JSX PRINCIPAL COM ANIMAÇÃO CORRIGIDA ---
   return (
-    // ------ MODIFICAÇÃO AQUI PARA A TELA PRINCIPAL ------
-    <div
-      className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB] overflow-hidden"
-      // Removida imagem de fundo, adicionada cor sólida
-    >
-      {/* ------ FIM DA MODIFICAÇÃO ------ */}
-
-      {/* Container Centralizador */}
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB] overflow-hidden">
       <div className="relative w-full max-w-md h-[700px] flex items-center justify-center">
         {" "}
-        {/* Aumentei a altura para dar espaço */}
-        {/* Animação Lottie (Foguete) - SÓ RENDERIZA SE NÃO ESTIVER 'finished' */}
         {animationState !== "finished" && (
           <motion.div
-            className="absolute inset-0 flex items-center justify-center z-0" // Fica atrás (z-0)
+            className="absolute inset-0 flex items-center justify-center z-0"
             animate={{
-              // Anima a saída
               y: animationState === "exiting" ? "-100%" : "0%",
               opacity: animationState === "exiting" ? 0 : 1,
             }}
             transition={{ duration: 0.5, ease: "easeIn" }}
-            // Marca como 'finished' DEPOIS que a animação de SAÍDA termina
             onAnimationComplete={() => {
               if (animationState === "exiting") {
                 setAnimationState("finished");
@@ -397,27 +384,25 @@ export const AuthPage = () => {
             <Lottie
               animationData={rocketAnimation}
               loop={false}
-              onComplete={handleLottieComplete} // Chama quando a animação INTERNA acaba
-              style={{ width: 400, height: 400 }} // Ajuste o tamanho
+              onComplete={handleLottieComplete}
+              style={{ width: 400, height: 400 }}
             />
           </motion.div>
         )}
-        {/* Formulário de Login - SÓ RENDERIZA QUANDO O FOGUETE COMEÇA A SAIR */}
         <AnimatePresence>
           {(animationState === "exiting" || animationState === "finished") && (
             <motion.div
               key="form"
-              className="w-full z-10" // Fica na frente (z-10)
-              initial={{ opacity: 0, y: "100%" }} // Começa de BAIXO, invisível
-              animate={{ opacity: 1, y: "0%" }} // Entra na posição
+              className="w-full z-10"
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: "0%" }}
               transition={{
                 type: "spring",
                 stiffness: 50,
                 damping: 15,
                 delay: 0.2,
-              }} // Delay para esperar o foguete
+              }}
             >
-              {/* --- CARD ORIGINAL COM ROLAGEM INTERNA --- */}
               <div className="bg-white rounded-lg shadow-md overflow-hidden max-h-[90vh]">
                 <div className="flex border-b">
                   <button
@@ -441,7 +426,6 @@ export const AuthPage = () => {
                     <Briefcase className="inline-block mr-2" size={18} /> Admin
                   </button>
                 </div>
-                {/* DIV INTERNA COM ROLAGEM */}
                 <div className="p-8 overflow-y-auto">
                   <img
                     src="/spx-logo.png"
@@ -466,7 +450,6 @@ export const AuthPage = () => {
 
                   {isLoginView ? (
                     <form onSubmit={handleLogin} className="space-y-4">
-                      {/* Inputs e Botão de Login */}
                       <div className="relative">
                         <Mail
                           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -479,6 +462,7 @@ export const AuthPage = () => {
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       <div className="relative">
@@ -493,6 +477,7 @@ export const AuthPage = () => {
                           onChange={(e) => setPassword(e.target.value)}
                           className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"
@@ -516,7 +501,6 @@ export const AuthPage = () => {
                     </form>
                   ) : (
                     <form onSubmit={handleRegister} className="space-y-4">
-                      {/* Inputs e Botão de Cadastro */}
                       <div className="relative">
                         <User
                           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -529,6 +513,7 @@ export const AuthPage = () => {
                           onChange={(e) => setName(e.target.value)}
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       <div className="relative">
@@ -543,6 +528,7 @@ export const AuthPage = () => {
                           onChange={(e) => setLastName(e.target.value)}
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       <div className="relative">
@@ -557,6 +543,7 @@ export const AuthPage = () => {
                           onChange={(e) => setBirthDate(e.target.value)}
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       <div className="relative">
@@ -573,6 +560,7 @@ export const AuthPage = () => {
                           }
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       {activeTab === "driver" && (
@@ -588,6 +576,7 @@ export const AuthPage = () => {
                             onChange={(e) => setDriverId(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                             required
+                            autoComplete="off"
                           />
                         </div>
                       )}
@@ -603,6 +592,7 @@ export const AuthPage = () => {
                           onChange={(e) => setEmail(e.target.value)}
                           className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="off"
                         />
                       </div>
                       <div className="relative">
@@ -617,6 +607,7 @@ export const AuthPage = () => {
                           onChange={(e) => setPassword(e.target.value)}
                           className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                           required
+                          autoComplete="new-password"
                         />
                         <button
                           type="button"
@@ -641,7 +632,6 @@ export const AuthPage = () => {
                     </form>
                   )}
 
-                  {/* Botões "OU" e Google */}
                   <div className="mt-4 text-center text-sm">
                     <button
                       onClick={() => {
@@ -674,7 +664,6 @@ export const AuthPage = () => {
                     </button>
                   </div>
                 </div>{" "}
-                {/* Fim da div com rolagem */}
               </div>
             </motion.div>
           )}

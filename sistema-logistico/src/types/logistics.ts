@@ -31,8 +31,7 @@ export interface SupportCall {
     name: string;
     avatar?: string;
     initials?: string;
-    phone?: string;
-    // --- ALTERAÇÃO 1: Adicionado shopeeId ao solicitante ---
+    phone?: string; // --- ALTERAÇÃO 1: Adicionado shopeeId ao solicitante ---
     shopeeId?: string;
   };
   assignedTo?: string;
@@ -47,7 +46,10 @@ export interface SupportCall {
   hub?: string;
   approvedBy?: string;
   deletedAt?: any;
-  // --- ALTERAÇÃO 2: Adicionados campos para o prompt detalhado ---
+
+  // <-- NOVO CAMPO ADICIONADO PARA RASTREAMENTO -->
+  deletedBy?: string; // Armazena o nome ou email do admin que excluiu // --- ALTERAÇÃO 2: Adicionados campos para o prompt detalhado ---
+
   packageCount?: number;
   deliveryRegions?: string[];
 }
