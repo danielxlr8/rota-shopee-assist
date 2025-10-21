@@ -64,12 +64,14 @@ import {
   CardFooter,
 } from "./ui/card";
 import { Badge } from "./ui/Badge";
+import { Button } from "./ui/button"; // Importação do Botão
 
 // Define a interface para as props que o componente receberá
 interface DriverInterfaceProps {
   driver: Driver;
 }
 
+// Constantes no topo do arquivo
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
   "LM Hub_PR_Maringa",
@@ -96,348 +98,15 @@ const parseDescription = (description: string) => {
   };
 };
 
-// Card de Cabeçalho do Perfil
-const ProfileHeaderCard = ({
-  driver,
-  onEditClick,
-  isUploading,
-  activeCall,
-}: {
-  driver: Driver | null;
-  onEditClick: () => void;
-  isUploading: boolean;
-  activeCall: SupportCall | null;
-}) => {
-  if (!driver) return null;
-
-  const formatPhoneNumberSimple = (phone: string) => {
-    if (!phone) return "";
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length !== 11) return phone;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  };
-
-  const getStatusInfo = () => {
-    if (
-      activeCall &&
-      activeCall.solicitante.id === driver.uid &&
-      activeCall.status === "ABERTO"
-    ) {
-      return { text: "Aguardando Apoio", color: "bg-orange-500" };
-    }
-
-    switch (driver.status) {
-      case "DISPONIVEL":
-        return { text: "Disponível para Apoio", color: "bg-green-500" };
-      case "INDISPONIVEL":
-        return { text: "Indisponível", color: "bg-red-500" };
-      case "EM_ROTA":
-        return { text: "Prestando Apoio", color: "bg-blue-500" };
-      default:
-        return { text: "Offline", color: "bg-gray-500" };
-    }
-  };
-
-  const statusInfo = getStatusInfo();
-
-  return (
-    <div className="relative mb-12">
-      <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-lg shadow-lg p-6 pt-16 text-white text-center">
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 group">
-          <div className="relative w-24 h-24 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center overflow-hidden">
-            {driver.avatar ? (
-              <img
-                src={driver.avatar}
-                alt={driver.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-3xl font-bold text-orange-600">
-                {driver.initials}
-              </span>
-            )}
-            {isUploading ? (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <LoaderCircle className="text-white animate-spin" />
-              </div>
-            ) : (
-              <button
-                onClick={onEditClick}
-                className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
-              >
-                <Camera className="text-white" size={32} />
-              </button>
-            )}
-          </div>
-        </div>
-        <h2 className="text-2xl font-bold">{driver.name}</h2>
-        <div className="text-sm opacity-90 mt-2 space-y-1">
-          <p className="flex items-center justify-center gap-2">
-            <Building size={14} /> {driver.hub || "Hub não definido"}
-          </p>
-          <p className="flex items-center justify-center gap-2">
-            <Phone size={14} />{" "}
-            {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
-          </p>
-          <p className="flex items-center justify-center gap-2 capitalize">
-            <Truck size={14} /> {driver.vehicleType || "Veículo não definido"}
-          </p>
-        </div>
-        <div className="flex items-center justify-center mt-3">
-          <span
-            className={`w-3 h-3 rounded-full ${statusInfo.color} mr-2`}
-          ></span>
-          <p className="text-sm font-bold">{statusInfo.text}</p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const DriverCallHistoryCard = ({
-  call,
-  currentDriver,
-  allDrivers,
-  onCancelSupport,
-  onDeleteSupportRequest,
-  onRequestApproval,
-}: {
-  call: SupportCall;
-  currentDriver: Driver;
-  allDrivers: Driver[];
-  onCancelSupport: (callId: string) => void;
-  onDeleteSupportRequest: (callId: string) => void;
-  onRequestApproval: (callId: string) => void;
-}) => {
-  const details = parseDescription(call.description);
-  const isRequester = call.solicitante.id === currentDriver.uid;
-  const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
-  const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
-  let statusText = "Status desconhecido",
-    statusColor: "default" | "destructive" | "outline" | "secondary" =
-      "default",
-    title = "Chamado";
-
-  if (isRequester) {
-    title = "Pedido de Apoio";
-    if (call.status === "ABERTO") {
-      statusText = "Aguardando Apoio";
-      statusColor = "default";
-    } else if (call.status === "AGUARDANDO_APROVACAO") {
-      statusText = "Aguardando Aprovação";
-      statusColor = "secondary";
-    } else if (call.status === "EM ANDAMENTO") {
-      statusText = `Recebendo Apoio`;
-      statusColor = "default";
-    }
-  } else {
-    title = `Apoio a ${call.solicitante.name}`;
-    if (call.status === "EM ANDAMENTO") {
-      statusText = "Prestando Apoio";
-      statusColor = "default";
-    } else if (call.status === "AGUARDANDO_APROVACAO") {
-      statusText = "Aguardando Aprovação";
-      statusColor = "secondary";
-    }
-  }
-  if (call.status === "CONCLUIDO") {
-    statusText = "Concluído";
-    statusColor = "outline";
-  }
-
-  const handleWhatsAppClick = () => {
-    const contactPhone = otherParty?.phone;
-    if (!contactPhone) {
-      sonnerToast.error("O outro motorista não tem um telefone cadastrado.");
-      return;
-    }
-    const message = encodeURIComponent(
-      `Olá ${otherParty?.name}, sou o ${currentDriver.name} referente ao chamado de apoio.`
-    );
-    window.open(`https://wa.me/55${contactPhone}?text=${message}`, "_blank");
-  };
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between bg-gray-50 p-4">
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <Badge variant={statusColor}>{statusText}</Badge>
-      </CardHeader>
-      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="font-semibold text-gray-500">Região(ões)</p>
-            <p>{details.region}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
-            <p>{details.packages}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="font-semibold text-gray-500">Veículo Necessário</p>
-            <p>{details.vehicle}</p>
-          </div>
-        </div>
-        <hr className="my-3 border-gray-200" />
-        <div className="space-y-1">
-          <p className="font-semibold text-gray-500">Localização</p>
-          <a
-            href={details.location}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
-          >
-            {details.location} <ExternalLink size={14} />
-          </a>
-        </div>
-      </CardContent>
-      {(call.status === "EM ANDAMENTO" ||
-        call.status === "AGUARDANDO_APROVACAO" ||
-        call.status === "ABERTO") && (
-        <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
-          {otherParty && (
-            <button
-              onClick={handleWhatsAppClick}
-              className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
-            >
-              <Phone size={14} /> Contatar
-            </button>
-          )}
-          {!isRequester && call.status === "EM ANDAMENTO" && (
-            <>
-              <button
-                onClick={() => onRequestApproval(call.id)}
-                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
-              >
-                <Clock size={14} /> Aprovação
-              </button>
-              <button
-                onClick={() => onCancelSupport(call.id)}
-                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-              >
-                <XCircle size={14} /> Cancelar
-              </button>
-            </>
-          )}
-          {isRequester &&
-            (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
-              <button
-                onClick={() => onDeleteSupportRequest(call.id)}
-                className="flex items-center gap-2 px-3 py-1 text-xs font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
-              >
-                <XCircle size={14} /> Cancelar
-              </button>
-            )}
-        </CardFooter>
-      )}
-    </Card>
-  );
-};
-
-// Componente para a lista de chamados abertos
-const OpenCallCard = ({
-  call,
-  currentDriverName,
-  onAccept,
-  acceptingCallId,
-}: {
-  call: SupportCall;
-  currentDriverName: string;
-  onAccept: (callId: string) => void;
-  acceptingCallId: string | null;
-}) => {
-  const details = parseDescription(call.description);
-  const requesterPhone = call.solicitante.phone || "";
-  const isAcceptingThisCall = acceptingCallId === call.id;
-
-  const handleWhatsAppClick = () => {
-    if (!requesterPhone) {
-      sonnerToast.error(
-        "O motorista solicitante não possui um número de telefone cadastrado."
-      );
-      return;
-    }
-    const message = encodeURIComponent(
-      `Olá ${call.solicitante.name}, me chamo ${currentDriverName} e aceitei seu chamado e serei seu apoio`
-    );
-    window.open(`https://wa.me/55${requesterPhone}?text=${message}`, "_blank");
-  };
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="p-4 bg-gray-50">
-        <CardTitle>Apoio para {call.solicitante.name}</CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 text-sm text-gray-700 space-y-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <div>
-            <p className="font-semibold text-gray-500">Região(ões)</p>
-            <p>{details.region}</p>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-500">Nº de Pacotes</p>
-            <p>{details.packages}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="font-semibold text-gray-500">Veículo Necessário</p>
-            <p>{details.vehicle}</p>
-          </div>
-        </div>
-        <hr className="my-3 border-gray-200" />
-        <div className="space-y-1">
-          <p className="font-semibold text-gray-500">Localização</p>
-          <a
-            href={details.location}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline flex items-center gap-1 break-all"
-          >
-            {details.location} <ExternalLink size={14} />
-          </a>
-        </div>
-      </CardContent>
-      <CardFooter className="bg-gray-50 p-4 flex justify-end gap-2">
-        <button
-          onClick={handleWhatsAppClick}
-          className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600"
-        >
-          <Phone size={16} />
-        </button>
-        <button
-          onClick={() => onAccept(call.id)}
-          disabled={!!acceptingCallId}
-          className="px-4 py-2 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 disabled:bg-orange-300 flex items-center justify-center w-28"
-        >
-          {isAcceptingThisCall ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            "Aceitar Apoio"
-          )}
-        </button>
-      </CardFooter>
-    </Card>
-  );
-};
-
+// --- COMPONENTE PRINCIPAL ---
 export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
+  // --- Estados ---
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
   const [showPassword, setShowPassword] = useState(false);
-
-  const TABS = useMemo(
-    () => [
-      { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
-      { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
-      { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
-      { id: "profile", label: "Perfil", icon: <User size={16} /> },
-    ],
-    []
-  );
-  type TabId = "availability" | "support" | "activeCalls" | "profile";
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [initialTabSet, setInitialTabSet] = useState(false);
-
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [location, setLocation] = useState("");
@@ -447,17 +116,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "requester" | "provider" | "inProgress"
   >("all");
-
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
   const [neededVehicles, setNeededVehicles] = useState([""]);
-
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [hub, setHub] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [hubSearch, setHubSearch] = useState("");
   const [shopeeId, setShopeeId] = useState<string | null>(null);
-
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
@@ -472,11 +138,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
   const [isMuted, setIsMuted] = useState(false);
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
-
   const [isReauthModalOpen, setIsReauthModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [reauthError, setReauthError] = useState("");
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+
+  // --- Tipos e Memos ---
+  const TABS = useMemo(
+    () => [
+      { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
+      { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
+      { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
+      { id: "profile", label: "Perfil", icon: <User size={16} /> },
+    ],
+    []
+  );
+  type TabId = "availability" | "support" | "activeCalls" | "profile";
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -500,6 +177,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   }, [allMyCalls, userId]);
 
+  // --- Funções Handler (handleUpdateProfile, handleLogin, etc.) ---
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
@@ -607,7 +285,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ ...doc.data(), uid: doc.id } as Driver)
+        (doc) => ({ ...doc.data(), uid: doc.id } as Driver) // uid é o ID do documento
       );
       setAllDrivers(driversData);
     });
@@ -689,9 +367,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     await updateDoc(callDocRef, updates as any);
   };
 
-  // ESTA FUNÇÃO NÃO É MAIS USADA PELO BOTÃO 'SUBMIT',
-  // MAS PODE SER ÚTIL PARA OUTRAS COISAS NO FUTURO.
-  // DEIXAMOS ELA AQUI.
   const addNewCall = async (
     newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
   ) => {
@@ -803,7 +478,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         (d) => d.uid === callToCancel.assignedTo
       );
       if (assignedDriver) {
-        await updateDriver(assignedDriver.uid, { status: "DISPONIVEL" });
+        const assignedDriverDocId = assignedDriver.uid;
+        await updateDriver(assignedDriverDocId, { status: "DISPONIVEL" });
       }
     }
 
@@ -945,15 +621,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   };
 
-  // =================================================================
-  // FUNÇÃO DE SUBMISSÃO CORRIGIDA
-  // =================================================================
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setModalError("");
 
-    // 1. Obter o token de autenticação do usuário logado
     const user = auth.currentUser;
     if (!user || !driver) {
       setModalError("Erro: Usuário não autenticado. Faça login novamente.");
@@ -961,7 +633,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    // 2. Obter dados do formulário (lógica existente)
     const formData = new FormData(e.currentTarget);
     const isBulky = formData.get("isBulky") === "on";
     const packageCount = Number(formData.get("packageCount"));
@@ -988,14 +659,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    // 3. Montar o "prompt" informal (lógica existente)
     const informalDescription = `Preciso de apoio de transferência. Estou no hub ${selectedHub}. Minha localização atual está disponível neste link: ${location}. Tenho ${packageCount} pacotes para a(s) região(ões) de ${selectedDeliveryRegions.join(
       ", "
     )}. Veículo(s) necessário(s): ${selectedNeededVehicles.join(", ")}. ${
       isBulky ? "Contém pacote volumoso." : ""
     }`;
 
-    // 4. Montar o objeto 'solicitante'
     const solicitanteData = {
       id: driver.uid,
       name: driver.name || "Nome não definido",
@@ -1004,7 +673,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       phone: driver.phone || null,
     };
 
-    // 5. Calcular Urgência e RouteId
     const routeId = `SPX-${Date.now().toString().slice(-6)}`;
     let urgency: UrgencyLevel = "BAIXA";
     if (packageCount >= 100) {
@@ -1015,8 +683,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       urgency = "MEDIA";
     }
 
-    // 6. Montar o payload final para o backend
-    // ESTE OBJETO CONTÉM TUDO QUE O BACKEND PRECISA
     const ticketPayload = {
       prompt: informalDescription,
       solicitante: solicitanteData,
@@ -1029,11 +695,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     };
 
     try {
-      // --- ESTA É A MUDANÇA PRINCIPAL ---
-
-      // 7. Obter o token e a URL da API
       const idToken = await user.getIdToken();
-      const apiUrl = import.meta.env.VITE_API_URL; // 'http://localhost:3000'
+      const apiUrl = import.meta.env.VITE_API_URL;
 
       if (!apiUrl) {
         setModalError(
@@ -1043,8 +706,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         return;
       }
 
-      // 8. Enviar a requisição para o backend Node/Mongo (server.ts)
-      // ENVIANDO O PAYLOAD COMPLETO
       const response = await fetch(`${apiUrl}/tickets`, {
         method: "POST",
         headers: {
@@ -1061,10 +722,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         );
       }
 
-      // 9. Se tudo deu certo, o backend já salvou no Mongo E no Firestore.
-      // O Firestore vai atualizar a UI automaticamente (via onSnapshot).
-      // NÃO PRECISAMOS MAIS CHAMAR addNewCall() AQUI.
-
       setIsSupportModalOpen(false);
       setShowSuccessModal(true);
       setDeliveryRegions([""]);
@@ -1077,9 +734,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     }
   };
 
-  // =================================================================
-  // FUNÇÃO DE LOCALIZAÇÃO CORRIGIDA
-  // =================================================================
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       setModalError("Geolocalização não é suportada pelo seu navegador.");
@@ -1090,12 +744,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-
-        // CORREÇÃO: A URL estava errada, faltava o "?q="
-        setLocation(
-          `http://googleusercontent.com/maps.google.com/3{latitude},${longitude}`
-        );
-
+        setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
         setIsLocating(false);
       },
       () => {
@@ -1239,13 +888,403 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const activeTabIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
+  // --- *** CORREÇÃO: COMPONENTES DEFINIDOS AQUI DENTRO *** ---
+
+  // Card de Cabeçalho do Perfil (Estilizado)
+  const ProfileHeaderCard = ({
+    driver,
+    onEditClick,
+    isUploading,
+    activeCall,
+  }: {
+    driver: Driver | null;
+    onEditClick: () => void;
+    isUploading: boolean;
+    activeCall: SupportCall | null;
+  }) => {
+    if (!driver) return null;
+
+    const formatPhoneNumberSimple = (phone: string) => {
+      if (!phone) return "";
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length !== 11) return phone;
+      return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    };
+
+    const getStatusInfo = () => {
+      if (
+        activeCall &&
+        activeCall.solicitante.id === driver.uid &&
+        activeCall.status === "ABERTO"
+      ) {
+        return {
+          text: "Aguardando Apoio",
+          color: "bg-yellow-100 dark:bg-yellow-900/50",
+          textColor: "text-yellow-700 dark:text-yellow-300",
+        };
+      }
+
+      switch (driver.status) {
+        case "DISPONIVEL":
+          return {
+            text: "Disponível",
+            color: "bg-green-100 dark:bg-green-900/50",
+            textColor: "text-green-700 dark:text-green-300",
+          };
+        case "INDISPONIVEL":
+          return {
+            text: "Indisponível",
+            color: "bg-red-100 dark:bg-red-900/50",
+            textColor: "text-red-700 dark:text-red-300",
+          };
+        case "EM_ROTA":
+          return {
+            text: "Prestando Apoio",
+            color: "bg-blue-100 dark:bg-blue-900/50",
+            textColor: "text-blue-700 dark:text-blue-300",
+          };
+        default:
+          return {
+            text: "Offline",
+            color: "bg-gray-200 dark:bg-gray-700",
+            textColor: "text-gray-600 dark:text-gray-300",
+          };
+      }
+    };
+
+    const statusInfo = getStatusInfo();
+
+    return (
+      <div className="relative mb-16">
+        <div className="bg-primary rounded-xl shadow-lg p-6 pt-24 text-primary-foreground text-center relative overflow-hidden">
+          <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-white/5 rounded-full opacity-50"></div>
+          <div className="absolute top-0 -left-16 w-28 h-28 bg-white/5 rounded-full opacity-50"></div>
+
+          <h2 className="text-3xl font-bold mt-2">{driver.name}</h2>
+          <div className="text-sm opacity-90 mt-4 space-y-2">
+            <p className="flex items-center justify-center gap-2">
+              <Building size={16} className="opacity-80" />{" "}
+              {driver.hub || "Hub não definido"}
+            </p>
+            <p className="flex items-center justify-center gap-2">
+              <Phone size={16} className="opacity-80" />{" "}
+              {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
+            </p>
+            <p className="flex items-center justify-center gap-2 capitalize">
+              <Truck size={16} className="opacity-80" />{" "}
+              {driver.vehicleType || "Veículo não definido"}
+            </p>
+          </div>
+          <Badge
+            className={`mt-6 px-4 py-1.5 text-xs font-semibold rounded-full ${statusInfo.color} ${statusInfo.textColor} hover:${statusInfo.color}`}
+          >
+            {statusInfo.text}
+          </Badge>
+        </div>
+
+        <div className="absolute -top-14 left-1/2 -translate-x-1/2 group">
+          <div className="relative w-28 h-28 rounded-full bg-background border-4 border-background shadow-lg flex items-center justify-center overflow-hidden">
+            {driver.avatar ? (
+              <img
+                src={driver.avatar}
+                alt={driver.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-4xl font-bold text-primary">
+                {driver.initials}
+              </span>
+            )}
+            {isUploading ? (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <LoaderCircle className="text-white animate-spin" />
+              </div>
+            ) : (
+              <button
+                onClick={onEditClick}
+                className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-60 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100 cursor-pointer rounded-full"
+              >
+                <Camera className="text-white" size={36} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Card Histórico de Chamados (Estilizado)
+  const DriverCallHistoryCard = ({ call }: { call: SupportCall }) => {
+    const details = parseDescription(call.description);
+    const isRequester = call.solicitante.id === userId; // Acesso direto ao userId
+    const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
+    const otherParty = allDrivers.find((d) => d.uid === otherPartyId); // Acesso direto a allDrivers
+
+    let statusVariant: "default" | "secondary" | "destructive" | "outline" =
+      "default";
+    let statusText = "Desconhecido";
+    let title = "Chamado";
+
+    if (isRequester) {
+      title = "Pedido de Apoio";
+      if (call.status === "ABERTO") {
+        statusText = "Aguardando Apoio";
+        statusVariant = "default";
+      } else if (call.status === "AGUARDANDO_APROVACAO") {
+        statusText = "Aguardando Aprovação";
+        statusVariant = "secondary";
+      } else if (call.status === "EM ANDAMENTO") {
+        statusText = `Recebendo Apoio de ${otherParty?.name || "Motorista"}`;
+        statusVariant = "default";
+      } else if (call.status === "CONCLUIDO") {
+        statusText = "Concluído";
+        statusVariant = "outline";
+      }
+    } else {
+      title = `Apoio a ${call.solicitante.name}`;
+      if (call.status === "EM ANDAMENTO") {
+        statusText = "Prestando Apoio";
+        statusVariant = "default";
+      } else if (call.status === "AGUARDANDO_APROVACAO") {
+        statusText = "Aguardando Aprovação";
+        statusVariant = "secondary";
+      } else if (call.status === "CONCLUIDO") {
+        statusText = "Concluído";
+        statusVariant = "outline";
+      }
+    }
+
+    const handleWhatsAppClick = () => {
+      const contactPhone = otherParty?.phone;
+      if (!contactPhone) {
+        sonnerToast.error("O outro motorista não tem um telefone cadastrado.");
+        return;
+      }
+      const message = encodeURIComponent(
+        `Olá ${otherParty?.name}, sou o ${driver.name} referente ao chamado de apoio.` // Acesso direto a 'driver'
+      );
+      window.open(`https://wa.me/55${contactPhone}?text=${message}`, "_blank");
+    };
+
+    return (
+      <Card className="overflow-hidden shadow-lg border-l-8 border-primary rounded-xl bg-card">
+        <CardHeader className="flex flex-row items-center justify-between bg-primary/5 dark:bg-card-foreground/5 p-4">
+          <CardTitle className="text-base font-bold text-foreground">
+            {title}
+          </CardTitle>
+          <Badge
+            variant={statusVariant}
+            className="text-xs font-semibold rounded-full px-2.5 py-0.5"
+          >
+            {statusText}
+          </Badge>
+        </CardHeader>
+        <CardContent className="p-4 text-sm space-y-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Região(ões)
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.region}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Nº Pacotes
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.packages}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Veículo Necessário
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.vehicle}
+              </p>
+            </div>
+          </div>
+          <hr className="my-3 border-border/50" />
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+              Localização
+            </p>
+            <a
+              href={details.location}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center gap-1 break-all text-xs"
+            >
+              <MapPin size={13} className="flex-shrink-0" />{" "}
+              <span className="truncate">{details.location}</span>{" "}
+              <ExternalLink size={13} className="ml-1 flex-shrink-0" />
+            </a>
+          </div>
+        </CardContent>
+        {(call.status === "EM ANDAMENTO" ||
+          call.status === "AGUARDANDO_APROVACAO" ||
+          call.status === "ABERTO") && (
+          <CardFooter className="bg-muted/30 dark:bg-card-foreground/5 p-4 flex justify-end gap-2">
+            {otherParty && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleWhatsAppClick}
+                className="bg-green-600 hover:bg-green-700 text-white border-green-700 hover:text-white text-xs rounded-lg"
+              >
+                <Phone size={14} className="mr-1" /> Contatar
+              </Button>
+            )}
+            {!isRequester && call.status === "EM ANDAMENTO" && (
+              <>
+                {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRequestApproval(call.id)}
+                  className="border-purple-500 text-purple-700 hover:bg-purple-100 dark:text-purple-300 dark:hover:bg-purple-900/50 dark:hover:text-purple-200 text-xs rounded-lg"
+                >
+                  <Clock size={14} className="mr-1" /> Aprovação
+                </Button>
+                {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleCancelSupport(call.id)}
+                  className="text-xs rounded-lg"
+                >
+                  <XCircle size={14} className="mr-1" /> Cancelar
+                </Button>
+              </>
+            )}
+            {isRequester &&
+              (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
+                // *** CORREÇÃO DO NOME DA FUNÇÃO ***
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDeleteSupportRequest(call.id)}
+                  className="text-xs rounded-lg"
+                >
+                  <XCircle size={14} className="mr-1" /> Cancelar
+                </Button>
+              )}
+          </CardFooter>
+        )}
+      </Card>
+    );
+  };
+
+  // Card Chamado Aberto (Estilizado)
+  const OpenCallCard = ({ call }: { call: SupportCall }) => {
+    const details = parseDescription(call.description);
+    const requesterPhone = call.solicitante.phone || "";
+    const isAcceptingThisCall = acceptingCallId === call.id;
+
+    const handleWhatsAppClick = () => {
+      if (!requesterPhone) {
+        sonnerToast.error(
+          "O motorista solicitante não possui um número de telefone cadastrado."
+        );
+        return;
+      }
+      const message = encodeURIComponent(
+        `Olá ${call.solicitante.name}, me chamo ${driver.name} e aceitei seu chamado e serei seu apoio` // Acesso direto a 'driver'
+      );
+      window.open(
+        `https://wa.me/55${requesterPhone}?text=${message}`,
+        "_blank"
+      );
+    };
+
+    return (
+      <Card className="overflow-hidden shadow-lg border-l-8 border-yellow-500 rounded-xl bg-card">
+        <CardHeader className="bg-card-foreground/5 dark:bg-card-foreground/10 p-4">
+          <CardTitle className="text-base font-bold text-foreground">
+            Apoio para {call.solicitante.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 text-sm space-y-3">
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Região(ões)
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.region}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Nº Pacotes
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.packages}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Veículo Necessário
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {details.vehicle}
+              </p>
+            </div>
+          </div>
+          <hr className="my-3 border-border/50" />
+          <div className="space-y-1">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+              Localização
+            </p>
+            <a
+              href={details.location}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center gap-1 break-all text-xs"
+            >
+              <MapPin size={13} className="flex-shrink-0" />{" "}
+              <span className="truncate">{details.location}</span>{" "}
+              <ExternalLink size={13} className="ml-1 flex-shrink-0" />
+            </a>
+          </div>
+        </CardContent>
+        <CardFooter className="bg-muted/30 dark:bg-card-foreground/5 p-4 flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleWhatsAppClick}
+            className="bg-green-600 hover:bg-green-700 text-white border-green-700 hover:text-white h-9 w-9"
+          >
+            <Phone size={16} />
+          </Button>
+          {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
+          <Button
+            onClick={() => handleAcceptCall(call.id)}
+            disabled={!!acceptingCallId}
+            size="sm"
+            className="bg-primary hover:bg-primary/90 w-auto px-4 text-xs h-9 rounded-lg"
+          >
+            {isAcceptingThisCall ? (
+              <LoaderCircle className="animate-spin mr-1.5 h-4 w-4" />
+            ) : (
+              "Aceitar Apoio"
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  };
+
+  // --- RETURN PRINCIPAL (JSX) ---
   return (
     <>
       <Toaster richColors position="top-center" />
-      <div className="bg-orange-50 min-h-dvh font-sans">
+      <div className="bg-background min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
           {!isProfileComplete && isProfileWarningVisible && (
-            <div className="p-4 sticky top-0 z-10">
+            <div className="p-4 sticky top-0 z-20">
               <div
                 className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md flex justify-between items-center"
                 role="alert"
@@ -1266,7 +1305,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               </div>
             </div>
           )}
-          <div className="p-4 md:p-6">
+
+          <div className="p-4 md:px-6 md:pt-6">
             <ProfileHeaderCard
               driver={driver}
               isUploading={isUploading}
@@ -1282,25 +1322,31 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             accept="image/*"
           />
 
-          <div className="bg-white rounded-t-lg shadow-md flex-grow flex flex-col overflow-hidden min-h-0">
-            <div className="px-4 pt-4">
-              <label className="text-sm font-medium text-gray-700">
+          <div className="bg-background rounded-t-2xl shadow-xl flex-grow flex flex-col overflow-hidden min-h-0">
+            <div className="px-4 pt-4 sticky top-0 bg-background z-10 border-b border-border">
+              <label
+                htmlFor="hubFilterSelect"
+                className="block text-xs font-medium text-muted-foreground mb-1"
+              >
                 Filtrar por Hub
               </label>
               <select
+                id="hubFilterSelect"
                 value={globalHubFilter}
                 onChange={(e) => setGlobalHubFilter(e.target.value)}
-                className="w-full p-2 mt-1 border rounded-md bg-white shadow-sm"
+                className="w-full p-2 border rounded-md bg-background shadow-sm text-sm focus:ring-primary focus:border-primary"
               >
-                {allHubs.map((hub) => (
-                  <option key={hub} value={hub}>
-                    {hub}
+                {allHubs.map((hubOption) => (
+                  <option key={hubOption} value={hubOption}>
+                    {hubOption}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="border-b overflow-x-auto whitespace-nowrap mt-4">
-              <div className="flex">
+
+            {/* Abas */}
+            <div className="border-b border-border sticky top-[calc(theme(spacing.24)+1px)] bg-background z-10">
+              <div className="flex px-1 sm:px-2">
                 {TABS.map((tab) => (
                   <button
                     key={tab.id}
@@ -1314,23 +1360,24 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       setActiveTab(tab.id as TabId);
                     }}
                     disabled={!isProfileComplete && tab.id !== "profile"}
-                    className={`flex-grow p-3 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-colors duration-300 ${
+                    className={`flex-1 p-3 text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 border-b-2 transition-colors duration-200 ${
                       activeTab === tab.id
-                        ? "border-b-2 border-orange-600 text-orange-600"
-                        : "text-gray-500 hover:bg-gray-100"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300 dark:hover:border-gray-700"
                     } ${
                       !isProfileComplete && tab.id !== "profile"
                         ? "cursor-not-allowed opacity-50"
                         : ""
                     }`}
                   >
-                    {tab.icon}
+                    {React.cloneElement(tab.icon, { size: 16 })}
                     <span className="capitalize">{tab.label}</span>
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Container do Conteúdo das Abas */}
             <div
               className="flex-1 overflow-hidden"
               onTouchStart={handleTouchStart}
@@ -1339,50 +1386,55 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             >
               <div
                 ref={swipeContainerRef}
-                className="flex h-full transition-transform duration-300 ease-in-out"
+                className="flex h-full transition-transform duration-300 ease-in-out bg-muted/10 dark:bg-black/20"
                 style={{ transform: `translateX(-${activeTabIndex * 100}%)` }}
               >
-                {/* Availability Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-6">
-                  <div className="bg-white p-6 rounded-lg shadow-sm text-center space-y-4">
-                    <h3 className="text-lg font-bold">
-                      Estou disponível para apoio?
-                    </h3>
-                    <div className="flex items-center justify-center space-x-4">
-                      <button
+                {/* --- Aba Disponibilidade --- */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6 space-y-6">
+                  <Card className="shadow-md bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-center text-lg font-semibold text-foreground">
+                        Estou disponível para apoio?
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                      <Button
                         onClick={() => handleAvailabilityChange(true)}
                         disabled={!isProfileComplete}
-                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
+                        variant={
+                          driver.status === "DISPONIVEL" ? "default" : "outline"
+                        }
+                        className={`w-full sm:w-36 ${
                           driver.status === "DISPONIVEL"
-                            ? "bg-green-600 text-white"
-                            : "bg-gray-200"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                            ? "bg-green-600 hover:bg-green-700 text-white"
+                            : ""
+                        } rounded-lg`}
                       >
-                        Disponível
-                      </button>
-                      <button
+                        <CheckCircle size={16} className="mr-2" /> Disponível
+                      </Button>
+                      <Button
                         onClick={() => handleAvailabilityChange(false)}
-                        className={`w-32 py-2 text-sm font-semibold rounded-lg ${
+                        disabled={!isProfileComplete}
+                        variant={
                           driver.status !== "DISPONIVEL"
-                            ? "bg-red-600 text-white"
-                            : "bg-gray-200"
-                        }`}
+                            ? "destructive"
+                            : "outline"
+                        }
+                        className="w-full sm:w-36 rounded-lg"
                       >
-                        Indisponível
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                      Use estes botões para informar o seu status.
-                    </p>
-                  </div>
+                        <XCircle size={16} className="mr-2" /> Indisponível
+                      </Button>
+                    </CardContent>
+                  </Card>
+
                   {driver.status === "DISPONIVEL" && (
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-800 mb-4">
-                        Chamados de Apoio Disponíveis
+                    <div className="pt-4">
+                      <h3 className="text-xl font-semibold text-foreground mb-4 px-1">
+                        Chamados Abertos
                       </h3>
-                      <div className="relative mb-4">
+                      <div className="relative mb-4 px-1">
                         <Search
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                           size={18}
                         />
                         <input
@@ -1390,190 +1442,197 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           placeholder="Pesquisar por ID da Rota..."
                           value={routeIdSearch}
                           onChange={(e) => setRouteIdSearch(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm bg-card text-foreground focus:ring-primary focus:border-primary"
                         />
                       </div>
                       {filteredOpenCalls.length > 0 ? (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                           {filteredOpenCalls.map((call) => (
-                            <OpenCallCard
-                              key={call.id}
-                              call={call}
-                              currentDriverName={driver.name}
-                              onAccept={handleAcceptCall}
-                              acceptingCallId={acceptingCallId}
-                            />
+                            <OpenCallCard key={call.id} call={call} />
                           ))}
                         </div>
                       ) : (
-                        <p className="text-center text-gray-500 pt-4">
-                          Nenhum chamado de apoio aberto.
-                        </p>
+                        <Card className="text-center py-10 px-4 shadow-sm mt-6 bg-card">
+                          <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground" />
+                          <h3 className="mt-2 text-sm font-semibold text-foreground">
+                            Nenhum chamado aberto
+                          </h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Quando houver chamados no seu hub, eles aparecerão
+                            aqui.
+                          </p>
+                        </Card>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Support Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
-                  <div className="bg-white p-6 rounded-lg shadow-sm space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <AlertTriangle className="text-red-500" />
-                      <h3 className="text-lg font-bold">
+                {/* --- Aba Apoio --- */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6">
+                  <Card className="shadow-md bg-card">
+                    <CardHeader className="flex flex-row items-center space-x-3 pb-4">
+                      <AlertTriangle className="text-destructive h-6 w-6" />
+                      <CardTitle className="text-lg font-semibold text-foreground">
                         Solicitar Apoio de Transferência
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (hasActiveRequest) {
-                          sonnerToast.error(
-                            "Você já possui uma solicitação de apoio ativa.",
-                            {
-                              description:
-                                "Cancele a solicitação anterior para criar uma nova.",
-                            }
-                          );
-                          return;
-                        }
-                        if (!isProfileComplete) {
-                          sonnerToast.error(
-                            "Complete seu perfil para solicitar apoio."
-                          );
-                          setActiveTab("profile");
-                          return;
-                        }
-                        setModalError("");
-                        setIsSupportModalOpen(true);
-                      }}
-                      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!isProfileComplete || hasActiveRequest}
-                    >
-                      PRECISO DE APOIO
-                    </button>
-                  </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Precisa de ajuda para transferir pacotes? Clique abaixo
+                        para abrir um chamado. Lembre-se que o mínimo são 20
+                        pacotes.
+                      </p>
+                      <Button
+                        onClick={() => {
+                          if (hasActiveRequest) {
+                            sonnerToast.error(
+                              "Você já possui uma solicitação de apoio ativa.",
+                              {
+                                description:
+                                  "Cancele a solicitação anterior para criar uma nova.",
+                              }
+                            );
+                            return;
+                          }
+                          if (!isProfileComplete) {
+                            sonnerToast.error(
+                              "Complete seu perfil para solicitar apoio."
+                            );
+                            setActiveTab("profile");
+                            return;
+                          }
+                          setModalError("");
+                          setIsSupportModalOpen(true);
+                        }}
+                        className="w-full bg-gradient-to-r from-red-500 to-primary text-white font-bold py-3 text-base h-auto shadow-md hover:shadow-lg transition-all duration-300 hover:from-red-600 hover:to-orange-500 rounded-lg"
+                        disabled={!isProfileComplete || hasActiveRequest}
+                      >
+                        <Zap size={18} className="mr-2" /> PRECISO DE APOIO
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Active Calls Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4 space-y-4">
-                  <h3 className="text-lg font-bold text-gray-800">
-                    Histórico de Chamados
+                {/* --- Aba Meus Chamados --- */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6 space-y-5">
+                  <h3 className="text-xl font-semibold text-foreground px-1 mb-3">
+                    Meus Chamados e Apoios
                   </h3>
-                  <div className="flex flex-wrap gap-2 border-b pb-2">
-                    <button
-                      onClick={() => setHistoryFilter("all")}
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        historyFilter === "all"
-                          ? "bg-orange-600 text-white"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      Todos
-                    </button>
-                    <button
-                      onClick={() => setHistoryFilter("inProgress")}
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        historyFilter === "inProgress"
-                          ? "bg-orange-600 text-white"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      Em Andamento
-                    </button>
-                    <button
-                      onClick={() => setHistoryFilter("requester")}
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        historyFilter === "requester"
-                          ? "bg-orange-600 text-white"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      Meus Pedidos
-                    </button>
-                    <button
-                      onClick={() => setHistoryFilter("provider")}
-                      className={`px-3 py-1 text-sm rounded-full ${
-                        historyFilter === "provider"
-                          ? "bg-orange-600 text-white"
-                          : "bg-gray-200"
-                      }`}
-                    >
-                      Meus Apoios
-                    </button>
+                  <div className="flex flex-wrap gap-2 px-1 pb-4 border-b border-border">
+                    {(
+                      ["all", "inProgress", "requester", "provider"] as const
+                    ).map((filter) => {
+                      const labels = {
+                        all: "Todos",
+                        inProgress: "Em Andamento",
+                        requester: "Meus Pedidos",
+                        provider: "Meus Apoios",
+                      };
+                      return (
+                        <Button
+                          key={filter}
+                          variant={
+                            historyFilter === filter ? "default" : "secondary"
+                          }
+                          size="sm"
+                          onClick={() => setHistoryFilter(filter)}
+                          className={`text-xs h-8 px-3 rounded-full ${
+                            historyFilter === filter
+                              ? "shadow-sm"
+                              : "text-muted-foreground hover:bg-accent"
+                          }`}
+                        >
+                          {labels[filter]}
+                        </Button>
+                      );
+                    })}
                   </div>
                   {filteredCalls.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       {filteredCalls.map((call) => (
-                        <DriverCallHistoryCard
-                          key={call.id}
-                          call={call}
-                          currentDriver={driver}
-                          allDrivers={allDrivers}
-                          onCancelSupport={handleCancelSupport}
-                          onDeleteSupportRequest={handleDeleteSupportRequest}
-                          onRequestApproval={handleRequestApproval}
-                        />
+                        <DriverCallHistoryCard key={call.id} call={call} />
                       ))}
                     </div>
                   ) : (
-                    <p className="text-center text-gray-500 pt-4">
-                      Nenhum chamado encontrado.
-                    </p>
+                    <Card className="text-center py-10 px-4 shadow-sm mt-6 bg-card">
+                      <Ticket className="mx-auto h-12 w-12 text-muted-foreground" />
+                      <h3 className="mt-2 text-sm font-semibold text-foreground">
+                        Nenhum chamado
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Seu histórico de pedidos e apoios aparecerá aqui.
+                      </p>
+                    </Card>
                   )}
                 </div>
 
-                {/* Profile Tab */}
-                <div className="w-full flex-shrink-0 overflow-y-auto p-4">
+                {/* --- Aba Perfil --- */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6">
                   <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                      <h3 className="text-lg font-semibold mb-4">
-                        Configurações
-                      </h3>
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-gray-700">
-                          Som das notificações
-                        </label>
-                        <button
-                          onClick={toggleMute}
-                          className="p-2 rounded-full hover:bg-gray-200"
-                        >
-                          {isMuted ? (
-                            <VolumeX size={20} />
-                          ) : (
-                            <Volume2 size={20} />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                      <h3 className="text-lg font-semibold mb-4">
-                        Editar Perfil
-                      </h3>
-                      <div className="space-y-4">
+                    <Card className="shadow-md bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold text-foreground">
+                          Configurações
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <label
+                            htmlFor="soundToggle"
+                            className="text-sm font-medium text-foreground pr-4"
+                          >
+                            Som das notificações
+                          </label>
+                          <button
+                            id="soundToggle"
+                            onClick={toggleMute}
+                            className={`p-2 rounded-full transition-colors ${
+                              isMuted
+                                ? "bg-muted text-muted-foreground"
+                                : "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+                            }`}
+                          >
+                            {isMuted ? (
+                              <VolumeX size={20} />
+                            ) : (
+                              <Volume2 size={20} />
+                            )}
+                          </button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="shadow-md bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold text-foreground">
+                          Editar Perfil
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             ID de Motorista
                           </label>
                           <input
                             type="text"
                             value={shopeeId || "Aguardando cadastro..."}
                             readOnly
-                            className="w-full p-2 border rounded-md bg-gray-100 text-gray-500 cursor-not-allowed"
-                            title="Seu ID de cadastro na plataforma"
+                            className="w-full p-2 border rounded-md bg-muted text-muted-foreground cursor-not-allowed text-sm"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Nome Completo
                           </label>
                           <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Telefone (WhatsApp)
                           </label>
                           <input
@@ -1585,12 +1644,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                                 setPhone(digits);
                               }
                             }}
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                             placeholder="(XX) XXXXX-XXXX"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Hub de Atuação
                           </label>
                           <div className="relative">
@@ -1608,16 +1667,19 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                                   150
                                 )
                               }
-                              className="w-full p-2 border rounded-md pr-10"
+                              className="w-full p-2 border rounded-md pr-10 text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                               placeholder="Pesquisar Hub..."
                             />
-                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <Search
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                              size={18}
+                            />
                             {isHubDropdownOpen && filteredHubs.length > 0 && (
-                              <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                              <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-y-auto text-sm">
                                 {filteredHubs.map((h) => (
                                   <div
                                     key={h}
-                                    className="p-2 hover:bg-gray-100 cursor-pointer"
+                                    className="p-2 hover:bg-muted cursor-pointer"
                                     onClick={() => {
                                       setHub(h);
                                       setHubSearch(h);
@@ -1632,13 +1694,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Tipo de Veículo
                           </label>
                           <select
                             value={vehicleType}
                             onChange={(e) => setVehicleType(e.target.value)}
-                            className="w-full p-2 border rounded-md"
+                            className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                           >
                             <option value="">Selecione seu veículo</option>
                             {vehicleTypesList.map((v) => (
@@ -1648,78 +1710,84 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             ))}
                           </select>
                         </div>
-                        <button
+                      </CardContent>
+                      <CardFooter>
+                        <Button
                           onClick={handleUpdateProfile}
-                          className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600"
+                          variant="outline"
+                          className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary rounded-lg"
                         >
                           Salvar Alterações
-                        </button>
-                        <div className="mt-4 pt-4 border-t">
-                          <h3 className="text-lg font-semibold mb-2">
-                            Alterar Senha
-                          </h3>
-                          <div className="space-y-2">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Nova Senha
-                              </label>
-                              <div className="relative">
-                                <input
-                                  type={showPassword ? "text" : "password"}
-                                  value={newPassword}
-                                  onChange={(e) =>
-                                    setNewPassword(e.target.value)
-                                  }
-                                  className="w-full p-2 border rounded-md"
-                                  placeholder="Mínimo 6 caracteres"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                >
-                                  {showPassword ? (
-                                    <EyeOff size={18} />
-                                  ) : (
-                                    <Eye size={18} />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Confirmar Nova Senha
-                              </label>
-                              <input
-                                type={showPassword ? "text" : "password"}
-                                value={confirmPassword}
-                                onChange={(e) =>
-                                  setConfirmPassword(e.target.value)
-                                }
-                                className="w-full p-2 border rounded-md"
-                                placeholder="Confirme a nova senha"
-                              />
-                            </div>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    <Card className="shadow-md bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold text-foreground">
+                          Alterar Senha
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                            Nova Senha
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? "text" : "password"}
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
+                              placeholder="Mínimo 6 caracteres"
+                            />
                             <button
-                              onClick={handleChangePassword}
-                              className="w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 mt-2"
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                             >
-                              Alterar Senha
+                              {showPassword ? (
+                                <EyeOff size={18} />
+                              ) : (
+                                <Eye size={18} />
+                              )}
                             </button>
                           </div>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                      <button
-                        onClick={() => auth.signOut()}
-                        className="w-full flex items-center justify-center gap-2 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600"
-                      >
-                        <LogOut size={16} />
-                        Sair da Conta
-                      </button>
-                    </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+                            Confirmar Nova Senha
+                          </label>
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
+                            placeholder="Confirme a nova senha"
+                          />
+                        </div>
+                      </CardContent>
+                      <CardFooter>
+                        <Button
+                          onClick={handleChangePassword}
+                          variant="outline"
+                          className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary rounded-lg"
+                        >
+                          Alterar Senha
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    <Card className="shadow-md border border-destructive/50 bg-card">
+                      <CardContent className="p-4">
+                        <Button
+                          variant="destructive"
+                          onClick={() => auth.signOut()}
+                          className="w-full rounded-lg"
+                        >
+                          <LogOut size={16} className="mr-2" />
+                          Sair da Conta
+                        </Button>
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
               </div>
@@ -1727,21 +1795,25 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           </div>
         </div>
       </div>
+
+      {/* --- Modais (Estilizados) --- */}
       {isReauthModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm">
-            <h2 className="text-lg font-bold text-gray-800 mb-2">
-              Confirme sua identidade
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Para sua segurança, por favor, insira sua senha atual para
-              continuar.
-            </p>
-            <div className="space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold">
+                Confirme sua identidade
+              </CardTitle>
+              <p className="text-sm text-muted-foreground pt-2">
+                Para sua segurança, por favor, insira sua senha atual para
+                continuar.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
                 <label
                   htmlFor="currentPassword"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+                  className="block text-sm font-medium text-muted-foreground mb-1"
                 >
                   Senha Atual
                 </label>
@@ -1750,280 +1822,322 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md bg-background"
                   required
                 />
               </div>
               {reauthError && (
                 <p className="text-sm text-red-600">{reauthError}</p>
               )}
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsReauthModalOpen(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
-                  disabled={isReauthenticating}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReauthenticateAndChange}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-blue-300"
-                  disabled={isReauthenticating}
-                >
-                  {isReauthenticating ? "Confirmando..." : "Confirmar"}
-                </button>
-              </div>
-            </div>
-          </div>
+            </CardContent>
+            <CardFooter className="flex justify-end gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsReauthModalOpen(false)}
+                disabled={isReauthenticating}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleReauthenticateAndChange}
+                disabled={isReauthenticating || !currentPassword}
+                className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 dark:text-white"
+              >
+                {isReauthenticating ? (
+                  <LoaderCircle className="animate-spin mr-2 h-4 w-4" />
+                ) : null}
+                Confirmar
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       )}
+
       {isSupportModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Solicitar Apoio de Transferência
-              </h2>
-              <button
-                onClick={() => setIsSupportModalOpen(false)}
-                className="p-1 rounded-full hover:bg-gray-200"
-              >
-                <X size={24} className="text-gray-600" />
-              </button>
-            </div>
-            <form onSubmit={handleSupportSubmit} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="hub"
-                  className="block text-sm font-medium text-gray-700 mb-1"
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg max-h-[90vh] flex flex-col">
+            <CardHeader className="border-b">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-xl font-bold">
+                  Solicitar Apoio de Transferência
+                </CardTitle>
+                <button
+                  onClick={() => setIsSupportModalOpen(false)}
+                  className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
                 >
-                  Selecione o seu Hub
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    id="hub"
-                    name="hub"
-                    value={hub}
-                    onChange={(e) => setHub(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none"
-                    required
-                  >
-                    <option value="">Selecione...</option>
-                    {hubs.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <X size={20} />
+                </button>
               </div>
-              <div>
-                <label
-                  htmlFor="currentLocation"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Sua Localização Atual
-                </label>
-                <div className="flex items-center space-x-2">
-                  <div className="relative flex-grow">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      id="currentLocation"
-                      name="currentLocation"
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Clique para obter ou digite"
-                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            </CardHeader>
+            <form onSubmit={handleSupportSubmit}>
+              <CardContent className="p-6 space-y-5 overflow-y-auto">
+                <div>
+                  <label
+                    htmlFor="hubModal"
+                    className="block text-sm font-medium text-muted-foreground mb-1"
+                  >
+                    Selecione o seu Hub
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                    <select
+                      id="hubModal"
+                      name="hub"
+                      value={hub}
+                      onChange={(e) => setHub(e.target.value)}
+                      className="w-full pl-10 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary appearance-none text-sm bg-background"
                       required
-                    />
+                    >
+                      <option value="">Selecione...</option>
+                      {hubs.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                      <svg
+                        className="fill-current h-4 w-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                      </svg>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleGetLocation}
-                    disabled={isLocating}
-                    className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
+                </div>
+                <div>
+                  <label
+                    htmlFor="currentLocationModal"
+                    className="block text-sm font-medium text-muted-foreground mb-1"
                   >
-                    {isLocating ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <MapPin />
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="packageCount"
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                >
-                  Número de Pacotes
-                </label>
-                <div className="relative">
-                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    id="packageCount"
-                    name="packageCount"
-                    type="number"
-                    min="0"
-                    placeholder="Ex: 15"
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Região de Entrega dos Pacotes
-                </label>
-                {deliveryRegions.map((region, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
+                    Sua Localização Atual
+                  </label>
+                  <div className="flex items-center space-x-2">
                     <div className="relative flex-grow">
-                      <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
                       <input
+                        id="currentLocationModal"
+                        name="currentLocation"
                         type="text"
-                        value={region}
-                        onChange={(e) =>
-                          handleFieldChange(
-                            index,
-                            e.target.value,
-                            setDeliveryRegions
-                          )
-                        }
-                        placeholder="Ex: Zona Leste, São Paulo"
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="Clique no ícone para obter ou digite"
+                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
                         required
                       />
                     </div>
-                    {deliveryRegions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveField(index, setDeliveryRegions)
-                        }
-                        className="text-red-500"
-                      >
-                        <MinusCircle size={20} />
-                      </button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleGetLocation}
+                      disabled={isLocating}
+                      className="border-primary text-primary hover:bg-primary/10"
+                    >
+                      {isLocating ? (
+                        <LoaderCircle className="animate-spin h-5 w-5" />
+                      ) : (
+                        <MapPin className="h-5 w-5" />
+                      )}
+                    </Button>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => handleAddField(setDeliveryRegions)}
-                  className="flex items-center space-x-1 text-sm text-blue-600"
-                >
-                  <PlusCircle size={16} />
-                  <span>Adicionar outra região</span>
-                </button>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Veículo Necessário
-                </label>
-                {neededVehicles.map((vehicle, index) => (
-                  <div key={index} className="flex items-center space-x-2 mb-2">
-                    <div className="relative flex-grow">
-                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <select
-                        value={vehicle}
-                        onChange={(e) =>
-                          handleFieldChange(
-                            index,
-                            e.target.value,
-                            setNeededVehicles
-                          )
-                        }
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg appearance-none"
-                        required
-                      >
-                        <option value="">Selecione seu veículo</option>
-                        {vehicleTypesList.map((v) => (
-                          <option key={v} value={v}>
-                            {v.charAt(0).toUpperCase() + v.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {neededVehicles.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveField(index, setNeededVehicles)
-                        }
-                        className="text-red-500"
-                      >
-                        <MinusCircle size={20} />
-                      </button>
-                    )}
+                </div>
+                <div>
+                  <label
+                    htmlFor="packageCountModal"
+                    className="block text-sm font-medium text-muted-foreground mb-1"
+                  >
+                    Número de Pacotes (mín. 20)
+                  </label>
+                  <div className="relative">
+                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                    <input
+                      id="packageCountModal"
+                      name="packageCount"
+                      type="number"
+                      min="20"
+                      placeholder="Ex: 25"
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
+                      required
+                    />
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => handleAddField(setNeededVehicles)}
-                  className="flex items-center space-x-1 text-sm text-blue-600"
-                >
-                  <PlusCircle size={16} />
-                  <span>Adicionar outro veículo</span>
-                </button>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  id="isBulky"
-                  name="isBulky"
-                  type="checkbox"
-                  className="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                />
-                <label
-                  htmlFor="isBulky"
-                  className="text-sm font-medium text-gray-700"
-                >
-                  Contém pacote volumoso
-                </label>
-              </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Região(ões) de Entrega
+                  </label>
+                  <div className="space-y-2">
+                    {deliveryRegions.map((region, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <div className="relative flex-grow">
+                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                          <input
+                            type="text"
+                            value={region}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                e.target.value,
+                                setDeliveryRegions
+                              )
+                            }
+                            placeholder={`Região ${index + 1}`}
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm bg-background"
+                            required
+                          />
+                        </div>
+                        {deliveryRegions.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              handleRemoveField(index, setDeliveryRegions)
+                            }
+                            className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 h-9 w-9"
+                          >
+                            <MinusCircle size={18} />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddField(setDeliveryRegions)}
+                    className="mt-2 text-xs h-8"
+                  >
+                    <PlusCircle size={14} className="mr-1.5" />
+                    Adicionar Região
+                  </Button>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Veículo(s) Necessário(s)
+                  </label>
+                  <div className="space-y-2">
+                    {neededVehicles.map((vehicle, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <div className="relative flex-grow">
+                          <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+                          <select
+                            value={vehicle}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                index,
+                                e.target.value,
+                                setNeededVehicles
+                              )
+                            }
+                            className="w-full pl-10 pr-8 py-2 border rounded-lg appearance-none text-sm bg-background"
+                            required
+                          >
+                            <option value="">Selecione...</option>
+                            {vehicleTypesList.map((v) => (
+                              <option key={v} value={v}>
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                            <svg
+                              className="fill-current h-4 w-4"
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            </svg>
+                          </div>
+                        </div>
+                        {neededVehicles.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              handleRemoveField(index, setNeededVehicles)
+                            }
+                            className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 h-9 w-9"
+                          >
+                            <MinusCircle size={18} />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddField(setNeededVehicles)}
+                    className="mt-2 text-xs h-8"
+                  >
+                    <PlusCircle size={14} className="mr-1.5" />
+                    Adicionar Veículo
+                  </Button>
+                </div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <input
+                    id="isBulkyModal"
+                    name="isBulky"
+                    type="checkbox"
+                    className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                  <label
+                    htmlFor="isBulkyModal"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Contém pacote volumoso
+                  </label>
+                </div>
 
-              {modalError && (
-                <p className="text-sm text-center text-red-600 bg-red-100 p-2 rounded-md">
-                  {modalError}
-                </p>
-              )}
-
-              <div className="pt-2">
-                <button
+                {modalError && (
+                  <div className="text-sm text-center text-red-600 bg-red-100 p-3 rounded-md border border-red-200">
+                    {modalError}
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="p-4 border-t">
+                <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors disabled:bg-orange-300"
+                  className="w-full h-11 text-base"
                 >
                   {isSubmitting ? (
-                    <LoaderCircle className="animate-spin" />
+                    <LoaderCircle className="animate-spin mr-2 h-5 w-5" />
                   ) : (
                     "Enviar Solicitação"
                   )}
-                </button>
-              </div>
+                </Button>
+              </CardFooter>
             </form>
-          </div>
+          </Card>
         </div>
       )}
+
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md text-center">
-            <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Sucesso!</h2>
-            <p className="text-gray-600 mb-6">
-              Apoio solicitado com sucesso, aguarde o contato de um Driver ou
-              Monitor.
-            </p>
-            <button
-              onClick={() => setShowSuccessModal(false)}
-              className="w-full py-2 px-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700"
-            >
-              OK
-            </button>
-          </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md text-center">
+            <CardContent className="p-8">
+              <CheckCircle size={56} className="text-green-500 mx-auto mb-5" />
+              <h2 className="text-xl font-bold text-foreground mb-2">
+                Sucesso!
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                Apoio solicitado com sucesso! Aguarde o contato de um motorista
+                ou monitor.
+              </p>
+              <Button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full h-10"
+              >
+                OK
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       )}
     </>

@@ -21,7 +21,7 @@ import {
   Ticket,
 } from "lucide-react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { ptBR } from "date-fns/locale"; // CORREÇÃO: importação correta do ptBR
 import { Timestamp, doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import {
@@ -30,7 +30,7 @@ import {
   SummaryCard,
   KanbanColumn,
   DriverInfoModal,
-} from "./UI";
+} from "./UI"; // Componentes do seu arquivo UI.tsx (mantidos)
 import {
   Panel as ResizablePanel,
   PanelGroup as ResizablePanelGroup,
@@ -40,7 +40,19 @@ import { toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 import SupportCallCard from "@/components/ui/SupportCallCard";
 
-// --- NOVO COMPONENTE: EnhancedDriverCard ---
+// --- IMPORTAÇÕES SHADCN/UI (Apenas os que existem) ---
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "./ui/card";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/button";
+// Input e Select são usados como HTML padrão
+
+// --- COMPONENTE: EnhancedDriverCard (Reestilizado) ---
 const EnhancedDriverCard = ({
   driver,
   onAction,
@@ -50,18 +62,18 @@ const EnhancedDriverCard = ({
   onAction: (driverId: string) => void;
   onInfoClick: (driver: Driver) => void;
 }) => (
-  <div className="bg-white p-3 rounded-lg shadow flex items-center justify-between gap-2">
+  <Card className="p-3 rounded-xl shadow-lg flex items-center justify-between gap-2 border-l-4 border-green-500 bg-card">
     <div className="flex items-center gap-3 flex-1 min-w-0">
       <AvatarComponent user={driver} onClick={() => onInfoClick(driver)} />
       <div className="flex-1 min-w-0">
         <p
-          className="font-bold text-gray-800 cursor-pointer truncate"
+          className="font-semibold text-foreground cursor-pointer truncate"
           onClick={() => onInfoClick(driver)}
           title={driver.name}
         >
           {driver.name}
         </p>
-        <div className="text-xs text-gray-500 flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
+        <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
           <div className="flex items-center gap-1 truncate" title={driver.hub}>
             <Building size={12} />
             <span className="truncate">{driver.hub || "N/A"}</span>
@@ -73,21 +85,25 @@ const EnhancedDriverCard = ({
         </div>
       </div>
     </div>
-    <div className="flex flex-col items-end gap-1">
-      <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
+    <div className="flex flex-col items-end gap-2">
+      <Badge
+        variant="outline"
+        className="text-green-600 border-green-500 text-xs"
+      >
         Disponível
-      </span>
-      <button
+      </Badge>
+      <Button
         onClick={() => onAction(driver.uid)}
-        className="px-3 py-1 text-xs font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
+        size="sm"
+        className="h-7 text-xs rounded-lg"
       >
         Acionar
-      </button>
+      </Button>
     </div>
-  </div>
+  </Card>
 );
 
-// --- Componente de Busca Reutilizável (ComboBox) ---
+// --- Componente de Busca Reutilizável (ComboBox) (Reestilizado com <input> normal) ---
 const SearchableComboBox = ({
   options,
   value,
@@ -134,7 +150,7 @@ const SearchableComboBox = ({
     <div className="relative w-full" ref={wrapperRef}>
       <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
           size={18}
         />
         <input
@@ -149,32 +165,33 @@ const SearchableComboBox = ({
           onFocus={() => {
             setIsOpen(true);
           }}
-          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
         />
       </div>
       {isOpen && (
-        <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, index) => (
               <li
                 key={index}
                 onClick={() => handleSelect(option)}
-                className="px-4 py-2 hover:bg-orange-100 cursor-pointer"
+                className="px-4 py-2 hover:bg-primary/10 cursor-pointer text-sm"
               >
                 {option}
               </li>
             ))
           ) : (
-            <li className="px-4 py-2 text-gray-500">
+            <li className="px-4 py-2 text-muted-foreground text-sm">
               Nenhuma opção encontrada.
             </li>
           )}
-        </ul>
+        </div>
       )}
     </div>
   );
 };
 
+// --- Modal de Confirmação (Reestilizado com <Card>) ---
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -195,29 +212,29 @@ const ConfirmationModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold text-gray-800">{title}</h2>
-        <div className="text-gray-600 my-4">{children}</div>
-        <div className="flex justify-end gap-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-          >
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">{title}</CardTitle>
+        </CardHeader>
+        <CardContent className="text-muted-foreground">{children}</CardContent>
+        <CardFooter className="flex justify-end gap-3 pt-4">
+          <Button variant="outline" onClick={onClose}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onConfirm}
-            className={`px-4 py-2 text-white font-semibold rounded-lg transition-colors ${confirmColor} hover:opacity-90`}
+            className={`${confirmColor} hover:opacity-90`}
           >
             {confirmText}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 };
 
+// --- Modal de Detalhes (Reestilizado com <Card>) ---
 const CallDetailsModal = ({
   call,
   onClose,
@@ -235,93 +252,108 @@ const CallDetailsModal = ({
   const getStatusColor = (status: CallStatus) => {
     switch (status) {
       case "ABERTO":
-        return "text-yellow-600";
+        return "text-yellow-500";
       case "EM ANDAMENTO":
-        return "text-blue-600";
+        return "text-blue-500";
       case "CONCLUIDO":
-        return "text-green-600";
+        return "text-green-500";
       case "AGUARDANDO_APROVACAO":
-        return "text-purple-600";
+        return "text-purple-500";
       default:
-        return "text-gray-600";
+        return "text-muted-foreground";
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg relative">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-lg relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
+          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
         >
-          <X size={24} />
+          <X size={20} />
         </button>
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          Detalhes do Chamado
-        </h2>
-        <div className="space-y-3">
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">
+            Detalhes do Chamado
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
             <AvatarComponent user={call.solicitante} />
             <div>
-              <p className="font-bold">{call.solicitante.name}</p>
-              <p className="text-sm text-gray-500">Solicitante</p>
+              <p className="font-semibold text-foreground">
+                {call.solicitante.name}
+              </p>
+              <p className="text-sm text-muted-foreground">Solicitante</p>
             </div>
           </div>
-          <p className={`font-bold text-sm ${getStatusColor(call.status)}`}>
+          <p
+            className={`font-bold text-sm uppercase ${getStatusColor(
+              call.status
+            )}`}
+          >
             {call.status.replace("_", " ")}
           </p>
-          <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
+          <div className="text-sm text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
             {call.description}
-          </p>
-        </div>
-        <div className="mt-6 pt-4 border-t flex justify-between items-center">
-          <p className="text-sm text-gray-500">Mover para:</p>
+          </div>
+        </CardContent>
+        <CardFooter className="mt-2 pt-4 border-t flex flex-wrap justify-between items-center gap-4">
+          <p className="text-sm text-muted-foreground">Mover para:</p>
           <div className="flex gap-2">
             {call.status === "EM ANDAMENTO" && (
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
-                <ArrowLeft size={16} /> Aberto
-              </button>
+                <ArrowLeft size={16} className="mr-1.5" /> Aberto
+              </Button>
             )}
             {call.status === "CONCLUIDO" && (
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() =>
                   onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
                 }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
               >
-                <ArrowLeft size={16} /> Em Andamento
-              </button>
+                <ArrowLeft size={16} className="mr-1.5" /> Em Andamento
+              </Button>
             )}
             {call.status === "ABERTO" && (
-              <button
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
                 onClick={() =>
                   onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
                 }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-blue-500 text-white rounded-md hover:bg-blue-600"
               >
-                Em Andamento <ArrowRight size={16} />
-              </button>
+                Em Andamento <ArrowRight size={16} className="ml-1.5" />
+              </Button>
             )}
             {call.status === "EM ANDAMENTO" && (
-              <button
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-purple-600 hover:bg-purple-700"
                 onClick={() =>
                   onUpdateStatus(call.id, { status: "AGUARDANDO_APROVACAO" })
                 }
-                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-purple-500 text-white rounded-md hover:bg-purple-600"
               >
-                Aguard. Aprovação <ArrowRight size={16} />
-              </button>
+                Aguard. Aprovação <ArrowRight size={16} className="ml-1.5" />
+              </Button>
             )}
           </div>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 };
 
+// --- Card de Aprovação (Reestilizado) ---
 const ApprovalCard = ({
   call,
   onApprove,
@@ -338,66 +370,80 @@ const ApprovalCard = ({
   const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md border-2 border-purple-500 space-y-3">
-      <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <AvatarComponent user={call.solicitante} />
-          <div>
-            <p className="font-bold text-gray-800">{call.solicitante.name}</p>
-            <p className="text-sm text-gray-500">Solicitante</p>
+    <Card className="overflow-hidden shadow-lg border-l-8 border-purple-500 rounded-xl bg-card">
+      <CardHeader className="p-4 bg-purple-500/10">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center space-x-3">
+            <AvatarComponent user={call.solicitante} />
+            <div>
+              <p className="font-bold text-foreground">
+                {call.solicitante.name}
+              </p>
+              <p className="text-sm text-muted-foreground">Solicitante</p>
+            </div>
+          </div>
+          <UrgencyBadge urgency={call.urgency} />
+        </div>
+        {assignedDriver && (
+          <div className="flex items-center gap-3 text-sm text-muted-foreground pl-1 pt-3">
+            <ArrowRight size={16} className="text-muted-foreground/50" />
+            <AvatarComponent user={assignedDriver} />
+            <div>
+              <p className="font-semibold text-foreground">
+                {assignedDriver.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Prestador do Apoio
+              </p>
+            </div>
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent className="p-4 space-y-3">
+        <div className="text-sm text-muted-foreground space-y-2">
+          <div className="flex items-center space-x-2">
+            <Ticket size={16} className="text-primary" />
+            <span>{call.routeId || "N/A"}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Building size={16} className="text-primary" />
+            <span>{call.hub || "N/A"}</span>
           </div>
         </div>
-        <UrgencyBadge urgency={call.urgency} />
-      </div>
+        <p className="text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap text-sm">
+          {call.description}
+        </p>
+      </CardContent>
 
-      {assignedDriver && (
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <ArrowRight size={16} className="text-gray-400" />
-          <AvatarComponent user={assignedDriver} />
-          <div>
-            <p className="font-semibold">{assignedDriver.name}</p>
-            <p className="text-xs text-gray-500">Prestador do Apoio</p>
-          </div>
-        </div>
-      )}
-
-      <div className="text-sm text-gray-600 space-y-2">
-        <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-gray-400" />
-          <span>{call.routeId || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Building size={16} className="text-gray-400" />
-          <span>{call.hub || "N/A"}</span>
-        </div>
-      </div>
-
-      <p className="text-gray-700 bg-gray-50 p-3 rounded-md whitespace-pre-wrap">
-        {call.description}
-      </p>
-
-      <div className="mt-2 pt-2 border-t flex justify-end gap-3">
-        <button
+      <CardFooter className="mt-2 pt-3 border-t bg-muted/30 p-4 flex justify-end gap-3">
+        <Button
           onClick={() => onDelete(call)}
-          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+          variant="ghost"
+          size="icon"
+          className="text-destructive hover:bg-destructive/10"
           title="Excluir Solicitação"
         >
           <Trash2 size={16} />
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => onReject(call)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-md hover:bg-red-600"
+          variant="destructive"
+          size="sm"
+          className="rounded-lg"
         >
-          <X size={16} /> Rejeitar
-        </button>
-        <button
+          <X size={16} className="mr-1.5" /> Rejeitar
+        </Button>
+        <Button
           onClick={() => onApprove(call)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600"
+          variant="default"
+          size="sm"
+          className="bg-green-600 hover:bg-green-700 rounded-lg"
         >
-          <CheckCircle size={16} /> Aprovar
-        </button>
-      </div>
-    </div>
+          <CheckCircle size={16} className="mr-1.5" /> Aprovar
+        </Button>
+      </CardFooter>
+    </Card>
   );
 };
 
@@ -420,6 +466,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeletePermanently,
   onDeleteAllExcluded,
 }) => {
+  // ... (Estados)
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
@@ -436,7 +483,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
   const notifiedCallIds = useRef(new Set<string>());
   const prevCallsRef = useRef<SupportCall[]>([]);
-
   const [tempHistoryFilters, setTempHistoryFilters] = useState({
     start: "",
     end: "",
@@ -444,7 +490,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     routeId: "",
     status: "Todos",
   });
-
   const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
     start: "",
     end: "",
@@ -452,15 +497,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     routeId: "",
     status: "Todos",
   });
-
   const [driverHubFilter, setDriverHubFilter] =
     useState<string>("Todos os Hubs");
   const [driverVehicleFilter, setDriverVehicleFilter] =
     useState<string>("Todos os Veículos");
-
   const [globalHubFilter, setGlobalHubFilter] =
     useState<string>("Todos os Hubs");
 
+  // ... (Funções)
   const updateDriver = async (
     driverUid: string,
     updates: Partial<Omit<Driver, "uid">>
@@ -690,6 +734,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     sonnerToast.info(`Chamado movido para ${status}`);
   };
 
+  // ... (Memos)
   const filteredCalls = useMemo(() => {
     return calls.filter(
       (call) =>
@@ -704,7 +749,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
   }, [drivers, globalHubFilter]);
 
-  const activeCallsFromMemo = useMemo(
+  const activeCalls = useMemo(
     () =>
       filteredCalls.filter(
         (c) => !["EXCLUIDO", "ARQUIVADO"].includes(c.status)
@@ -716,21 +761,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [filteredCalls]
   );
   const openCalls = useMemo(
-    () => activeCallsFromMemo.filter((c) => c.status === "ABERTO"),
-    [activeCallsFromMemo]
+    () => activeCalls.filter((c) => c.status === "ABERTO"),
+    [activeCalls]
   );
   const inProgressCalls = useMemo(
-    () => activeCallsFromMemo.filter((c) => c.status === "EM ANDAMENTO"),
-    [activeCallsFromMemo]
+    () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
+    [activeCalls]
   );
   const concludedCalls = useMemo(
-    () => activeCallsFromMemo.filter((c) => c.status === "CONCLUIDO"),
-    [activeCallsFromMemo]
+    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
+    [activeCalls]
   );
   const pendingApprovalCalls = useMemo(
-    () =>
-      activeCallsFromMemo.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
-    [activeCallsFromMemo]
+    () => activeCalls.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
+    [activeCalls]
   );
 
   const availableDriverHubs = useMemo(
@@ -843,55 +887,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [openCalls, urgencyFilter]
   );
 
-  const filterControls = (
-    <div className="flex flex-wrap gap-1">
-      {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
-        (level) => (
-          <button
-            key={level}
-            onClick={() => setUrgencyFilter(level)}
-            className={`px-2 py-0.5 text-xs rounded-md font-semibold transition-colors ${
-              urgencyFilter === level
-                ? "bg-orange-600 text-white"
-                : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-            }`}
-          >
-            {level === "TODOS"
-              ? "Todos"
-              : level.charAt(0) + level.slice(1).toLowerCase()}
-          </button>
-        )
-      )}
-    </div>
-  );
-
-  const driverFilterControls = (
-    <div className="flex flex-col gap-2 w-full">
-      <select
-        value={driverHubFilter}
-        onChange={(e) => setDriverHubFilter(e.target.value)}
-        className="w-full p-2 border rounded-md text-sm bg-white"
-      >
-        {availableDriverHubs.map((hub) => (
-          <option key={hub} value={hub}>
-            {hub}
-          </option>
-        ))}
-      </select>
-      <select
-        value={driverVehicleFilter}
-        onChange={(e) => setDriverVehicleFilter(e.target.value)}
-        className="w-full p-2 border rounded-md text-sm bg-white capitalize"
-      >
-        {vehicleTypes.map((v) => (
-          <option key={v} value={v} className="capitalize">
-            {v}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-
+  // *** CORREÇÃO: Variáveis movidas para o escopo correto ***
   const activeCallForDriver = infoModalDriver
     ? calls.find(
         (c) =>
@@ -909,21 +905,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [excludedCalls]
   );
 
+  // --- Controles de Filtro (Reestilizados) ---
+  const filterControls = (
+    <div className="flex flex-wrap gap-1">
+      {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
+        (level) => (
+          <Button
+            key={level}
+            onClick={() => setUrgencyFilter(level)}
+            variant={urgencyFilter === level ? "default" : "secondary"}
+            size="sm"
+            className={`text-xs h-7 px-2.5 rounded-full ${
+              urgencyFilter === level ? "shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {level === "TODOS"
+              ? "Todos"
+              : level.charAt(0) + level.slice(1).toLowerCase()}
+          </Button>
+        )
+      )}
+    </div>
+  );
+
+  const driverFilterControls = (
+    <div className="flex flex-col gap-2 w-full">
+      <select
+        value={driverHubFilter}
+        onChange={(e) => setDriverHubFilter(e.target.value)}
+        className="w-full p-2 border border-border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
+      >
+        {availableDriverHubs.map((hub) => (
+          <option key={hub} value={hub}>
+            {hub}
+          </option>
+        ))}
+      </select>
+      <select
+        value={driverVehicleFilter}
+        onChange={(e) => setDriverVehicleFilter(e.target.value)}
+        className="w-full p-2 border border-border rounded-md text-sm bg-background text-foreground capitalize focus:ring-primary focus:border-primary"
+      >
+        {vehicleTypes.map((v) => (
+          <option key={v} value={v} className="capitalize">
+            {v}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  // --- RETURN PRINCIPAL (JSX Reestilizado) ---
   return (
-    <div className="bg-orange-100 min-h-screen font-sans flex flex-col">
-      <header className="p-6">
+    <div className="bg-background min-h-screen font-sans flex flex-col">
+      <header className="p-4 sm:p-6 border-b border-border sticky top-0 bg-background z-20">
         <div className="flex flex-wrap justify-between items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-orange-600">
-              Painel do Admin
-            </h1>
-            <p className="text-gray-900">Sistema de Apoio - SPX</p>
+          <div className="flex items-center gap-3">
+            <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
+            <div>
+              <h1 className="text-2xl font-bold text-primary">
+                Painel do Admin
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                Sistema de Apoio Logístico - SPX
+              </p>
+            </div>
           </div>
           <div className="w-full sm:w-auto sm:min-w-[250px]">
             <select
               value={globalHubFilter}
               onChange={(e) => setGlobalHubFilter(e.target.value)}
-              className="w-full p-2 border rounded-md text-sm bg-white shadow-sm"
+              className="w-full p-2 border border-border rounded-md text-sm bg-background text-foreground shadow-sm focus:ring-primary focus:border-primary"
             >
               {allHubsForFilter.map((hub) => (
                 <option key={hub} value={hub}>
@@ -934,49 +986,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </header>
-      <nav className="px-6 border-b border--200">
-        <div className="flex space-x-4">
+
+      <nav className="px-4 sm:px-6 border-b border-border sticky top-[calc(theme(spacing.24)-1px)] sm:top-[calc(theme(spacing.24)+1px)] bg-background z-20">
+        <div className="flex space-x-1 sm:space-x-4 overflow-x-auto">
           <button
             onClick={() => setAdminView("kanban")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
+            className={`py-3 px-2 text-sm font-semibold whitespace-nowrap transition-colors ${
               adminView === "kanban"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Acompanhamento de chamados
+            Acompanhamento
           </button>
           <button
             onClick={() => setAdminView("approvals")}
-            className={`py-2 px-1 text-sm font-semibold relative transition-colors ${
+            className={`py-3 px-2 text-sm font-semibold whitespace-nowrap relative transition-colors ${
               adminView === "approvals"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Aprovações Pendentes
+            Aprovações
             {pendingApprovalCalls.length > 0 && (
-              <span className="absolute top-1 -right-3 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              <span className="absolute top-2 -right-3 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-bold rounded-full flex items-center justify-center">
                 {pendingApprovalCalls.length}
               </span>
             )}
           </button>
           <button
             onClick={() => setAdminView("excluded")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
+            className={`py-3 px-2 text-sm font-semibold whitespace-nowrap transition-colors ${
               adminView === "excluded"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Solicitações Excluídas
+            Lixeira
           </button>
           <button
             onClick={() => setAdminView("history")}
-            className={`py-2 px-1 text-sm font-semibold transition-colors ${
+            className={`py-3 px-2 text-sm font-semibold whitespace-nowrap transition-colors ${
               adminView === "history"
-                ? "border-b-2 border-orange-600 text-orange-600"
-                : "text-gray-900 hover:text-gray-500"
+                ? "border-b-2 border-primary text-primary"
+                : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             Histórico
@@ -984,44 +1037,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </nav>
 
-      {adminView === "kanban" && (
-        <div className="p-6 flex-grow flex flex-col space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <SummaryCard
-              title="Chamados Abertos"
-              value={openCalls.length}
-              icon={<AlertTriangle />}
-              subtext="Aguardando atendimento"
-              colorClass="#F59E0B"
-            />
-            <SummaryCard
-              title="Em Andamento"
-              value={inProgressCalls.length}
-              icon={<Clock />}
-              subtext="Sendo atendidos"
-              colorClass="#3B82F6"
-            />
-            <SummaryCard
-              title="Concluídos"
-              value={concludedCalls.length}
-              icon={<CheckCircle />}
-              subtext="Finalizados hoje"
-              colorClass="#10B981"
-            />
-            <SummaryCard
-              title="Motoristas Disponíveis"
-              value={availableDrivers.length}
-              icon={<Users />}
-              subtext="Prontos para apoio"
-              colorClass="#8B5CF6"
-            />
-          </div>
-          <ResizablePanelGroup
-            direction="horizontal"
-            className="flex-grow rounded-lg border"
-          >
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-yellow-50 h-full rounded-lg p-2">
+      <main className="flex-grow bg-muted/20 dark:bg-black/20 p-4 sm:p-6">
+        {adminView === "kanban" && (
+          <div className="flex-grow flex flex-col space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <SummaryCard
+                title="Abertos"
+                value={openCalls.length}
+                icon={<AlertTriangle />}
+                subtext="Aguardando atendimento"
+                colorClass="#F59E0B"
+              />
+              <SummaryCard
+                title="Em Andamento"
+                value={inProgressCalls.length}
+                icon={<Clock />}
+                subtext="Sendo atendidos"
+                colorClass="#3B82F6"
+              />
+              <SummaryCard
+                title="Concluídos"
+                value={concludedCalls.length}
+                icon={<CheckCircle />}
+                subtext="Finalizados hoje"
+                colorClass="#10B981"
+              />
+              <SummaryCard
+                title="Drivers Disponíveis"
+                value={availableDrivers.length}
+                icon={<Users />}
+                subtext="Prontos para apoio"
+                colorClass="#8B5CF6"
+              />
+            </div>
+
+            <ResizablePanelGroup
+              direction="horizontal"
+              className="flex-grow rounded-xl border border-border bg-card shadow-sm min-h-[600px]"
+            >
+              <ResizablePanel defaultSize={25} minSize={15}>
                 <KanbanColumn
                   title="Chamados Abertos"
                   count={filteredOpenCalls.length}
@@ -1056,13 +1110,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     );
                   })}
                 </KanbanColumn>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-blue-50 h-full rounded-lg p-2">
+              </ResizablePanel>
+              <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                <div className="w-1 h-10 bg-border rounded-full" />
+              </ResizableHandle>
+              <ResizablePanel defaultSize={25} minSize={15}>
                 <KanbanColumn
                   title="Em Andamento"
                   count={inProgressCalls.length}
@@ -1096,13 +1148,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     );
                   })}
                 </KanbanColumn>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-green-50 h-full rounded-lg p-2">
+              </ResizablePanel>
+              <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                <div className="w-1 h-10 bg-border rounded-full" />
+              </ResizableHandle>
+              <ResizablePanel defaultSize={25} minSize={15}>
                 <KanbanColumn
                   title="Concluídos"
                   count={concludedCalls.length}
@@ -1136,13 +1186,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     );
                   })}
                 </KanbanColumn>
-              </div>
-            </ResizablePanel>
-            <ResizableHandle className="w-2 bg-gray-200 hover:bg-orange-500 transition-colors flex items-center justify-center">
-              <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
-            </ResizableHandle>
-            <ResizablePanel defaultSize={25} minSize={15}>
-              <div className="bg-purple-50 h-full rounded-lg p-2">
+              </ResizablePanel>
+              <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                <div className="w-1 h-10 bg-border rounded-full" />
+              </ResizableHandle>
+              <ResizablePanel defaultSize={25} minSize={15}>
                 <KanbanColumn
                   title="Motoristas Disponíveis"
                   count={availableDrivers.length}
@@ -1158,281 +1206,314 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     />
                   ))}
                 </KanbanColumn>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
-      )}
-
-      {adminView === "approvals" && (
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Aprovações Pendentes
-          </h2>
-          <div className="space-y-4">
-            {pendingApprovalCalls.length > 0 ? (
-              pendingApprovalCalls.map((call) => (
-                <ApprovalCard
-                  key={call.id}
-                  call={call}
-                  onApprove={handleApprove}
-                  onReject={handleReject}
-                  onDelete={handleDeleteClick}
-                  drivers={drivers}
-                />
-              ))
-            ) : (
-              <p className="text-center text-gray-500 pt-8">
-                Não há solicitações pendentes de aprovação.
-              </p>
-            )}
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </div>
-        </div>
-      )}
+        )}
 
-      {adminView === "history" && (
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Histórico de Solicitações
-          </h2>
-          <div className="bg-white p-4 rounded-lg shadow-md mb-4 flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Data Início
-              </label>
-              <input
-                type="date"
-                value={tempHistoryFilters.start}
-                onChange={(e) =>
-                  handleHistoryFilterChange("start", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Data Fim
-              </label>
-              <input
-                type="date"
-                value={tempHistoryFilters.end}
-                onChange={(e) =>
-                  handleHistoryFilterChange("end", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Hub</label>
-              <select
-                value={tempHistoryFilters.hub}
-                onChange={(e) =>
-                  handleHistoryFilterChange("hub", e.target.value)
-                }
-                className="w-full p-2 border rounded-md bg-white"
-              >
-                {allHubs.map((hub) => (
-                  <option key={hub} value={hub}>
-                    {hub}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                ID da Rota
-              </label>
-              <input
-                type="text"
-                placeholder="Digite o ID da rota..."
-                value={tempHistoryFilters.routeId}
-                onChange={(e) =>
-                  handleHistoryFilterChange("routeId", e.target.value)
-                }
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={tempHistoryFilters.status}
-                onChange={(e) =>
-                  handleHistoryFilterChange("status", e.target.value)
-                }
-                className="w-full p-2 border rounded-md bg-white"
-              >
-                <option value="Todos">Todos</option>
-                <option value="Concluidas">Concluídas</option>
-                <option value="Nao Concluidas">Não Concluídas</option>
-              </select>
-            </div>
-            <button
-              onClick={handleApplyHistoryFilters}
-              className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
-            >
-              Filtrar
-            </button>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
-            <table className="w-full text-sm text-left text-gray-500">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3">
-                    Solicitante
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Apoio
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Hub
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Data
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    Aprovado Por
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredHistoryCalls.map((call) => {
-                  const assignedDriver = drivers.find(
-                    (d) => d.uid === call.assignedTo
-                  );
-                  const callTimestamp = call.timestamp;
-                  const formattedDate = callTimestamp
-                    ? format(
-                        callTimestamp instanceof Timestamp
-                          ? callTimestamp.toDate()
-                          : new Date((callTimestamp as any).seconds * 1000),
-                        "dd/MM/yy HH:mm",
-                        { locale: ptBR }
-                      )
-                    : "N/A";
-
-                  return (
-                    <tr
-                      key={call.id}
-                      className="bg-white border-b hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                        {call.solicitante.name}
-                      </td>
-                      <td className="px-6 py-4">
-                        {assignedDriver?.name || "N/A"}
-                      </td>
-                      <td className="px-6 py-4">{call.hub || "N/A"}</td>
-                      <td className="px-6 py-4">{call.status}</td>
-                      <td className="px-6 py-4">{formattedDate}</td>
-                      <td className="px-6 py-4">
-                        {(call as any).approvedBy || "N/A"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {adminView === "excluded" && (
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-800">
-              Solicitações Excluídas
+        {adminView === "approvals" && (
+          <div>
+            <h2 className="text-xl font-bold text-foreground mb-4">
+              Aprovações Pendentes
             </h2>
-            {excludedCalls.length > 0 && (
-              <button
-                onClick={handleClearAllClick}
-                className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-red-600 text-white rounded-md hover:bg-red-700"
-              >
-                <Trash2 size={14} /> Limpar Tudo
-              </button>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pendingApprovalCalls.length > 0 ? (
+                pendingApprovalCalls.map((call) => (
+                  <ApprovalCard
+                    key={call.id}
+                    call={call}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onDelete={handleDeleteClick}
+                    drivers={drivers}
+                  />
+                ))
+              ) : (
+                <Card className="md:col-span-2 lg:col-span-3 text-center py-10 px-4 shadow-sm bg-card">
+                  <CheckCircle className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-2 text-sm font-semibold text-foreground">
+                    Tudo certo!
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Não há solicitações pendentes de aprovação.
+                  </p>
+                </Card>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <SearchableComboBox
-              options={excludedCallNames}
-              value={excludedNameFilter}
-              onChange={setExcludedNameFilter}
-              placeholder="Filtrar por nome..."
-            />
-            <SearchableComboBox
-              options={excludedCallHubs}
-              value={excludedHubFilter}
-              onChange={setExcludedHubFilter}
-              placeholder="Filtrar por hub..."
-            />
-          </div>
-          <div className="space-y-4">
-            {excludedCalls.length > 0 ? (
-              excludedCalls
-                .filter((call) =>
-                  call.solicitante.name.includes(excludedNameFilter)
-                )
-                .filter((call) =>
-                  excludedHubFilter ? call.hub === excludedHubFilter : true
-                )
-                .map((call) => {
-                  const deletedTimestamp = call.deletedAt;
-                  const formattedDeletedDate = deletedTimestamp
-                    ? format(
-                        deletedTimestamp instanceof Timestamp
-                          ? deletedTimestamp.toDate()
-                          : new Date((deletedTimestamp as any).seconds * 1000),
-                        "dd/MM/yyyy 'às' HH:mm",
-                        { locale: ptBR }
-                      )
-                    : "Data indisponível";
-                  return (
-                    <div
-                      key={call.id}
-                      className="bg-white p-4 rounded-lg shadow-md flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-bold">{call.solicitante.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {call.description}
-                        </p>
-                        {call.deletedAt && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Excluído em: {formattedDeletedDate}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleRestore(call.id)}
-                          className="flex items-center gap-2 px-3 py-1 text-sm font-semibold bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-                        >
-                          <RotateCcw size={14} /> Restaurar
-                        </button>
-                        <button
-                          onClick={() => handlePermanentDeleteClick(call)}
-                          className="p-2 text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-                          title="Excluir Permanentemente"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-            ) : (
-              <p className="text-center text-gray-500">
-                Não há solicitações excluídas.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+        )}
 
+        {adminView === "history" && (
+          <div className="space-y-6">
+            <h2 className="text-xl font-bold text-foreground">
+              Histórico de Solicitações
+            </h2>
+            <Card className="shadow-lg bg-card">
+              <CardContent className="p-4 flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Data Início
+                  </label>
+                  <input
+                    type="date"
+                    value={tempHistoryFilters.start}
+                    onChange={(e) =>
+                      handleHistoryFilterChange("start", e.target.value)
+                    }
+                    className="w-full p-2 border border-border rounded-md bg-background text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Data Fim
+                  </label>
+                  <input
+                    type="date"
+                    value={tempHistoryFilters.end}
+                    onChange={(e) =>
+                      handleHistoryFilterChange("end", e.target.value)
+                    }
+                    className="w-full p-2 border border-border rounded-md bg-background text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Hub
+                  </label>
+                  <select
+                    value={tempHistoryFilters.hub}
+                    onChange={(e) =>
+                      handleHistoryFilterChange("hub", e.target.value)
+                    }
+                    className="w-full sm:w-[200px] p-2 border border-border rounded-md bg-background text-sm"
+                  >
+                    {allHubs.map((hub) => (
+                      <option key={hub} value={hub}>
+                        {hub}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    ID da Rota
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Digite o ID da rota..."
+                    value={tempHistoryFilters.routeId}
+                    onChange={(e) =>
+                      handleHistoryFilterChange("routeId", e.target.value)
+                    }
+                    className="w-full sm:w-[200px] p-2 border border-border rounded-md bg-background text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Status
+                  </label>
+                  <select
+                    value={tempHistoryFilters.status}
+                    onChange={(e) =>
+                      handleHistoryFilterChange("status", e.target.value)
+                    }
+                    className="w-full sm:w-[180px] p-2 border border-border rounded-md bg-background text-sm"
+                  >
+                    <option value="Todos">Todos</option>
+                    <option value="Concluidas">Concluídas</option>
+                    <option value="Nao Concluidas">Não Concluídas</option>
+                  </select>
+                </div>
+                <Button
+                  onClick={handleApplyHistoryFilters}
+                  className="rounded-lg h-10"
+                >
+                  <Search size={16} className="mr-1.5" /> Filtrar
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-lg bg-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-foreground">
+                  <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3">
+                        Solicitante
+                      </th>
+                      <th scope="col" className="px-6 py-3">
+                        Apoio
+                      </th>
+                      <th scope="col" className="px-6 py-3">
+                        Hub
+                      </th>
+                      <th scope="col" className="px-6 py-3">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3">
+                        Data
+                      </th>
+                      <th scope="col" className="px-6 py-3">
+                        Aprovado Por
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHistoryCalls.map((call) => {
+                      const assignedDriver = drivers.find(
+                        (d) => d.uid === call.assignedTo
+                      );
+                      const callTimestamp = call.timestamp;
+                      const formattedDate = callTimestamp
+                        ? format(
+                            callTimestamp instanceof Timestamp
+                              ? callTimestamp.toDate()
+                              : new Date((callTimestamp as any).seconds * 1000),
+                            "dd/MM/yy HH:mm",
+                            { locale: ptBR }
+                          )
+                        : "N/A";
+
+                      return (
+                        <tr
+                          key={call.id}
+                          className="bg-card border-b border-border hover:bg-muted/50"
+                        >
+                          <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
+                            {call.solicitante.name}
+                          </td>
+                          <td className="px-6 py-4">
+                            {assignedDriver?.name || "N/A"}
+                          </td>
+                          <td className="px-6 py-4">{call.hub || "N/A"}</td>
+                          <td className="px-6 py-4">{call.status}</td>
+                          <td className="px-6 py-4">{formattedDate}</td>
+                          <td className="px-6 py-4">
+                            {(call as any).approvedBy || "N/A"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {adminView === "excluded" && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-foreground">
+                Solicitações Excluídas
+              </h2>
+              {excludedCalls.length > 0 && (
+                <Button
+                  onClick={handleClearAllClick}
+                  variant="destructive"
+                  size="sm"
+                  className="rounded-lg"
+                >
+                  <Trash2 size={14} className="mr-1.5" /> Limpar Tudo
+                </Button>
+              )}
+            </div>
+            <Card className="p-4 bg-card shadow-md">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <SearchableComboBox
+                  options={excludedCallNames}
+                  value={excludedNameFilter}
+                  onChange={setExcludedNameFilter}
+                  placeholder="Filtrar por nome..."
+                />
+                <SearchableComboBox
+                  options={excludedCallHubs}
+                  value={excludedHubFilter}
+                  onChange={setExcludedHubFilter}
+                  placeholder="Filtrar por hub..."
+                />
+              </div>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {excludedCalls.length > 0 ? (
+                excludedCalls
+                  .filter((call) =>
+                    call.solicitante.name.includes(excludedNameFilter)
+                  )
+                  .filter((call) =>
+                    excludedHubFilter ? call.hub === excludedHubFilter : true
+                  )
+                  .map((call) => {
+                    const deletedTimestamp = call.deletedAt;
+                    const formattedDeletedDate = deletedTimestamp
+                      ? format(
+                          deletedTimestamp instanceof Timestamp
+                            ? deletedTimestamp.toDate()
+                            : new Date(
+                                (deletedTimestamp as any).seconds * 1000
+                              ),
+                          "dd/MM/yyyy 'às' HH:mm",
+                          { locale: ptBR }
+                        )
+                      : "Data indisponível";
+                    return (
+                      <Card
+                        key={call.id}
+                        className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start gap-4"
+                      >
+                        <div className="flex-grow">
+                          <p className="font-semibold text-foreground">
+                            {call.solicitante.name}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {call.description}
+                          </p>
+                          {call.deletedAt && (
+                            <p className="text-xs text-muted-foreground/70 mt-1">
+                              Excluído em: {formattedDeletedDate}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            onClick={() => handleRestore(call.id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 border-green-500 hover:bg-green-100 hover:text-green-700"
+                          >
+                            <RotateCcw size={14} className="mr-1.5" /> Restaurar
+                          </Button>
+                          <Button
+                            onClick={() => handlePermanentDeleteClick(call)}
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:bg-destructive/10"
+                            title="Excluir Permanentemente"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })
+              ) : (
+                <Card className="md:col-span-2 text-center py-10 px-4 shadow-sm bg-card">
+                  <Trash2 className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-2 text-sm font-semibold text-foreground">
+                    Lixeira vazia
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Não há solicitações excluídas.
+                  </p>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* --- Modais --- */}
       {infoModalDriver && (
         <DriverInfoModal
           driver={infoModalDriver}
@@ -1443,7 +1524,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <CallDetailsModal
         call={selectedCall}
         onClose={() => setSelectedCall(null)}
-        onUpdateStatus={handleUpdateStatus}
+        onUpdateStatus={handleUpdateStatus} // CORREÇÃO: Passando a função correta
       />
       <ConfirmationModal
         isOpen={confirmationType === "soft-delete"}

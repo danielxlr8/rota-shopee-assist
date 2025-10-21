@@ -304,67 +304,61 @@ export const AuthPage = () => {
   // --- TELA DE VINCULAR CONTA ---
   if (isLinkingGoogleAccount) {
     return (
-      <div
-        className="relative min-h-screen bg-cover bg-center"
-        style={{ backgroundImage: `url(/SP3.jpg)` }}
-      >
-        <div className="absolute inset-0 bg-black bg-opacity-50" />
-        <div className="relative flex items-center justify-center min-h-screen p-4">
-          <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
-              Vincular Conta Google
-            </h2>
-            <p className="text-center text-gray-600 mb-6">
-              Para usar o login com Google, vincule seu ID de motorista.
-            </p>
-            <form onSubmit={handleLinkAccount} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="driverIdLink"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  ID de Motorista
-                </label>
-                <input
-                  id="driverIdLink"
-                  type="text"
-                  value={driverId}
-                  onChange={(e) => setDriverId(e.target.value)}
-                  className="mt-1 block w-full input-style"
-                  placeholder="Seu ID único"
-                  required
-                />{" "}
-                {/* Classe genérica */}
-              </div>
-              {linkingError && (
-                <p className="text-sm text-red-600 text-center">
-                  {linkingError}
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full btn-primary disabled:opacity-50"
+      // ------ MODIFICAÇÃO AQUI PARA A TELA DE VINCULAÇÃO ------
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB]">
+        {/* ------ FIM DA MODIFICAÇÃO ------ */}
+        <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
+            Vincular Conta Google
+          </h2>
+          <p className="text-center text-gray-600 mb-6">
+            Para usar o login com Google, vincule seu ID de motorista.
+          </p>
+          <form onSubmit={handleLinkAccount} className="space-y-4">
+            <div>
+              <label
+                htmlFor="driverIdLink"
+                className="block text-sm font-medium text-gray-700"
               >
-                {loading ? "Verificando..." : "Vincular Conta"}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (auth.currentUser) {
-                    await signOut(auth);
-                  }
-                  setIsLinkingGoogleAccount(false);
-                  setGoogleUser(null);
-                  setLinkingError("");
-                  setDriverId("");
-                }}
-                className="w-full text-center text-sm text-gray-600 hover:text-gray-800 mt-2"
-              >
-                Cancelar
-              </button>
-            </form>
-          </div>
+                ID de Motorista
+              </label>
+              <input
+                id="driverIdLink"
+                type="text"
+                value={driverId}
+                onChange={(e) => setDriverId(e.target.value)}
+                className="mt-1 block w-full input-style"
+                placeholder="Seu ID único"
+                required
+              />{" "}
+              {/* Classe genérica */}
+            </div>
+            {linkingError && (
+              <p className="text-sm text-red-600 text-center">{linkingError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full btn-primary disabled:opacity-50"
+            >
+              {loading ? "Verificando..." : "Vincular Conta"}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (auth.currentUser) {
+                  await signOut(auth);
+                }
+                setIsLinkingGoogleAccount(false);
+                setGoogleUser(null);
+                setLinkingError("");
+                setDriverId("");
+              }}
+              className="w-full text-center text-sm text-gray-600 hover:text-gray-800 mt-2"
+            >
+              Cancelar
+            </button>
+          </form>
         </div>
       </div>
     );
@@ -372,11 +366,12 @@ export const AuthPage = () => {
 
   // --- JSX PRINCIPAL COM ANIMAÇÃO CORRIGIDA ---
   return (
+    // ------ MODIFICAÇÃO AQUI PARA A TELA PRINCIPAL ------
     <div
-      className="relative min-h-screen bg-cover bg-center flex items-center justify-center p-4 overflow-hidden"
-      style={{ backgroundImage: `url(/SP3.jpg)` }}
+      className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB] overflow-hidden"
+      // Removida imagem de fundo, adicionada cor sólida
     >
-      <div className="absolute inset-0 bg-black bg-opacity-50" />
+      {/* ------ FIM DA MODIFICAÇÃO ------ */}
 
       {/* Container Centralizador */}
       <div className="relative w-full max-w-md h-[700px] flex items-center justify-center">

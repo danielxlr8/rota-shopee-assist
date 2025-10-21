@@ -1,52 +1,56 @@
 import React from "react";
-import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
-import { Building, Truck, Phone, MapPin, X } from "lucide-react";
+import { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Timestamp } from "firebase/firestore";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/Avatar"; // Usando seu Avatar.tsx
+import { Badge } from "./ui/Badge"; // Usando sua Badge.tsx
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"; // Usando seu card.tsx
+import { Button } from "./ui/button"; // Usando seu button.tsx
+import { Phone, Mail, Truck, Building, X } from "lucide-react";
 
-type UserLike = Partial<Driver> | Partial<SupportCall["solicitante"]>;
-
+// --- AvatarComponent (Corrigido para Dark Mode) ---
 export const AvatarComponent = ({
   user,
   onClick,
 }: {
-  user: UserLike;
+  user: {
+    avatar?: string | null;
+    initials?: string;
+    name?: string;
+  };
   onClick?: () => void;
-}) => (
-  <div
-    className={`relative w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm ${
-      onClick ? "cursor-pointer" : ""
-    }`}
-    onClick={onClick}
-  >
-    {user.avatar ? (
-      <img
-        src={user.avatar}
-        alt={user.name || "Avatar"}
-        className="w-full h-full object-cover"
-      />
-    ) : (
-      <span className="text-sm font-bold text-gray-600">
+}) => {
+  return (
+    <Avatar onClick={onClick} className={onClick ? "cursor-pointer" : ""}>
+      <AvatarImage src={user.avatar || undefined} alt={user.name || "Avatar"} />
+      <AvatarFallback className="bg-muted text-muted-foreground font-semibold">
         {user.initials || user.name?.charAt(0) || "?"}
-      </span>
-    )}
-  </div>
-);
+      </AvatarFallback>
+    </Avatar>
+  );
+};
 
+// --- UrgencyBadge (Corrigido para Dark Mode) ---
 export const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel }) => {
-  const urgencyStyles: { [key in UrgencyLevel]: string } = {
+  const urgencyStyles = {
     URGENTE: "bg-red-600 text-white",
     ALTA: "bg-orange-500 text-white",
-    MEDIA: "bg-yellow-400 text-gray-800",
-    BAIXA: "bg-blue-400 text-white",
+    MEDIA: "bg-yellow-400 text-yellow-900",
+    BAIXA: "bg-blue-200 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   };
   return (
     <span
-      className={`px-2 py-1 text-xs font-bold rounded-full ${urgencyStyles[urgency]}`}
+      className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+        urgencyStyles[urgency] || "bg-gray-200 text-gray-800"
+      }`}
     >
       {urgency}
     </span>
   );
 };
 
+// --- SummaryCard (Corrigido para Dark Mode) ---
 export const SummaryCard = ({
   title,
   value,
@@ -60,21 +64,23 @@ export const SummaryCard = ({
   subtext: string;
   colorClass: string;
 }) => (
-  <div className="bg-white p-4 rounded-lg shadow-md flex items-center space-x-4">
-    <div
-      className="p-3 rounded-full"
-      style={{ backgroundColor: `${colorClass}20`, color: colorClass }}
-    >
-      {icon}
-    </div>
-    <div>
-      <p className="text-2xl font-bold text-gray-800">{value}</p>
-      <p className="text-sm font-semibold text-gray-600">{title}</p>
-      <p className="text-xs text-gray-400">{subtext}</p>
-    </div>
-  </div>
+  <Card className="shadow-lg bg-card">
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium text-muted-foreground">
+        {title}
+      </CardTitle>
+      <div style={{ color: colorClass }} className="h-4 w-4">
+        {icon}
+      </div>
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold text-foreground">{value}</div>
+      <p className="text-xs text-muted-foreground">{subtext}</p>
+    </CardContent>
+  </Card>
 );
 
+// --- KanbanColumn (Corrigido para Dark Mode) ---
 export const KanbanColumn = ({
   title,
   count,
@@ -88,28 +94,32 @@ export const KanbanColumn = ({
   children: React.ReactNode;
   headerControls?: React.ReactNode;
 }) => (
-  <div className="flex flex-col h-full">
-    <div className="p-2 sticky top-0 bg-inherit z-10">
+  <div className="flex flex-col h-full bg-muted/50 dark:bg-card-foreground/5 rounded-lg">
+    <div className="p-4 sticky top-0 bg-muted/50 dark:bg-card-foreground/5 z-10 rounded-t-lg">
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2">
           <div
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: colorClass }}
-          ></div>
-          <h3 className="font-bold text-gray-800">{title}</h3>
+          />
+          <h3 className="font-semibold text-sm uppercase text-foreground">
+            {title}
+          </h3>
         </div>
-        <span className="px-2 py-0.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-full">
+        <span
+          className="text-xs font-bold px-2 py-0.5 rounded-full"
+          style={{ backgroundColor: `${colorClass}33`, color: colorClass }}
+        >
           {count}
         </span>
       </div>
-      {headerControls && <div className="mb-2">{headerControls}</div>}
+      {headerControls && <div className="mt-2">{headerControls}</div>}
     </div>
-    <div className="flex-grow overflow-y-auto space-y-3 px-2 pb-2">
-      {children}
-    </div>
+    <div className="p-2 space-y-3 overflow-y-auto h-full">{children}</div>
   </div>
 );
 
+// --- DriverInfoModal (Corrigido para Dark Mode) ---
 export const DriverInfoModal = ({
   driver,
   call,
@@ -121,39 +131,73 @@ export const DriverInfoModal = ({
 }) => {
   if (!driver) return null;
 
+  const formatPhoneNumber = (phone: string) => {
+    if (!phone) return "N/A";
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 11) return phone;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const driverStatus = call
+    ? "Em Apoio"
+    : driver.status === "DISPONIVEL"
+    ? "Disponível"
+    : "Indisponível";
+  const statusColor = call
+    ? "bg-blue-100 text-blue-700"
+    : driver.status === "DISPONIVEL"
+    ? "bg-green-100 text-green-700"
+    : "bg-red-100 text-red-700";
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md relative">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
+          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
         >
-          <X size={24} />
+          <X size={20} />
         </button>
-        <div className="flex flex-col items-center text-center">
+        <CardHeader className="flex flex-col items-center text-center">
           <AvatarComponent user={driver} />
-          <h2 className="text-xl font-bold mt-4">{driver.name}</h2>
-          <div className="text-sm text-gray-500 mt-2 space-y-1">
-            <p className="flex items-center gap-2">
-              <Building size={14} /> {driver.hub}
-            </p>
-            <p className="flex items-center gap-2">
-              <Truck size={14} /> {driver.vehicleType}
-            </p>
-            <p className="flex items-center gap-2">
-              <Phone size={14} /> {driver.phone}
-            </p>
+          <CardTitle className="text-xl font-bold mt-3">
+            {driver.name}
+          </CardTitle>
+          <Badge className={`mt-2 ${statusColor} hover:${statusColor}`}>
+            {driverStatus}
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm space-y-2 text-foreground">
+            <div className="flex items-center gap-3">
+              <Phone size={16} className="text-muted-foreground" />
+              <span>{formatPhoneNumber(driver.phone)}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Mail size={16} className="text-muted-foreground" />
+              <span className="truncate">{driver.email}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Building size={16} className="text-muted-foreground" />
+              <span className="truncate">{driver.hub}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Truck size={16} className="text-muted-foreground" />
+              <span className="capitalize">{driver.vehicleType}</span>
+            </div>
           </div>
-        </div>
-        {call && (
-          <div className="mt-4 pt-4 border-t">
-            <h3 className="font-bold text-center mb-2">Apoio em Andamento</h3>
-            <p className="text-sm text-gray-600 flex items-center gap-2">
-              <MapPin size={14} /> <strong>Local:</strong> {call.location}
-            </p>
-          </div>
-        )}
-      </div>
+          {call && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <h4 className="text-sm font-semibold text-primary mb-2">
+                Chamado Ativo
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {call.description}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
