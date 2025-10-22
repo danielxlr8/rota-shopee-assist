@@ -692,6 +692,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       isBulky: isBulky,
       routeId: routeId,
       urgency: urgency,
+      packageCount: packageCount,
+      deliveryRegions: selectedDeliveryRegions,
     };
 
     try {
