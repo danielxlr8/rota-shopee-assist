@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-
 import type { Driver, SupportCall, UrgencyLevel } from "../types/logistics";
-
 import {
   Clock,
   AlertTriangle,
@@ -29,10 +27,9 @@ import {
   Volume2,
   VolumeX,
   ExternalLink,
+  CalendarClock, // Importado
 } from "lucide-react";
-
 import { auth, db, storage } from "../firebase";
-
 import {
   doc,
   onSnapshot,
@@ -43,28 +40,26 @@ import {
   query,
   where,
   or,
-  Timestamp,
+  Timestamp, // Importado
   deleteField,
   getDocs,
 } from "firebase/firestore";
-
 import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from "firebase/auth";
-
 import {
   ref,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-
-import { Toaster, toast as sonnerToast } from "sonner";
-
+// CORREÇÃO: Removemos a importação do toaster/hook antigo para evitar duplicidade
+// import { Toaster } from "./ui/toaster";
+// import { useToast } from "../hooks/use-toast";
+import { toast as sonnerToast } from "sonner"; // Usamos apenas o 'sonner'
 import spxLogo from "/spx-logo.png";
-
 import {
   Card,
   CardContent,
@@ -72,26 +67,19 @@ import {
   CardTitle,
   CardFooter,
 } from "./ui/card";
-
 import { Badge } from "./ui/Badge";
-
-import { Button } from "./ui/button"; // Importação do Botão
+import { Button } from "./ui/button";
 
 // Define a interface para as props que o componente receberá
-
 interface DriverInterfaceProps {
   driver: Driver;
 }
 
 // Constantes no topo do arquivo
-
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
-
   "LM Hub_PR_Maringa",
-
   "LM Hub_PR_Foz do Iguaçu",
-
   "LM Hub_PR_Cascavel",
 ];
 
@@ -99,134 +87,88 @@ const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 
 const sessionNotifiedCallIds = new Set<string>();
 
-// Função para extrair detalhes da descrição
+// --- AJUSTE: Função para formatar Timestamp ---
+const formatTimestamp = (
+  timestamp: Timestamp | Date | null | undefined
+): string => {
+  if (!timestamp) return "Data indisponível";
+  const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
 
-const parseDescription = (description: string) => {
-  const regionMatch = description.match(/Região\(ões\):\s*(.*)/);
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return "Data inválida";
+  }
 
-  const packagesMatch = description.match(/Nº de Pacotes:\s*(.*)/);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // Mês começa do 0
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
 
-  const vehicleMatch = description.match(/Veículo Necessário:\s*(.*)/);
-
-  const locationMatch = description.match(/Localização:\s*(.*)/);
-
-  return {
-    region: regionMatch ? regionMatch[1].trim() : "N/A",
-
-    packages: packagesMatch ? packagesMatch[1].trim() : "N/A",
-
-    vehicle: vehicleMatch ? vehicleMatch[1].trim() : "N/A",
-
-    location: locationMatch ? locationMatch[1].trim() : "N/A",
-  };
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 // --- COMPONENTE PRINCIPAL ---
-
 export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   // --- Estados ---
-
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
-
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
-
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
-
   const [showPassword, setShowPassword] = useState(false);
-
   const [activeTab, setActiveTab] = useState<TabId>("profile");
-
   const [initialTabSet, setInitialTabSet] = useState(false);
-
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
-
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-
   const [location, setLocation] = useState("");
-
   const [isLocating, setIsLocating] = useState(false);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [modalError, setModalError] = useState("");
-
   const [historyFilter, setHistoryFilter] = useState<
     "all" | "requester" | "provider" | "inProgress"
   >("all");
-
   const [deliveryRegions, setDeliveryRegions] = useState([""]);
-
   const [neededVehicles, setNeededVehicles] = useState([""]);
-
   const [name, setName] = useState("");
-
   const [phone, setPhone] = useState("");
-
   const [hub, setHub] = useState("");
-
   const [vehicleType, setVehicleType] = useState("");
-
   const [hubSearch, setHubSearch] = useState("");
-
   const [shopeeId, setShopeeId] = useState<string | null>(null);
-
   const [newPassword, setNewPassword] = useState("");
-
   const [confirmPassword, setConfirmPassword] = useState("");
-
   const [isHubDropdownOpen, setIsHubDropdownOpen] = useState(false);
-
   const [isUploading, setIsUploading] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const touchStartX = useRef(0);
-
   const touchEndX = useRef(0);
-
   const swipeContainerRef = useRef<HTMLDivElement>(null);
-
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
-
   const userId = auth.currentUser?.uid;
-
   const [routeIdSearch, setRouteIdSearch] = useState("");
-
   const [globalHubFilter, setGlobalHubFilter] = useState("Todos os Hubs");
-
   const [isMuted, setIsMuted] = useState(false);
-
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
-
   const [isReauthModalOpen, setIsReauthModalOpen] = useState(false);
-
   const [currentPassword, setCurrentPassword] = useState("");
-
   const [reauthError, setReauthError] = useState("");
-
   const [isReauthenticating, setIsReauthenticating] = useState(false);
 
-  // --- Tipos e Memos ---
+  // CORREÇÃO: Ref para controlar a carga inicial de notificações
+  const isInitialOpenCallsLoad = useRef(true);
 
+  // --- Tipos e Memos ---
   const TABS = useMemo(
     () => [
       { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
-
       { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
-
       { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
-
       { id: "profile", label: "Perfil", icon: <User size={16} /> },
     ],
-
     []
   );
-
   type TabId = "availability" | "support" | "activeCalls" | "profile";
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-
     return !!(
       driver.hub &&
       driver.vehicleType &&
@@ -248,25 +190,20 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   }, [allMyCalls, userId]);
 
   // --- Funções Handler (handleUpdateProfile, handleLogin, etc.) ---
-
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
     }
-
     const savedMutePreference = localStorage.getItem("notificationsMuted");
-
     setIsMuted(savedMutePreference === "true");
   }, []);
 
   useEffect(() => {
     if (isProfileComplete && !initialTabSet) {
       setActiveTab("availability");
-
       setInitialTabSet(true);
     } else if (!isProfileComplete && !initialTabSet) {
       setActiveTab("profile");
-
       setInitialTabSet(true);
     }
   }, [isProfileComplete, initialTabSet]);
@@ -274,49 +211,37 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   useEffect(() => {
     if (driver) {
       setName(driver.name || "");
-
       setPhone(driver.phone || "");
-
       setHub(driver.hub || "");
-
       setVehicleType(driver.vehicleType || "");
-
       setHubSearch(driver.hub || "");
 
       const fetchShopeeId = async () => {
         if (driver.uid) {
           setShopeeId("Carregando...");
-
           const driversRef = collection(db, "motoristas_pre_aprovados");
-
           const q = query(
             driversRef,
-
             or(
               where("uid", "==", driver.uid),
-
               where("googleUid", "==", driver.uid)
             )
           );
 
           try {
             const querySnapshot = await getDocs(q);
-
             if (!querySnapshot.empty) {
               const driverDoc = querySnapshot.docs[0];
-
               setShopeeId(driverDoc.id);
             } else {
               setShopeeId("Não encontrado");
             }
           } catch (error) {
             console.error("Erro ao buscar ID de cadastro:", error);
-
             setShopeeId("Erro ao buscar");
           }
         }
       };
-
       fetchShopeeId();
     }
   }, [driver]);
@@ -334,35 +259,43 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
       if (!isMuted) {
         const audio = new Audio("/shopee-ringtone.mp3");
-
         audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
       }
 
+      // --- CORREÇÃO: Design moderno com botão de fechar ---
       sonnerToast.custom(
-        () => (
-          <div className="flex items-center gap-3 bg-white p-4 rounded-lg shadow-lg border">
-            <img src={spxLogo} alt="SPX Logo" className="w-10 h-10" />
-
-            <div>
-              <p className="font-bold text-gray-800">Novo Apoio Disponível</p>
-
-              <p className="text-sm text-gray-600">
+        (t) => (
+          <div className="flex w-full max-w-sm items-start gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
+            <img
+              src={spxLogo}
+              alt="SPX Logo"
+              className="mt-1 h-10 w-10 flex-shrink-0"
+            />
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">
+                Novo Apoio Disponível
+              </p>
+              <p className="text-sm text-muted-foreground">
                 Um novo chamado de {newCall.solicitante.name} está aberto.
               </p>
             </div>
+            {/* Botão de Fechar */}
+            <button
+              onClick={() => sonnerToast.dismiss(t)}
+              className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <X size={16} />
+            </button>
           </div>
         ),
-
         { duration: 10000 }
       );
 
       if (document.hidden && Notification.permission === "granted") {
         new Notification("Novo Apoio Disponível!", {
           body: `Um novo chamado de ${newCall.solicitante.name} está aberto.`,
-
           icon: spxLogo,
         });
-
         if ("vibrate" in navigator) {
           navigator.vibrate([200, 100, 200]);
         }
@@ -376,21 +309,17 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     if (!userId) return;
 
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
-
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
         (doc) => ({ ...doc.data(), uid: doc.id } as Driver) // uid é o ID do documento
       );
-
       setAllDrivers(driversData);
     });
 
     const myCallsQuery = query(
       collection(db, "supportCalls"),
-
       or(
         where("solicitante.id", "==", userId),
-
         where("assignedTo", "==", userId)
       )
     );
@@ -399,27 +328,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       const callsData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
-
       callsData.sort((a, b) => {
         const timeA =
           a.timestamp instanceof Timestamp
             ? a.timestamp.toMillis()
             : (a.timestamp as any)?.seconds * 1000 || 0;
-
         const timeB =
           b.timestamp instanceof Timestamp
             ? b.timestamp.toMillis()
             : (b.timestamp as any)?.seconds * 1000 || 0;
-
         return timeB - timeA;
       });
-
       setAllMyCalls(callsData);
     });
 
     const openCallsQuery = query(
       collection(db, "supportCalls"),
-
       where("status", "==", "ABERTO")
     );
 
@@ -427,25 +351,28 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       snapshot.docChanges().forEach((change) => {
         const callData = {
           id: change.doc.id,
-
           ...change.doc.data(),
         } as SupportCall;
 
         if (callData.solicitante.id !== userId) {
           if (change.type === "added") {
-            triggerNotificationRef.current(callData);
+            // --- CORREÇÃO: Apenas notifica se NÃO for a carga inicial ---
+            if (!isInitialOpenCallsLoad.current) {
+              triggerNotificationRef.current(callData);
+            }
           }
-
           if (change.type === "removed") {
             sessionNotifiedCallIds.delete(callData.id);
           }
         }
       });
 
+      // --- CORREÇÃO: Marca que a carga inicial já foi concluída ---
+      isInitialOpenCallsLoad.current = false;
+
       const openCallsData = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
-
       setOpenSupportCalls(
         openCallsData.filter((call) => call.solicitante.id !== userId)
       );
@@ -453,32 +380,25 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     return () => {
       unsubscribeMyCalls();
-
       unsubscribeOpenCalls();
-
       unsubscribeAllDrivers();
     };
   }, [userId]);
 
   const updateDriver = async (
     driverId: string,
-
     updates: Partial<Omit<Driver, "uid">>
   ) => {
     if (!driverId) return;
-
     const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
-
     await updateDoc(driverDocRef, updates);
   };
 
   const updateCall = async (
     id: string,
-
     updates: Partial<Omit<SupportCall, "id">>
   ) => {
     const callDocRef = doc(db, "supportCalls", id);
-
     await updateDoc(callDocRef, updates as any);
   };
 
@@ -489,17 +409,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     const getInitials = (name: string) => {
       if (!name) return "??";
-
       return name
-
         .split(" ")
-
         .map((n) => n[0])
-
         .join("")
-
         .toUpperCase()
-
         .substring(0, 2);
     };
 
@@ -507,18 +421,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     const callToAdd = {
       ...newCall,
-
       timestamp: serverTimestamp(),
-
       solicitante: {
         id: driver.uid,
-
         name: driverName,
-
         avatar: driver.avatar || null,
-
         initials: driver.initials || getInitials(driverName),
-
         phone: driver.phone || null,
       },
     };
@@ -531,7 +439,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Complete seu perfil para alterar sua disponibilidade."
       );
-
       return;
     }
 
@@ -539,21 +446,17 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Não foi possível identificar seu perfil. Tente recarregar a página."
       );
-
       return;
     }
 
     const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
-
     updateDriver(shopeeId, { status: newStatus });
   };
 
   const handleAcceptCall = async (callId: string) => {
     if (!isProfileComplete) {
       sonnerToast.error("Complete seu perfil para aceitar um chamado.");
-
       setActiveTab("profile");
-
       return;
     }
 
@@ -564,7 +467,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         description:
           "Você já está prestando um apoio e não pode aceitar outro no momento.",
       });
-
       return;
     }
 
@@ -572,13 +474,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
-
       if (shopeeId && !shopeeId.includes("...")) {
         await updateDriver(shopeeId, { status: "EM_ROTA" });
       }
     } catch (error) {
       console.error("Erro ao aceitar chamado:", error);
-
       sonnerToast.error("Erro", {
         description: "Não foi possível aceitar o chamado.",
       });
@@ -590,11 +490,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const handleRequestApproval = async (callId: string) => {
     try {
       await updateCall(callId, { status: "AGUARDANDO_APROVACAO" });
-
       sonnerToast.success("Chamado enviado para aprovação do monitor.");
     } catch (error) {
       console.error("Erro ao enviar para aprovação:", error);
-
       sonnerToast.error("Falha ao enviar chamado para aprovação.");
     }
   };
@@ -604,14 +502,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     await updateCall(callId, {
       assignedTo: deleteField(),
-
       status: "ABERTO",
     } as any);
 
     if (shopeeId && !shopeeId.includes("...")) {
       await updateDriver(shopeeId, { status: "DISPONIVEL" });
     }
-
     sonnerToast.success("Apoio cancelado com sucesso.");
   };
 
@@ -627,14 +523,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
       if (assignedDriver) {
         const assignedDriverDocId = assignedDriver.uid;
-
         await updateDriver(assignedDriverDocId, { status: "DISPONIVEL" });
       }
     }
 
     await updateCall(callId, {
       status: "EXCLUIDO",
-
       deletedAt: serverTimestamp(),
     } as any);
 
@@ -646,7 +540,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Não foi possível identificar seu perfil. Tente recarregar a página."
       );
-
       return;
     }
 
@@ -654,7 +547,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     if (formattedPhone.length !== 11) {
       sonnerToast.error("O telefone deve ter 11 dígitos, incluindo o DDD.");
-
       return;
     }
 
@@ -662,37 +554,29 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Hub inválido. Por favor, selecione um Hub válido da lista."
       );
-
       return;
     }
 
     const updates = {
       name,
-
       phone: formattedPhone,
-
       hub,
-
       vehicleType,
     };
 
     updateDriver(shopeeId, updates);
-
     sonnerToast.success("Perfil atualizado com sucesso!");
-
     setIsProfileWarningVisible(false);
   };
 
   const handleChangePassword = () => {
     if (newPassword !== confirmPassword) {
       sonnerToast.error("As novas senhas não coincidem.");
-
       return;
     }
 
     if (newPassword.length < 6) {
       sonnerToast.error("A nova senha deve ter no mínimo 6 caracteres.");
-
       return;
     }
 
@@ -702,7 +586,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       sonnerToast.error(
         "Você não pode alterar a senha de contas logadas com o Google."
       );
-
       return;
     }
 
@@ -716,40 +599,31 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setReauthError(
         "Usuário não encontrado. Por favor, faça login novamente."
       );
-
       return;
     }
 
     setIsReauthenticating(true);
-
     setReauthError("");
 
     try {
       const credential = EmailAuthProvider.credential(
         user.email,
-
         currentPassword
       );
-
       await reauthenticateWithCredential(user, credential);
 
       await updatePassword(user, newPassword);
 
       sonnerToast.success("Senha alterada com sucesso!");
-
       setIsReauthModalOpen(false);
-
       setCurrentPassword("");
-
       setNewPassword("");
-
       setConfirmPassword("");
     } catch (error: any) {
       if (error.code === "auth/wrong-password") {
         setReauthError("Senha atual incorreta. Tente novamente.");
       } else {
         setReauthError("Ocorreu um erro. Tente novamente mais tarde.");
-
         console.error("Erro na reautenticação:", error);
       }
     } finally {
@@ -759,7 +633,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-
     if (!file || !driver || !shopeeId) return;
 
     setIsUploading(true);
@@ -767,42 +640,32 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     if (driver.avatar) {
       try {
         const oldAvatarRef = ref(storage, driver.avatar);
-
         await deleteObject(oldAvatarRef);
       } catch (error) {
         console.warn(
           "Erro ao deletar avatar antigo. Pode ser que não exista, ignorando:",
-
           error
         );
       }
     }
 
     const storageRef = ref(storage, `avatars/${shopeeId}/avatar.jpg`);
-
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on(
       "state_changed",
-
       () => {},
-
       (error) => {
         console.error("Falha no upload:", error);
-
         sonnerToast.error("Falha no upload", { description: error.message });
-
         setIsUploading(false);
       },
-
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
           if (shopeeId) {
             updateDriver(shopeeId, { avatar: downloadURL });
           }
-
           sonnerToast.success("Foto de perfil atualizada com sucesso!");
-
           setIsUploading(false);
         });
       }
@@ -811,40 +674,28 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleSupportSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     setIsSubmitting(true);
-
     setModalError("");
 
     const user = auth.currentUser;
-
     if (!user || !driver) {
       setModalError("Erro: Usuário não autenticado. Faça login novamente.");
-
       setIsSubmitting(false);
-
       return;
     }
 
     const formData = new FormData(e.currentTarget);
-
     const isBulky = formData.get("isBulky") === "on";
-
     const packageCount = Number(formData.get("packageCount"));
-
     const selectedHub = formData.get("hub") as string;
-
     const selectedDeliveryRegions = deliveryRegions.filter(Boolean);
-
     const selectedNeededVehicles = neededVehicles.filter(Boolean);
 
     if (packageCount < 20) {
       sonnerToast.error(
         "A solicitação de apoio só pode ser feita para 20 ou mais pacotes."
       );
-
       setIsSubmitting(false);
-
       return;
     }
 
@@ -855,9 +706,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       selectedNeededVehicles.length === 0
     ) {
       setModalError("Por favor, preencha todos os campos obrigatórios.");
-
       setIsSubmitting(false);
-
       return;
     }
 
@@ -869,20 +718,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     const solicitanteData = {
       id: driver.uid,
-
       name: driver.name || "Nome não definido",
-
       avatar: driver.avatar || null,
-
       initials: driver.initials || "??",
-
       phone: driver.phone || null,
     };
 
     const routeId = `SPX-${Date.now().toString().slice(-6)}`;
 
     let urgency: UrgencyLevel = "BAIXA";
-
     if (packageCount >= 100) {
       urgency = "URGENTE";
     } else if (packageCount >= 90) {
@@ -893,71 +737,51 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
     const ticketPayload = {
       prompt: informalDescription,
-
       solicitante: solicitanteData,
-
       location: location,
-
       hub: selectedHub,
-
       vehicleType: selectedNeededVehicles.join(", "),
-
       isBulky: isBulky,
-
       routeId: routeId,
-
       urgency: urgency,
-
       packageCount: packageCount,
-
       deliveryRegions: selectedDeliveryRegions,
     };
 
     try {
       const idToken = await user.getIdToken();
-
       const apiUrl = import.meta.env.VITE_API_URL;
 
       if (!apiUrl) {
         setModalError(
           "Erro: VITE_API_URL não está configurada no .env do frontend."
         );
-
         setIsSubmitting(false);
-
         return;
       }
 
       const response = await fetch(`${apiUrl}/tickets`, {
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
-
           Authorization: `Bearer ${idToken}`,
         },
-
         body: JSON.stringify(ticketPayload),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-
         throw new Error(
           errorData.error || "Falha ao criar o ticket no backend."
         );
       }
 
       setIsSupportModalOpen(false);
-
       setShowSuccessModal(true);
-
       setDeliveryRegions([""]);
-
       setNeededVehicles([""]);
     } catch (error: any) {
       console.error("Erro detalhado ao criar chamado:", error);
-
       setModalError(`Erro: ${error.message}`);
     } finally {
       setIsSubmitting(false);
@@ -967,26 +791,20 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       setModalError("Geolocalização não é suportada pelo seu navegador.");
-
       return;
     }
 
     setIsLocating(true);
-
     setModalError("");
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-
         setLocation(`https://www.google.com/maps?q=${latitude},${longitude}`);
-
         setIsLocating(false);
       },
-
       () => {
         setModalError("Não foi possível obter a sua localização.");
-
         setIsLocating(false);
       }
     );
@@ -996,16 +814,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const activeCalls = allMyCalls.filter((call) => {
       const hubMatch =
         globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
-
       return call.status !== "EXCLUIDO" && hubMatch;
     });
 
     if (historyFilter === "requester")
       return activeCalls.filter((call) => call.solicitante.id === userId);
-
     if (historyFilter === "provider")
       return activeCalls.filter((call) => call.assignedTo === userId);
-
     if (historyFilter === "inProgress")
       return activeCalls.filter((call) =>
         ["EM ANDAMENTO", "AGUARDANDO_APROVACAO"].includes(call.status)
@@ -1018,13 +833,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     return openSupportCalls.filter((call) => {
       const hubMatch =
         globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter;
-
       const searchMatch =
         !routeIdSearch ||
         (call.routeId
           ? call.routeId.toLowerCase().includes(routeIdSearch.toLowerCase())
           : false);
-
       return hubMatch && searchMatch;
     });
   }, [openSupportCalls, routeIdSearch, globalHubFilter]);
@@ -1033,16 +846,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     () =>
       [
         "Todos os Hubs",
-
         ...new Set(allDrivers.map((d) => d.hub).filter(Boolean)),
       ].sort(),
-
     [allDrivers]
   );
 
   const filteredHubs = useMemo(() => {
     if (!hubSearch) return hubs;
-
     return hubs.filter((h) =>
       h.toLowerCase().includes(hubSearch.toLowerCase())
     );
@@ -1050,16 +860,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const formatPhoneNumber = (value: string) => {
     if (!value) return "";
-
     const digits = value.replace(/\D/g, "");
-
     if (digits.length <= 2) return `(${digits}`;
-
     if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(
       7,
-
       11
     )}`;
   };
@@ -1080,7 +885,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleRemoveField = (
     index: number,
-
     setter: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setter((prev) => prev.filter((_, i) => i !== index));
@@ -1088,23 +892,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleFieldChange = (
     index: number,
-
     value: string,
-
     setter: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setter((prev) => {
       const newValues = [...prev];
-
       newValues[index] = value;
-
       return newValues;
     });
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchEndX.current = 0;
-
     touchStartX.current = e.targetTouches[0].clientX;
   };
 
@@ -1114,11 +913,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleTouchEnd = () => {
     if (touchStartX.current === 0 || touchEndX.current === 0) return;
-
     const threshold = 50;
-
     const swipedLeft = touchStartX.current - touchEndX.current > threshold;
-
     const swipedRight = touchEndX.current - touchStartX.current > threshold;
 
     const currentIndex = TABS.findIndex((tab) => tab.id === activeTab);
@@ -1130,25 +926,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     }
 
     touchStartX.current = 0;
-
     touchEndX.current = 0;
   };
 
   const toggleMute = () => {
     const newMutedState = !isMuted;
-
     setIsMuted(newMutedState);
-
     localStorage.setItem("notificationsMuted", String(newMutedState));
-
     if (!newMutedState) {
       const audio = new Audio("/shopee-ringtone.mp3");
-
       audio.volume = 0;
-
       audio.play().catch(() => {});
     }
-
     sonnerToast.success(
       newMutedState
         ? "Som das notificações desativado."
@@ -1158,36 +947,69 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const activeTabIndex = TABS.findIndex((tab) => tab.id === activeTab);
 
-  // --- *** CORREÇÃO: COMPONENTES DEFINIDOS AQUI DENTRO *** ---
+  // --- COMPONENTES DEFINIDOS AQUI DENTRO ---
+
+  // Componente de Badge de Urgência
+  const getUrgencyInfo = (urgency: UrgencyLevel | undefined) => {
+    switch (urgency) {
+      case "MEDIA":
+        return {
+          text: "Média",
+          className:
+            "bg-blue-500/10 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 border-blue-500/20",
+        };
+      case "ALTA":
+        return {
+          text: "Alta",
+          className:
+            "bg-yellow-500/10 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300 border-yellow-500/20",
+        };
+      case "URGENTE":
+        return {
+          text: "Urgente",
+          className:
+            "bg-red-500/10 text-red-700 dark:bg-red-900/50 dark:text-red-300 border-red-500/20",
+        };
+      case "BAIXA":
+      default:
+        return {
+          text: "Baixa",
+          className:
+            "bg-gray-500/10 text-gray-700 dark:bg-gray-900/50 dark:text-gray-300 border-gray-500/20",
+        };
+    }
+  };
+
+  const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel | undefined }) => {
+    const { text, className } = getUrgencyInfo(urgency);
+    return (
+      <Badge
+        variant={"secondary"}
+        className={`text-xs font-semibold rounded-full px-2.5 py-0.5 ${className}`}
+      >
+        {text}
+      </Badge>
+    );
+  };
 
   // Card de Cabeçalho do Perfil (Estilizado)
-
   const ProfileHeaderCard = ({
     driver,
-
     onEditClick,
-
     isUploading,
-
     activeCall,
   }: {
     driver: Driver | null;
-
     onEditClick: () => void;
-
     isUploading: boolean;
-
     activeCall: SupportCall | null;
   }) => {
     if (!driver) return null;
 
     const formatPhoneNumberSimple = (phone: string) => {
       if (!phone) return "";
-
       const digits = phone.replace(/\D/g, "");
-
       if (digits.length !== 11) return phone;
-
       return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
     };
 
@@ -1199,9 +1021,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       ) {
         return {
           text: "Aguardando Apoio",
-
           color: "bg-yellow-100 dark:bg-yellow-900/50",
-
           textColor: "text-yellow-700 dark:text-yellow-300",
         };
       }
@@ -1210,36 +1030,25 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         case "DISPONIVEL":
           return {
             text: "Disponível",
-
             color: "bg-green-100 dark:bg-green-900/50",
-
             textColor: "text-green-700 dark:text-green-300",
           };
-
         case "INDISPONIVEL":
           return {
             text: "Indisponível",
-
             color: "bg-red-100 dark:bg-red-900/50",
-
             textColor: "text-red-700 dark:text-red-300",
           };
-
         case "EM_ROTA":
           return {
             text: "Prestando Apoio",
-
             color: "bg-blue-100 dark:bg-blue-900/50",
-
             textColor: "text-blue-700 dark:text-blue-300",
           };
-
         default:
           return {
             text: "Offline",
-
             color: "bg-gray-200 dark:bg-gray-700",
-
             textColor: "text-gray-600 dark:text-gray-300",
           };
       }
@@ -1251,28 +1060,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       <div className="relative mb-16">
         <div className="bg-primary rounded-xl shadow-lg p-6 pt-24 text-primary-foreground text-center relative overflow-hidden">
           <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-white/5 rounded-full opacity-50"></div>
-
           <div className="absolute top-0 -left-16 w-28 h-28 bg-white/5 rounded-full opacity-50"></div>
-
           <h2 className="text-3xl font-bold mt-2">{driver.name}</h2>
-
           <div className="text-sm opacity-90 mt-4 space-y-2">
             <p className="flex items-center justify-center gap-2">
               <Building size={16} className="opacity-80" />{" "}
               {driver.hub || "Hub não definido"}
             </p>
-
             <p className="flex items-center justify-center gap-2">
               <Phone size={16} className="opacity-80" />{" "}
               {formatPhoneNumberSimple(driver.phone) || "Telefone não definido"}
             </p>
-
             <p className="flex items-center justify-center gap-2 capitalize">
               <Truck size={16} className="opacity-80" />{" "}
               {driver.vehicleType || "Veículo não definido"}
             </p>
           </div>
-
           <Badge
             className={`mt-6 px-4 py-1.5 text-xs font-semibold rounded-full ${statusInfo.color} ${statusInfo.textColor} hover:${statusInfo.color}`}
           >
@@ -1293,7 +1096,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 {driver.initials}
               </span>
             )}
-
             {isUploading ? (
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                 <LoaderCircle className="text-white animate-spin" />
@@ -1313,121 +1115,118 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   // Card Histórico de Chamados (Estilizado)
-
   const DriverCallHistoryCard = ({ call }: { call: SupportCall }) => {
-    const details = parseDescription(call.description);
-
-    const isRequester = call.solicitante.id === userId; // Acesso direto ao userId
-
+    const isRequester = call.solicitante.id === userId;
     const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
-
-    const otherParty = allDrivers.find((d) => d.uid === otherPartyId); // Acesso direto a allDrivers
+    const otherParty = allDrivers.find((d) => d.uid === otherPartyId);
 
     let statusVariant: "default" | "secondary" | "destructive" | "outline" =
       "default";
-
     let statusText = "Desconhecido";
-
     let title = "Chamado";
 
     if (isRequester) {
       title = "Pedido de Apoio";
-
       if (call.status === "ABERTO") {
         statusText = "Aguardando Apoio";
-
         statusVariant = "default";
       } else if (call.status === "AGUARDANDO_APROVACAO") {
         statusText = "Aguardando Aprovação";
-
         statusVariant = "secondary";
       } else if (call.status === "EM ANDAMENTO") {
         statusText = `Recebendo Apoio de ${otherParty?.name || "Motorista"}`;
-
         statusVariant = "default";
       } else if (call.status === "CONCLUIDO") {
         statusText = "Concluído";
-
         statusVariant = "outline";
       }
     } else {
       title = `Apoio a ${call.solicitante.name}`;
-
       if (call.status === "EM ANDAMENTO") {
         statusText = "Prestando Apoio";
-
         statusVariant = "default";
       } else if (call.status === "AGUARDANDO_APROVACAO") {
         statusText = "Aguardando Aprovação";
-
         statusVariant = "secondary";
       } else if (call.status === "CONCLUIDO") {
         statusText = "Concluído";
-
         statusVariant = "outline";
       }
     }
 
     const handleWhatsAppClick = () => {
       const contactPhone = otherParty?.phone;
-
       if (!contactPhone) {
         sonnerToast.error("O outro motorista não tem um telefone cadastrado.");
-
         return;
       }
-
       const message = encodeURIComponent(
-        `Olá ${otherParty?.name}, sou o ${driver.name} referente ao chamado de apoio.` // Acesso direto a 'driver'
+        `Olá ${otherParty?.name}, sou o ${driver.name} referente ao chamado de apoio.`
       );
-
       window.open(`https://wa.me/55${contactPhone}?text=${message}`, "_blank");
     };
 
     return (
       <Card className="overflow-hidden shadow-lg border-l-8 border-primary rounded-xl bg-card">
-        <CardHeader className="flex flex-row items-center justify-between bg-primary/5 dark:bg-card-foreground/5 p-4">
-          <CardTitle className="text-base font-bold text-foreground">
-            {title}
-          </CardTitle>
+        <CardHeader className="flex flex-row items-start justify-between bg-primary/5 dark:bg-card-foreground/5 p-4">
+          <div className="space-y-1.5">
+            <CardTitle className="text-base font-bold text-foreground leading-tight">
+              {title}
+            </CardTitle>
+            {call.routeId && (
+              <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 font-mono tracking-wide">
+                {call.routeId}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <CalendarClock size={13} className="flex-shrink-0" />
+              {formatTimestamp(call.timestamp)}
+            </p>
+          </div>
 
-          <Badge
-            variant={statusVariant}
-            className="text-xs font-semibold rounded-full px-2.5 py-0.5"
-          >
-            {statusText}
-          </Badge>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-2">
+            <UrgencyBadge urgency={call.urgency} />
+            <Badge
+              variant={statusVariant}
+              className="text-xs font-semibold rounded-full px-2.5 py-0.5"
+            >
+              {statusText}
+            </Badge>
+          </div>
         </CardHeader>
 
         <CardContent className="p-4 text-sm space-y-3">
           <div className="grid grid-cols-2 gap-x-5 gap-y-3">
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
-                Região(ões)
-              </p>
-
-              <p className="font-medium text-foreground text-sm">
-                {details.region}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
                 Nº Pacotes
               </p>
-
               <p className="font-medium text-foreground text-sm">
-                {details.packages}
+                {call.packageCount || "N/A"}
               </p>
             </div>
-
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Hub de Origem
+              </p>
+              <p className="font-medium text-foreground text-sm truncate">
+                {call.hub || "N/A"}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Região(ões)
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {call.deliveryRegions?.join(", ") || "N/A"}
+              </p>
+            </div>
             <div className="col-span-2">
               <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
                 Veículo Necessário
               </p>
-
               <p className="font-medium text-foreground text-sm">
-                {details.vehicle}
+                {call.vehicleType || "N/A"}
               </p>
             </div>
           </div>
@@ -1438,15 +1237,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
               Localização
             </p>
-
             <a
-              href={details.location}
+              href={call.location || "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center gap-1 break-all text-xs"
             >
               <MapPin size={13} className="flex-shrink-0" />{" "}
-              <span className="truncate">{details.location}</span>{" "}
+              <span className="truncate">{call.location || "N/A"}</span>{" "}
               <ExternalLink size={13} className="ml-1 flex-shrink-0" />
             </a>
           </div>
@@ -1469,8 +1267,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
             {!isRequester && call.status === "EM ANDAMENTO" && (
               <>
-                {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
-
                 <Button
                   variant="outline"
                   size="sm"
@@ -1479,9 +1275,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 >
                   <Clock size={14} className="mr-1" /> Aprovação
                 </Button>
-
-                {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
-
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1495,8 +1288,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
             {isRequester &&
               (call.status === "ABERTO" || call.status === "EM ANDAMENTO") && (
-                // *** CORREÇÃO DO NOME DA FUNÇÃO ***
-
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1513,12 +1304,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   // Card Chamado Aberto (Estilizado)
-
   const OpenCallCard = ({ call }: { call: SupportCall }) => {
-    const details = parseDescription(call.description);
-
     const requesterPhone = call.solicitante.phone || "";
-
     const isAcceptingThisCall = acceptingCallId === call.id;
 
     const handleWhatsAppClick = () => {
@@ -1526,17 +1313,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         sonnerToast.error(
           "O motorista solicitante não possui um número de telefone cadastrado."
         );
-
         return;
       }
-
       const message = encodeURIComponent(
-        `Olá ${call.solicitante.name}, me chamo ${driver.name} e aceitei seu chamado e serei seu apoio` // Acesso direto a 'driver'
+        `Olá ${call.solicitante.name}, me chamo ${driver.name} e aceitei seu chamado e serei seu apoio`
       );
-
       window.open(
         `https://wa.me/55${requesterPhone}?text=${message}`,
-
         "_blank"
       );
     };
@@ -1544,40 +1327,59 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     return (
       <Card className="overflow-hidden shadow-lg border-l-8 border-yellow-500 rounded-xl bg-card">
         <CardHeader className="bg-card-foreground/5 dark:bg-card-foreground/10 p-4">
-          <CardTitle className="text-base font-bold text-foreground">
-            Apoio para {call.solicitante.name}
-          </CardTitle>
+          <div className="flex justify-between items-start">
+            <div className="space-y-1.5">
+              <CardTitle className="text-base font-bold text-foreground leading-tight">
+                Apoio para {call.solicitante.name}
+              </CardTitle>
+              {call.routeId && (
+                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 font-mono tracking-wide">
+                  {call.routeId}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <CalendarClock size={13} className="flex-shrink-0" />
+                {formatTimestamp(call.timestamp)}
+              </p>
+            </div>
+            <div className="flex-shrink-0 ml-2">
+              <UrgencyBadge urgency={call.urgency} />
+            </div>
+          </div>
         </CardHeader>
 
         <CardContent className="p-4 text-sm space-y-3">
           <div className="grid grid-cols-2 gap-x-5 gap-y-3">
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
-                Região(ões)
-              </p>
-
-              <p className="font-medium text-foreground text-sm">
-                {details.region}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
                 Nº Pacotes
               </p>
-
               <p className="font-medium text-foreground text-sm">
-                {details.packages}
+                {call.packageCount || "N/A"}
               </p>
             </div>
-
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Hub de Origem
+              </p>
+              <p className="font-medium text-foreground text-sm truncate">
+                {call.hub || "N/A"}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
+                Região(ões)
+              </p>
+              <p className="font-medium text-foreground text-sm">
+                {call.deliveryRegions?.join(", ") || "N/A"}
+              </p>
+            </div>
             <div className="col-span-2">
               <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
                 Veículo Necessário
               </p>
-
               <p className="font-medium text-foreground text-sm">
-                {details.vehicle}
+                {call.vehicleType || "N/A"}
               </p>
             </div>
           </div>
@@ -1588,15 +1390,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             <p className="text-[10px] font-semibold text-muted-foreground mb-0.5 uppercase tracking-wider">
               Localização
             </p>
-
             <a
-              href={details.location}
+              href={call.location || "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300 hover:underline flex items-center gap-1 break-all text-xs"
             >
               <MapPin size={13} className="flex-shrink-0" />{" "}
-              <span className="truncate">{details.location}</span>{" "}
+              <span className="truncate">{call.location || "N/A"}</span>{" "}
               <ExternalLink size={13} className="ml-1 flex-shrink-0" />
             </a>
           </div>
@@ -1611,9 +1412,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           >
             <Phone size={16} />
           </Button>
-
-          {/* *** CORREÇÃO DO NOME DA FUNÇÃO *** */}
-
           <Button
             onClick={() => handleAcceptCall(call.id)}
             disabled={!!acceptingCallId}
@@ -1632,10 +1430,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   // --- RETURN PRINCIPAL (JSX) ---
-
   return (
     <>
-      <Toaster richColors position="top-center" />
+      {/* CORREÇÃO: O <Toaster /> foi removido daqui. 
+        Ele já está sendo renderizado no `main.tsx`, 
+        o que evita a duplicidade de notificações.
+      */}
+      {/* <Toaster richColors position="top-center" /> */}
 
       <div className="bg-background min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
@@ -1647,13 +1448,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               >
                 <div>
                   <p className="font-bold">Perfil Incompleto!</p>
-
                   <p className="text-sm">
                     Por favor, preencha todas as informações do seu perfil para
                     poder solicitar ou prestar apoio.
                   </p>
                 </div>
-
                 <button
                   onClick={() => setIsProfileWarningVisible(false)}
                   className="p-1 rounded-full hover:bg-yellow-200"
@@ -1689,7 +1488,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               >
                 Filtrar por Hub
               </label>
-
               <select
                 id="hubFilterSelect"
                 value={globalHubFilter}
@@ -1705,7 +1503,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             </div>
 
             {/* Abas */}
-
             <div className="border-b border-border sticky top-[calc(theme(spacing.24)+1px)] bg-background z-10">
               <div className="flex px-1 sm:px-2">
                 {TABS.map((tab) => (
@@ -1716,10 +1513,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         sonnerToast.error(
                           "Complete seu perfil para acessar esta aba."
                         );
-
                         return;
                       }
-
                       setActiveTab(tab.id as TabId);
                     }}
                     disabled={!isProfileComplete && tab.id !== "profile"}
@@ -1734,7 +1529,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     }`}
                   >
                     {React.cloneElement(tab.icon, { size: 16 })}
-
                     <span className="capitalize">{tab.label}</span>
                   </button>
                 ))}
@@ -1742,7 +1536,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             </div>
 
             {/* Container do Conteúdo das Abas */}
-
             <div
               className="flex-1 overflow-hidden"
               onTouchStart={handleTouchStart}
@@ -1755,7 +1548,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 style={{ transform: `translateX(-${activeTabIndex * 100}%)` }}
               >
                 {/* --- Aba Disponibilidade --- */}
-
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6 space-y-6">
                   <Card className="shadow-md bg-card">
                     <CardHeader>
@@ -1763,7 +1555,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         Estou disponível para apoio?
                       </CardTitle>
                     </CardHeader>
-
                     <CardContent className="flex flex-col sm:flex-row items-center justify-center gap-4">
                       <Button
                         onClick={() => handleAvailabilityChange(true)}
@@ -1779,7 +1570,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       >
                         <CheckCircle size={16} className="mr-2" /> Disponível
                       </Button>
-
                       <Button
                         onClick={() => handleAvailabilityChange(false)}
                         disabled={!isProfileComplete}
@@ -1800,13 +1590,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       <h3 className="text-xl font-semibold text-foreground mb-4 px-1">
                         Chamados Abertos
                       </h3>
-
                       <div className="relative mb-4 px-1">
                         <Search
                           className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                           size={18}
                         />
-
                         <input
                           type="text"
                           placeholder="Pesquisar por ID da Rota..."
@@ -1825,11 +1613,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       ) : (
                         <Card className="text-center py-10 px-4 shadow-sm mt-6 bg-card">
                           <HelpCircle className="mx-auto h-12 w-12 text-muted-foreground" />
-
                           <h3 className="mt-2 text-sm font-semibold text-foreground">
                             Nenhum chamado aberto
                           </h3>
-
                           <p className="mt-1 text-sm text-muted-foreground">
                             Quando houver chamados no seu hub, eles aparecerão
                             aqui.
@@ -1841,51 +1627,40 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 </div>
 
                 {/* --- Aba Apoio --- */}
-
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6">
                   <Card className="shadow-md bg-card">
                     <CardHeader className="flex flex-row items-center space-x-3 pb-4">
                       <AlertTriangle className="text-destructive h-6 w-6" />
-
                       <CardTitle className="text-lg font-semibold text-foreground">
                         Solicitar Apoio de Transferência
                       </CardTitle>
                     </CardHeader>
-
                     <CardContent>
                       <p className="text-sm text-muted-foreground mb-6">
                         Precisa de ajuda para transferir pacotes? Clique abaixo
                         para abrir um chamado. Lembre-se que o mínimo são 20
                         pacotes.
                       </p>
-
                       <Button
                         onClick={() => {
                           if (hasActiveRequest) {
                             sonnerToast.error(
                               "Você já possui uma solicitação de apoio ativa.",
-
                               {
                                 description:
                                   "Cancele a solicitação anterior para criar uma nova.",
                               }
                             );
-
                             return;
                           }
-
                           if (!isProfileComplete) {
                             sonnerToast.error(
                               "Complete seu perfil para solicitar apoio."
                             );
-
                             setActiveTab("profile");
-
                             return;
                           }
-
                           setModalError("");
-
                           setIsSupportModalOpen(true);
                         }}
                         className="w-full bg-gradient-to-r from-red-500 to-primary text-white font-bold py-3 text-base h-auto shadow-md hover:shadow-lg transition-all duration-300 hover:from-red-600 hover:to-orange-500 rounded-lg"
@@ -1898,26 +1673,20 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 </div>
 
                 {/* --- Aba Meus Chamados --- */}
-
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6 space-y-5">
                   <h3 className="text-xl font-semibold text-foreground px-1 mb-3">
                     Meus Chamados e Apoios
                   </h3>
-
                   <div className="flex flex-wrap gap-2 px-1 pb-4 border-b border-border">
                     {(
                       ["all", "inProgress", "requester", "provider"] as const
                     ).map((filter) => {
                       const labels = {
                         all: "Todos",
-
                         inProgress: "Em Andamento",
-
                         requester: "Meus Pedidos",
-
                         provider: "Meus Apoios",
                       };
-
                       return (
                         <Button
                           key={filter}
@@ -1947,11 +1716,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   ) : (
                     <Card className="text-center py-10 px-4 shadow-sm mt-6 bg-card">
                       <Ticket className="mx-auto h-12 w-12 text-muted-foreground" />
-
                       <h3 className="mt-2 text-sm font-semibold text-foreground">
                         Nenhum chamado
                       </h3>
-
                       <p className="mt-1 text-sm text-muted-foreground">
                         Seu histórico de pedidos e apoios aparecerá aqui.
                       </p>
@@ -1960,7 +1727,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 </div>
 
                 {/* --- Aba Perfil --- */}
-
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6">
                   <div className="space-y-6">
                     <Card className="shadow-md bg-card">
@@ -1969,7 +1735,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           Configurações
                         </CardTitle>
                       </CardHeader>
-
                       <CardContent>
                         <div className="flex items-center justify-between">
                           <label
@@ -1978,7 +1743,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           >
                             Som das notificações
                           </label>
-
                           <button
                             id="soundToggle"
                             onClick={toggleMute}
@@ -2004,13 +1768,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           Editar Perfil
                         </CardTitle>
                       </CardHeader>
-
                       <CardContent className="space-y-4 pt-4">
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             ID de Motorista
                           </label>
-
                           <input
                             type="text"
                             value={shopeeId || "Aguardando cadastro..."}
@@ -2018,12 +1780,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             className="w-full p-2 border rounded-md bg-muted text-muted-foreground cursor-not-allowed text-sm"
                           />
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Nome Completo
                           </label>
-
                           <input
                             type="text"
                             value={name}
@@ -2031,18 +1791,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                           />
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Telefone (WhatsApp)
                           </label>
-
                           <input
                             type="text"
                             value={formatPhoneNumber(phone)}
                             onChange={(e) => {
                               const digits = e.target.value.replace(/\D/g, "");
-
                               if (digits.length <= 11) {
                                 setPhone(digits);
                               }
@@ -2051,38 +1808,32 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             placeholder="(XX) XXXXX-XXXX"
                           />
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Hub de Atuação
                           </label>
-
                           <div className="relative">
                             <input
                               type="text"
                               value={hubSearch}
                               onChange={(e) => {
                                 setHubSearch(e.target.value);
-
                                 setIsHubDropdownOpen(true);
                               }}
                               onFocus={() => setIsHubDropdownOpen(true)}
                               onBlur={() =>
                                 setTimeout(
                                   () => setIsHubDropdownOpen(false),
-
                                   150
                                 )
                               }
                               className="w-full p-2 border rounded-md pr-10 text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                               placeholder="Pesquisar Hub..."
                             />
-
                             <Search
                               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                               size={18}
                             />
-
                             {isHubDropdownOpen && filteredHubs.length > 0 && (
                               <div className="absolute z-10 w-full mt-1 bg-card border rounded-md shadow-lg max-h-60 overflow-y-auto text-sm">
                                 {filteredHubs.map((h) => (
@@ -2091,9 +1842,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                                     className="p-2 hover:bg-muted cursor-pointer"
                                     onClick={() => {
                                       setHub(h);
-
                                       setHubSearch(h);
-
                                       setIsHubDropdownOpen(false);
                                     }}
                                   >
@@ -2104,19 +1853,16 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             )}
                           </div>
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Tipo de Veículo
                           </label>
-
                           <select
                             value={vehicleType}
                             onChange={(e) => setVehicleType(e.target.value)}
                             className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                           >
                             <option value="">Selecione seu veículo</option>
-
                             {vehicleTypesList.map((v) => (
                               <option key={v} value={v}>
                                 {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -2125,7 +1871,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           </select>
                         </div>
                       </CardContent>
-
                       <CardFooter>
                         <Button
                           onClick={handleUpdateProfile}
@@ -2143,13 +1888,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           Alterar Senha
                         </CardTitle>
                       </CardHeader>
-
                       <CardContent className="space-y-4 pt-4">
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Nova Senha
                           </label>
-
                           <div className="relative">
                             <input
                               type={showPassword ? "text" : "password"}
@@ -2158,7 +1901,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                               className="w-full p-2 border rounded-md text-sm bg-background text-foreground focus:ring-primary focus:border-primary"
                               placeholder="Mínimo 6 caracteres"
                             />
-
                             <button
                               type="button"
                               onClick={() => setShowPassword(!showPassword)}
@@ -2172,12 +1914,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             </button>
                           </div>
                         </div>
-
                         <div>
                           <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
                             Confirmar Nova Senha
                           </label>
-
                           <input
                             type={showPassword ? "text" : "password"}
                             value={confirmPassword}
@@ -2187,7 +1927,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           />
                         </div>
                       </CardContent>
-
                       <CardFooter>
                         <Button
                           onClick={handleChangePassword}
@@ -2220,7 +1959,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       </div>
 
       {/* --- Modais (Estilizados) --- */}
-
       {isReauthModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-sm">
@@ -2228,13 +1966,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               <CardTitle className="text-lg font-bold">
                 Confirme sua identidade
               </CardTitle>
-
               <p className="text-sm text-muted-foreground pt-2">
                 Para sua segurança, por favor, insira sua senha atual para
                 continuar.
               </p>
             </CardHeader>
-
             <CardContent className="space-y-4">
               <div>
                 <label
@@ -2243,7 +1979,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 >
                   Senha Atual
                 </label>
-
                 <input
                   id="currentPassword"
                   type="password"
@@ -2253,12 +1988,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   required
                 />
               </div>
-
               {reauthError && (
                 <p className="text-sm text-red-600">{reauthError}</p>
               )}
             </CardContent>
-
             <CardFooter className="flex justify-end gap-3 pt-4">
               <Button
                 variant="outline"
@@ -2267,7 +2000,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
               >
                 Cancelar
               </Button>
-
               <Button
                 onClick={handleReauthenticateAndChange}
                 disabled={isReauthenticating || !currentPassword}
@@ -2291,7 +2023,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 <CardTitle className="text-xl font-bold">
                   Solicitar Apoio de Transferência
                 </CardTitle>
-
                 <button
                   onClick={() => setIsSupportModalOpen(false)}
                   className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -2300,7 +2031,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 </button>
               </div>
             </CardHeader>
-
             <form onSubmit={handleSupportSubmit}>
               <CardContent className="p-6 space-y-5 overflow-y-auto">
                 <div>
@@ -2310,10 +2040,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   >
                     Selecione o seu Hub
                   </label>
-
                   <div className="relative">
                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-
                     <select
                       id="hubModal"
                       name="hub"
@@ -2323,14 +2051,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       required
                     >
                       <option value="">Selecione...</option>
-
                       {hubs.map((h) => (
                         <option key={h} value={h}>
                           {h}
                         </option>
                       ))}
                     </select>
-
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                       <svg
                         className="fill-current h-4 w-4"
@@ -2350,11 +2076,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   >
                     Sua Localização Atual
                   </label>
-
                   <div className="flex items-center space-x-2">
                     <div className="relative flex-grow">
                       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-
                       <input
                         id="currentLocationModal"
                         name="currentLocation"
@@ -2366,7 +2090,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         required
                       />
                     </div>
-
                     <Button
                       type="button"
                       variant="outline"
@@ -2391,10 +2114,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   >
                     Número de Pacotes (mín. 20)
                   </label>
-
                   <div className="relative">
                     <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-
                     <input
                       id="packageCountModal"
                       name="packageCount"
@@ -2411,22 +2132,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Região(ões) de Entrega
                   </label>
-
                   <div className="space-y-2">
                     {deliveryRegions.map((region, index) => (
                       <div key={index} className="flex items-center space-x-2">
                         <div className="relative flex-grow">
                           <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-
                           <input
                             type="text"
                             value={region}
                             onChange={(e) =>
                               handleFieldChange(
                                 index,
-
                                 e.target.value,
-
                                 setDeliveryRegions
                               )
                             }
@@ -2435,7 +2152,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             required
                           />
                         </div>
-
                         {deliveryRegions.length > 1 && (
                           <Button
                             type="button"
@@ -2452,7 +2168,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       </div>
                     ))}
                   </div>
-
                   <Button
                     type="button"
                     variant="outline"
@@ -2469,21 +2184,17 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   <label className="block text-sm font-medium text-muted-foreground mb-2">
                     Veículo(s) Necessário(s)
                   </label>
-
                   <div className="space-y-2">
                     {neededVehicles.map((vehicle, index) => (
                       <div key={index} className="flex items-center space-x-2">
                         <div className="relative flex-grow">
                           <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-
                           <select
                             value={vehicle}
                             onChange={(e) =>
                               handleFieldChange(
                                 index,
-
                                 e.target.value,
-
                                 setNeededVehicles
                               )
                             }
@@ -2491,14 +2202,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             required
                           >
                             <option value="">Selecione...</option>
-
                             {vehicleTypesList.map((v) => (
                               <option key={v} value={v}>
                                 {v.charAt(0).toUpperCase() + v.slice(1)}
                               </option>
                             ))}
                           </select>
-
                           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                             <svg
                               className="fill-current h-4 w-4"
@@ -2509,7 +2218,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                             </svg>
                           </div>
                         </div>
-
                         {neededVehicles.length > 1 && (
                           <Button
                             type="button"
@@ -2526,7 +2234,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       </div>
                     ))}
                   </div>
-
                   <Button
                     type="button"
                     variant="outline"
@@ -2546,7 +2253,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     type="checkbox"
                     className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
-
                   <label
                     htmlFor="isBulkyModal"
                     className="text-sm font-medium text-foreground"
@@ -2561,7 +2267,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   </div>
                 )}
               </CardContent>
-
               <CardFooter className="p-4 border-t">
                 <Button
                   type="submit"
@@ -2585,16 +2290,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           <Card className="w-full max-w-md text-center">
             <CardContent className="p-8">
               <CheckCircle size={56} className="text-green-500 mx-auto mb-5" />
-
               <h2 className="text-xl font-bold text-foreground mb-2">
                 Sucesso!
               </h2>
-
               <p className="text-muted-foreground mb-6">
                 Apoio solicitado com sucesso! Aguarde o contato de um motorista
                 ou monitor.
               </p>
-
               <Button
                 onClick={() => setShowSuccessModal(false)}
                 className="w-full h-10"

@@ -1,3 +1,5 @@
+const { fontFamily } = require("tailwindcss/defaultTheme"); // Importa as fontes padrão
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
@@ -6,7 +8,7 @@ module.exports = {
     "./components/**/*.{ts,tsx}",
     "./app/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}",
-    "./index.html", // Adicionei o index.html
+    "./index.html",
   ],
   prefix: "",
   theme: {
@@ -18,6 +20,10 @@ module.exports = {
       },
     },
     extend: {
+      // 1. REGISTRA A NOVA FONTE
+      fontFamily: {
+        sans: ["'Plus Jakarta Sans'", ...fontFamily.sans],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -67,10 +73,23 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        // 2. ADICIONA A ANIMAÇÃO DE PISCAR
+        blink: {
+          "0%, 100%": {
+            backgroundColor: "hsl(var(--card))",
+            borderColor: "hsl(var(--border))",
+          },
+          "50%": {
+            backgroundColor: "hsl(var(--destructive) / 0.1)",
+            borderColor: "hsl(var(--destructive) / 0.5)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        // 3. REGISTRA A ANIMAÇÃO DE PISCAR
+        blink: "blink 1.5s infinite",
       },
     },
   },

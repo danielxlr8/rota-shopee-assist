@@ -1,94 +1,62 @@
+/* Importa a nova fonte profissional "Plus Jakarta Sans" */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
-
 @tailwind components;
-
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-
-    --card-foreground: 222.2 84% 4.9%;
-
+    /* Este é o tema CLARO (light mode) - Vamos deixar profissional também */
+    --background: 240 5% 98%; /* slate-50 (Um cinza bem claro, não branco puro) */
+    --foreground: 240 10% 3.9%; /* slate-950 (Preto suave) */
+    --card: 0 0% 100%; /* white */
+    --card-foreground: 240 10% 3.9%; /* slate-950 */
     --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
 
-    --popover-foreground: 222.2 84% 4.9%;
+    /* Cor primária: Laranja Shopee (Mantido) */
+    --primary: 24 95% 53%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Cor primária: Laranja Shopee */
-
-    --primary: 24 95% 53%; /* Laranja principal (ex: #F57224) */
-
-    --primary-foreground: 0 0% 100%; /* Texto branco para botões */
-
-    --secondary: 210 40% 96.1%;
-
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-
-    --accent-foreground: 222.2 47.4% 11.2%;
-
+    --secondary: 240 5% 96%; /* slate-100 */
+    --secondary-foreground: 240 6% 10%; /* slate-900 */
+    --muted: 240 5% 90%; /* slate-200 */
+    --muted-foreground: 240 4% 46%; /* slate-500 */
+    --accent: 240 5% 96%; /* slate-100 */
+    --accent-foreground: 240 6% 10%; /* slate-900 */
     --destructive: 0 84.2% 60.2%;
-
     --destructive-foreground: 0 0% 100%;
-
-    --border: 214.3 31.8% 91.4%;
-
-    --input: 214.3 31.8% 91.4%;
-
+    --border: 240 6% 90%; /* slate-200 */
+    --input: 240 6% 90%; /* slate-200 */
     --ring: 24 95% 53%; /* Laranja para foco */
-
     --radius: 0.5rem;
   }
 
   .dark {
-    /* Você pode adicionar variáveis dark theme aqui se quiser */
+    /* Esta é a nossa paleta "TECH DARK" (Modo Cockpit) */
+    --background: 240 6% 10%; /* zinc-900 (Fundo principal) */
+    --foreground: 240 5% 96%; /* zinc-100 (Texto principal) */
+    --card: 240 6% 13%; /* zinc-800 (Fundo dos cards) */
+    --card-foreground: 240 5% 96%; /* zinc-100 */
+    --popover: 240 6% 10%; /* zinc-900 */
+    --popover-foreground: 240 5% 96%; /* zinc-100 */
 
-    --background: 222.2 84% 4.9%;
-
-    --foreground: 0 0% 100%;
-
-    --card: 222.2 84% 4.9%;
-
-    --card-foreground: 0 0% 100%;
-
-    --popover: 222.2 84% 4.9%;
-
-    --popover-foreground: 0 0% 100%;
-
+    /* Cor primária: Laranja Shopee (Mantido) */
     --primary: 24 95% 53%;
-
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 217.2 32.6% 17.5%;
-
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62.8% 30.6%;
-
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 217.2 32.6% 17.5%;
-
-    --input: 217.2 32.6% 17.5%;
-
-    --ring: 24 95% 53%;
+    --secondary: 240 5% 34%; /* zinc-600 (Botões secundários) */
+    --secondary-foreground: 240 5% 96%; /* zinc-100 */
+    --muted: 240 5% 20%; /* zinc-700 (Fundos "muted") */
+    --muted-foreground: 240 4% 65%; /* zinc-400 (Texto "muted") */
+    --accent: 240 5% 34%; /* zinc-600 (Hover de itens) */
+    --accent-foreground: 240 5% 96%; /* zinc-100 */
+    --destructive: 0 72% 51%; /* red-600 (Mais vibrante no escuro) */
+    --destructive-foreground: 240 5% 96%; /* zinc-100 */
+    --border: 240 5% 26%; /* zinc-700 (Bordas) */
+    --input: 240 5% 26%; /* zinc-700 (Inputs) */
+    --ring: 24 95% 53%; /* Laranja para foco */
   }
 }
 
@@ -96,8 +64,10 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
+    /* Aplica a fonte suave (antialiasing) */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
