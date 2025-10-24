@@ -24,23 +24,32 @@ import {
   CalendarDays,
   ListFilter,
   ChevronDown,
-  LayoutDashboard, // Ícone da Sidebar
-  CheckCheck, // Ícone da Sidebar
-  History, // Ícone da Sidebar
-  PanelLeft, // Ícone de Toggle
-  PanelRight, // Ícone de Toggle
-  Phone, // Ícone do WhatsApp
+  LayoutDashboard,
+  CheckCheck,
+  History,
+  PanelLeft, // <-- Ícone Adicionado
+  PanelRight, // <-- Ícone Adicionado
+  Phone, // <-- Ícone Adicionado
+  User, // <-- Ícone Adicionado
+  Volume2, // <-- Ícone Adicionado
+  VolumeX, // <-- Ícone Adicionado
 } from "lucide-react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale"; // Corrigido
-import { Timestamp, doc, updateDoc, deleteField } from "firebase/firestore";
+import { ptBR } from "date-fns/locale";
+import {
+  Timestamp,
+  doc,
+  updateDoc,
+  deleteField,
+  serverTimestamp,
+} from "firebase/firestore"; // <-- serverTimestamp adicionado
 import { db } from "../firebase";
 import {
   AvatarComponent,
   UrgencyBadge,
-  SummaryCard,
-  KanbanColumn,
-  DriverInfoModal,
+  SummaryCard, // <-- Vem do UI.tsx corrigido
+  KanbanColumn, // <-- Vem do UI.tsx corrigido
+  DriverInfoModal, // <-- Vem do UI.tsx corrigido
 } from "./UI";
 import {
   Panel as ResizablePanel,
@@ -60,6 +69,12 @@ import {
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip"; // <-- Adicionado Tooltip
 
 // --- NOVA FUNÇÃO DE CONTATO (WhatsApp) ---
 const handleContactDriver = (phone: string | undefined) => {
@@ -73,7 +88,7 @@ const handleContactDriver = (phone: string | undefined) => {
   }
 };
 
-// --- COMPONENTE: EnhancedDriverCard (Atualizado) ---
+// --- COMPONENTE: EnhancedDriverCard (CORRIGIDO PARA DARK MODE) ---
 const EnhancedDriverCard = ({
   driver,
   onInfoClick,
@@ -81,18 +96,21 @@ const EnhancedDriverCard = ({
   driver: Driver;
   onInfoClick: (driver: Driver) => void;
 }) => (
+  // Usa bg-card do tema
   <Card className="p-3 rounded-xl shadow-lg flex items-center justify-between gap-2 border-l-4 border-green-500 bg-card">
     <div className="flex items-center gap-3 flex-1 min-w-0">
       <AvatarComponent user={driver} onClick={() => onInfoClick(driver)} />
       <div className="flex-1 min-w-0">
         <p
-          className="font-semibold text-foreground cursor-pointer truncate"
+          className="font-semibold text-foreground cursor-pointer truncate" // Usa text-foreground
           onClick={() => onInfoClick(driver)}
           title={driver.name}
         >
           {driver.name}
         </p>
         <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
+          {" "}
+          {/* Usa text-muted-foreground */}
           <div className="flex items-center gap-1 truncate" title={driver.hub}>
             <Building size={12} />
             <span className="truncate">{driver.hub || "N/A"}</span>
@@ -105,16 +123,17 @@ const EnhancedDriverCard = ({
       </div>
     </div>
     <div className="flex flex-col items-end gap-2">
+      {/* Badge corrigida para o tema dark */}
       <Badge
         variant="outline"
-        className="text-green-600 border-green-500 text-xs"
+        className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50"
       >
         Disponível
       </Badge>
       <Button
-        onClick={() => handleContactDriver(driver.phone)} // <-- Ação atualizada
+        onClick={() => handleContactDriver(driver.phone)} // Ação atualizada
         size="sm"
-        className="h-7 text-xs rounded-lg"
+        className="h-7 text-xs rounded-lg" // Button já usa theme
       >
         Acionar
       </Button>
@@ -122,7 +141,7 @@ const EnhancedDriverCard = ({
   </Card>
 );
 
-// --- COMPONENTE: SearchableSelect --- (Sem alterações)
+// --- COMPONENTE: SearchableSelect --- (Já usa theme)
 const SearchableSelect = ({
   options,
   value,
@@ -231,7 +250,7 @@ const SearchableSelect = ({
   );
 };
 
-// --- COMPONENTE: SearchInput --- (Sem alterações)
+// --- COMPONENTE: SearchInput --- (Já usa theme)
 const SearchInput = ({
   value,
   onChange,
@@ -260,7 +279,7 @@ const SearchInput = ({
   </div>
 );
 
-// --- COMPONENTE: ConfirmationModal --- (Sem alterações)
+// --- COMPONENTE: ConfirmationModal --- (Corrigido para Dark Mode)
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -281,18 +300,26 @@ const ConfirmationModal = ({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md bg-card">
+        {" "}
+        {/* Usa bg-card */}
         <CardHeader>
-          <CardTitle className="text-xl font-bold">{title}</CardTitle>
+          <CardTitle className="text-xl font-bold text-foreground">
+            {title}
+          </CardTitle>{" "}
+          {/* Usa text-foreground */}
         </CardHeader>
-        <CardContent className="text-muted-foreground">{children}</CardContent>
+        <CardContent className="text-muted-foreground">{children}</CardContent>{" "}
+        {/* Usa text-muted-foreground */}
         <CardFooter className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={onClose}>
+            {" "}
+            {/* Usa variant */}
             Cancelar
           </Button>
           <Button
             onClick={onConfirm}
-            className={`${confirmColor} hover:opacity-90`}
+            className={`${confirmColor} hover:opacity-90`} // Mantém cor de confirmação
           >
             {confirmText}
           </Button>
@@ -302,7 +329,7 @@ const ConfirmationModal = ({
   );
 };
 
-// --- COMPONENTE: CallDetailsModal --- (Sem alterações)
+// --- COMPONENTE: CallDetailsModal --- (Corrigido para Dark Mode)
 const CallDetailsModal = ({
   call,
   onClose,
@@ -319,15 +346,15 @@ const CallDetailsModal = ({
   const getStatusColor = (status: CallStatus) => {
     switch (status) {
       case "ABERTO":
-        return "text-yellow-500";
+        return "text-yellow-500"; // Mantido
       case "EM ANDAMENTO":
-        return "text-blue-500";
+        return "text-blue-500"; // Mantido
       case "CONCLUIDO":
-        return "text-green-500";
+        return "text-green-500"; // Mantido
       case "AGUARDANDO_APROVACAO":
-        return "text-purple-500";
+        return "text-purple-500"; // Mantido
       default:
-        return "text-muted-foreground";
+        return "text-muted-foreground"; // Usa theme
     }
   };
   const cleanDescription = (desc: string) => {
@@ -339,15 +366,19 @@ const CallDetailsModal = ({
   };
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-lg relative">
+      <Card className="w-full max-w-lg relative bg-card">
+        {" "}
+        {/* Usa bg-card */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground" // Usa theme
         >
           <X size={20} />
         </button>
         <CardHeader>
-          <CardTitle className="text-xl font-bold">
+          <CardTitle className="text-xl font-bold text-foreground">
+            {" "}
+            {/* Usa theme */}
             Detalhes do Chamado
           </CardTitle>
         </CardHeader>
@@ -357,8 +388,10 @@ const CallDetailsModal = ({
             <div>
               <p className="font-semibold text-foreground">
                 {call.solicitante.name}
-              </p>
-              <p className="text-sm text-muted-foreground">Solicitante</p>
+              </p>{" "}
+              {/* Usa theme */}
+              <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
+              {/* Usa theme */}
             </div>
           </div>
           <p
@@ -369,11 +402,16 @@ const CallDetailsModal = ({
             {call.status.replace("_", " ")}
           </p>
           <div className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
+            {" "}
+            {/* Usa theme */}
             {cleanDescription(call.description)}
           </div>
         </CardContent>
-        <CardFooter className="mt-2 pt-4 border-t flex flex-wrap justify-between items-center gap-4">
-          <p className="text-sm text-muted-foreground">Mover para:</p>
+        <CardFooter className="mt-2 pt-4 border-t border-border flex flex-wrap justify-between items-center gap-4">
+          {" "}
+          {/* Usa theme */}
+          <p className="text-sm text-muted-foreground">Mover para:</p>{" "}
+          {/* Usa theme */}
           <div className="flex gap-2">
             {call.status === "EM ANDAMENTO" && (
               <Button
@@ -381,6 +419,8 @@ const CallDetailsModal = ({
                 size="sm"
                 onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
               >
+                {" "}
+                {/* Usa theme */}
                 <ArrowLeft size={16} className="mr-1.5" /> Aberto
               </Button>
             )}
@@ -392,6 +432,8 @@ const CallDetailsModal = ({
                   onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
                 }
               >
+                {" "}
+                {/* Usa theme */}
                 <ArrowLeft size={16} className="mr-1.5" /> Em Andamento
               </Button>
             )}
@@ -426,7 +468,7 @@ const CallDetailsModal = ({
   );
 };
 
-// --- COMPONENTE: CallCard (Atualizado com Botão WhatsApp) ---
+// --- COMPONENTE: CallCard (CORRIGIDO PARA DARK MODE e Botão WhatsApp) ---
 const CallCard = ({
   call,
   onDelete,
@@ -459,6 +501,7 @@ const CallCard = ({
   };
 
   return (
+    // Usa bg-card do tema
     <div
       className={cn(
         "bg-card p-4 rounded-lg shadow-md border border-border space-y-3 hover:shadow-lg transition-shadow cursor-pointer",
@@ -467,32 +510,34 @@ const CallCard = ({
       onClick={() => onClick(call)}
     >
       <div className="flex justify-between items-start">
+        {/* Bloco do Solicitante */}
         <div className="flex items-center space-x-3">
           <AvatarComponent user={call.solicitante} />
           <div>
             <div className="flex items-center gap-2">
               <p className="font-bold text-foreground">
                 {call.solicitante.name}
-              </p>
+              </p>{" "}
+              {/* Usa theme */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(call);
                 }}
-                className="p-1 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                className="p-1 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" // Usa theme
                 title="Excluir Solicitação"
               >
                 <Trash2 size={14} />
               </button>
             </div>
-            <p className="text-sm text-muted-foreground">Solicitante</p>
+            <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
+            {/* Usa theme */}
           </div>
         </div>
-
         {/* Bloco de Urgência e Ação (WhatsApp) */}
         <div className="flex flex-col items-end gap-2">
           <UrgencyBadge urgency={call.urgency} />
-          {/* ÍCONE DE WHATSAPP (IMAGEM 2) */}
+          {/* BOTÃO WHATSAPP */}
           <Button
             variant="ghost"
             size="icon"
@@ -506,33 +551,41 @@ const CallCard = ({
           </Button>
         </div>
       </div>
-
+      {/* Restante do card */}
       <div className="text-sm text-muted-foreground space-y-2">
+        {" "}
+        {/* Usa theme */}
         <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-primary" />
-          <span>{call.routeId || "N/A"}</span>
+          {" "}
+          <Ticket size={16} className="text-primary" />{" "}
+          <span>{call.routeId || "N/A"}</span>{" "}
         </div>
         <div className="flex items-center space-x-2">
-          <Building size={16} className="text-primary" />
-          <span>{call.hub || "N/A"}</span>
+          {" "}
+          <Building size={16} className="text-primary" />{" "}
+          <span>{call.hub || "N/A"}</span>{" "}
         </div>
         <div className="flex items-center space-x-2">
-          <Clock size={16} className="text-muted-foreground" />
-          <span>{timeAgo}</span>
+          {" "}
+          <Clock size={16} className="text-muted-foreground" />{" "}
+          <span>{timeAgo}</span>{" "}
         </div>
         <div className="flex items-center space-x-2">
-          <MapPin size={16} className="text-primary" />
-          <span>{call.location}</span>
+          {" "}
+          <MapPin size={16} className="text-primary" />{" "}
+          <span>{call.location}</span>{" "}
         </div>
       </div>
       <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
+        {" "}
+        {/* Usa theme */}
         {cleanDescription(call.description)}
       </p>
     </div>
   );
 };
 
-// --- COMPONENTE: ApprovalCard (Atualizado com Botão WhatsApp) ---
+// --- COMPONENTE: ApprovalCard (CORRIGIDO PARA DARK MODE e Botão WhatsApp) ---
 const ApprovalCard = ({
   call,
   onApprove,
@@ -556,16 +609,21 @@ const ApprovalCard = ({
   };
 
   return (
+    // Usa bg-card do tema
     <Card className="overflow-hidden shadow-lg border-l-8 border-purple-500 rounded-xl bg-card">
       <CardHeader className="p-4 bg-purple-500/10">
+        {" "}
+        {/* Fundo levemente roxo */}
         <div className="flex justify-between items-start">
           <div className="flex items-center space-x-3">
             <AvatarComponent user={call.solicitante} />
             <div>
               <p className="font-bold text-foreground">
                 {call.solicitante.name}
-              </p>
-              <p className="text-sm text-muted-foreground">Solicitante</p>
+              </p>{" "}
+              {/* Usa theme */}
+              <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
+              {/* Usa theme */}
             </div>
           </div>
           {/* Bloco de Urgência e Ação (WhatsApp) */}
@@ -586,16 +644,20 @@ const ApprovalCard = ({
         </div>
         {assignedDriver && (
           <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground pl-1 pt-3">
+            {" "}
+            {/* Usa theme */}
             <div className="flex items-center gap-3">
               <ArrowRight size={16} className="text-muted-foreground/50" />
               <AvatarComponent user={assignedDriver} />
               <div>
                 <p className="font-semibold text-foreground">
                   {assignedDriver.name}
-                </p>
+                </p>{" "}
+                {/* Usa theme */}
                 <p className="text-xs text-muted-foreground">
                   Prestador do Apoio
-                </p>
+                </p>{" "}
+                {/* Usa theme */}
               </div>
             </div>
             {/* Botão WhatsApp para o Prestador */}
@@ -616,33 +678,41 @@ const ApprovalCard = ({
 
       <CardContent className="p-4 space-y-3">
         <div className="text-sm text-muted-foreground space-y-2">
+          {" "}
+          {/* Usa theme */}
           <div className="flex items-center space-x-2">
-            <Ticket size={16} className="text-primary" />
-            <span>{call.routeId || "N/A"}</span>
+            {" "}
+            <Ticket size={16} className="text-primary" />{" "}
+            <span>{call.routeId || "N/A"}</span>{" "}
           </div>
           <div className="flex items-center space-x-2">
-            <Building size={16} className="text-primary" />
-            <span>{call.hub || "N/A"}</span>
+            {" "}
+            <Building size={16} className="text-primary" />{" "}
+            <span>{call.hub || "N/A"}</span>{" "}
           </div>
         </div>
         <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
+          {" "}
+          {/* Usa theme */}
           {cleanDescription(call.description)}
         </p>
       </CardContent>
 
       <CardFooter className="mt-2 pt-3 border-t bg-muted/30 p-4 flex justify-end gap-3">
+        {" "}
+        {/* Usa theme */}
         <Button
           onClick={() => onDelete(call)}
           variant="ghost"
           size="icon"
-          className="text-destructive hover:bg-destructive/10"
+          className="text-destructive hover:bg-destructive/10" // Usa theme
           title="Excluir Solicitação"
         >
           <Trash2 size={16} />
         </Button>
         <Button
           onClick={() => onReject(call)}
-          variant="destructive"
+          variant="destructive" // Usa theme
           size="sm"
           className="rounded-lg"
         >
@@ -650,9 +720,9 @@ const ApprovalCard = ({
         </Button>
         <Button
           onClick={() => onApprove(call)}
-          variant="default"
+          variant="default" // Usa theme
           size="sm"
-          className="bg-green-600 hover:bg-green-700 rounded-lg"
+          className="bg-green-600 hover:bg-green-700 rounded-lg" // Mantém verde para aprovar
         >
           <CheckCircle size={16} className="mr-1.5" /> Aprovar
         </Button>
@@ -678,7 +748,10 @@ const viewTitles: Record<string, string> = {
   approvals: "Aprovações Pendentes",
   excluded: "Solicitações Excluídas (Lixeira)",
   history: "Histórico de Solicitações",
+  profile: "Perfil e Configurações", // <-- Novo Título
 };
+
+type AdminView = "kanban" | "approvals" | "excluded" | "history" | "profile"; // <-- Novo Tipo
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   calls,
@@ -690,19 +763,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   // --- Estados ---
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // <-- NOVO ESTADO
+  const [isMuted, setIsMuted] = useState(false); // <-- NOVO ESTADO
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
-  const [adminView, setAdminView] = useState<
-    "kanban" | "approvals" | "excluded" | "history"
-  >("kanban");
+  const [adminView, setAdminView] = useState<AdminView>("kanban"); // <-- Tipo Atualizado
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
   const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
   const [confirmationType, setConfirmationType] = useState<
     "soft-delete" | "permanent-delete" | "clear-all" | null
   >(null);
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
-  const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs");
+  const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs"); // <-- Corrigido valor inicial
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
   const notifiedCallIds = useRef(new Set<string>());
   const prevCallsRef = useRef<SupportCall[]>([]);
@@ -747,7 +819,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
   };
 
-  // Efeitos (sem alteração)
+  // --- NOVA FUNÇÃO DE MUDO ---
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    localStorage.setItem("notificationsMuted", String(newMutedState));
+    if (!newMutedState) {
+      // Toca um som baixo para confirmar que não está mutado
+      const audio = new Audio("/shopee-ringtone.mp3");
+      audio.volume = 0.3; // Volume baixo
+      audio.play().catch(() => {});
+    }
+    sonnerToast.success(
+      newMutedState
+        ? "Som das notificações desativado."
+        : "Som das notificações ativado."
+    );
+  };
+
+  // --- Efeitos ---
+  // Carrega preferência de mudo
+  useEffect(() => {
+    const savedMutePreference = localStorage.getItem("notificationsMuted");
+    setIsMuted(savedMutePreference === "true");
+  }, []);
+
+  // Escalonamento de Urgência (Mantido)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -779,6 +876,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }, 60000);
     return () => clearInterval(interval);
   }, [calls, updateCall]);
+
+  // Arquivamento Automático (Mantido)
   useEffect(() => {
     const archiveOldCalls = () => {
       const now = new Date();
@@ -803,51 +902,60 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     archiveOldCalls();
     return () => clearInterval(intervalId);
   }, [calls, updateCall]);
+
+  // --- useEffect de Notificação (ATUALIZADO) ---
   useEffect(() => {
     const prevCallsMap = new Map(
       prevCallsRef.current.map((c) => [c.id, c.status])
     );
     const newOpenCalls = calls.filter((call) => {
       const prevStatus = prevCallsMap.get(call.id);
-      return call.status === "ABERTO" && prevStatus !== "ABERTO";
+      // LÓGICA CORRIGIDA: Só notifica se for um chamado novo ou que não estava "Aberto" antes
+      return (
+        call.status === "ABERTO" &&
+        prevStatus !== "ABERTO" &&
+        !notifiedCallIds.current.has(call.id) // E não foi notificado (ex: restaurado)
+      );
     });
+
     if (newOpenCalls.length > 0) {
-      const audio = new Audio("/shopee-ringtone.mp3");
-      audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+      if (!isMuted) {
+        // <-- Verifica se não está mutado
+        const audio = new Audio("/shopee-ringtone.mp3");
+        audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+      }
+
       newOpenCalls.forEach((newCall) => {
-        if (!notifiedCallIds.current.has(newCall.id)) {
-          sonnerToast.custom(
-            (t) => (
-              <div className="flex w-full max-w-sm items-start gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
-                <img
-                  src={spxLogo}
-                  alt="SPX Logo"
-                  className="mt-1 h-10 w-10 flex-shrink-0"
-                />
-                <div className="flex-1">
-                  <p className="font-semibold text-foreground">
-                    Novo Chamado Aberto!
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {newCall.solicitante.name} do hub{" "}
-                    {newCall.hub || "desconhecido"} precisa de apoio.
-                  </p>
-                </div>
-                <button
-                  onClick={() => sonnerToast.dismiss(t)}
-                  className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <X size={16} />
-                </button>
+        // --- NOTIFICAÇÃO ESTILIZADA ---
+        sonnerToast.custom(
+          (t) => (
+            <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
+              <AlertTriangle size={32} className="text-primary flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-lg font-bold text-foreground">
+                  Novo Chamado Aberto!
+                </p>
+                <p className="text-base text-muted-foreground">
+                  {newCall.solicitante.name} do hub{" "}
+                  {newCall.hub || "desconhecido"} precisa de apoio.
+                </p>
               </div>
-            ),
-            { duration: 10000 }
-          );
-          notifiedCallIds.current.add(newCall.id);
-        }
+              <button
+                onClick={() => sonnerToast.dismiss(t)}
+                className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ),
+          { duration: 10000 }
+        );
+        notifiedCallIds.current.add(newCall.id);
       });
     }
+
     prevCallsRef.current = calls;
+
     const openCallIds = new Set(
       calls.filter((c) => c.status === "ABERTO").map((c) => c.id)
     );
@@ -856,7 +964,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         notifiedCallIds.current.delete(id);
       }
     });
-  }, [calls]);
+  }, [calls, isMuted]); // <-- Adicionado isMuted como dependência
 
   // --- Funções de Ação (Handle) ---
   const handleApprove = async (call: SupportCall) => {
@@ -914,10 +1022,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCallToConfirm(null);
     setConfirmationType(null);
   };
+
+  // --- FUNÇÃO RESTAURAR (ATUALIZADA) ---
   const handleRestore = (callId: string) => {
+    // Adiciona o timestamp para que o 'deletedAt' seja removido
     updateCall(callId, { status: "ABERTO", deletedAt: deleteField() });
-    sonnerToast.success("Chamado restaurado para 'Aberto'.");
+
+    // LÓGICA DE NOTIFICAÇÃO
+    // Adiciona ao set para evitar a notificação de "Novo Chamado"
+    notifiedCallIds.current.add(callId);
+
+    // NOTIFICAÇÃO PERSONALIZADA
+    sonnerToast.custom((t) => (
+      <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
+        <RotateCcw size={28} className="text-green-500 flex-shrink-0" />
+        <div className="flex-1">
+          <p className="text-base font-semibold text-foreground">
+            Chamado Restaurado
+          </p>
+          <p className="text-sm text-muted-foreground">
+            O chamado foi movido de volta para "Abertos".
+          </p>
+        </div>
+        <button
+          onClick={() => sonnerToast.dismiss(t)}
+          className="p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
+        >
+          <X size={16} />
+        </button>
+      </div>
+    ));
   };
+
   const handleUpdateStatus = (
     callId: string,
     updates: Partial<Omit<SupportCall, "id">>
@@ -928,7 +1064,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSelectedCall(null);
   };
 
-  // --- Memos (Filtros) --- (Mantidos)
+  // --- Memos (Filtros) ---
   const filteredCalls = useMemo(
     () =>
       calls.filter(
@@ -1106,7 +1242,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       );
   }, [excludedCalls, excludedNameFilter, excludedHubFilter]);
 
-  // --- Controles de Filtro --- (Mantidos)
+  // --- Controles de Filtro ---
   const filterControls = (
     <div className="flex flex-wrap gap-1">
       {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
@@ -1156,624 +1292,748 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- ESTRUTURA JSX ATUALIZADA ---
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      {/* ===== 1. SIDEBAR (COM AJUSTES DE COR E TOGGLE) ===== */}
-      <aside
-        className={cn(
-          // CORRIGIDO: Voltando para bg-card (zinc-800 no modo dark)
-          "sticky top-0 h-screen flex-shrink-0 border-r border-border bg-card p-4 flex flex-col gap-6 transition-all duration-300 ease-in-out relative",
-          isSidebarCollapsed ? "w-20" : "w-64"
-        )}
-      >
-        {/* Botão de Toggle (CORRIGIDO) */}
-        <Button
-          variant="secondary" // <-- Mudado de 'ghost' para 'secondary'
-          size="icon"
+    <TooltipProvider>
+      {" "}
+      {/* Adicionado TooltipProvider */}
+      <div className="flex min-h-screen bg-background text-foreground">
+        {/* ===== 1. SIDEBAR (COM AJUSTES DE COR E TOGGLE) ===== */}
+        <aside
           className={cn(
-            "absolute top-4 -right-4 z-20 rounded-full w-8 h-8",
-            isSidebarCollapsed ? "text-foreground" : "text-primary" // Laranja quando aberto
+            // CORRIGIDO: Voltando para bg-card (zinc-800 no modo dark)
+            "sticky top-0 h-screen flex-shrink-0 border-r border-border bg-card p-4 flex flex-col gap-6 transition-all duration-300 ease-in-out relative",
+            isSidebarCollapsed ? "w-20" : "w-64"
           )}
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         >
-          {isSidebarCollapsed ? (
-            <PanelRight size={18} />
-          ) : (
-            <PanelLeft size={18} />
-          )}
-        </Button>
+          {/* Botão de Toggle (VISIBILIDADE CORRIGIDA) */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary" // <-- Mudado para 'secondary'
+                size="icon"
+                className={cn(
+                  "absolute top-4 -right-4 z-20 rounded-full w-8 h-8",
+                  !isSidebarCollapsed && "text-primary" // Laranja quando aberto
+                )}
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              >
+                {isSidebarCollapsed ? (
+                  <PanelRight size={18} />
+                ) : (
+                  <PanelLeft size={18} />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            </TooltipContent>
+          </Tooltip>
 
-        {/* Logo e Título na Sidebar */}
-        <div
-          className={cn(
-            "flex items-center gap-3 px-2 transition-all",
-            isSidebarCollapsed && "justify-center"
-          )}
-        >
-          <img
-            src={spxLogo}
-            alt="SPX Logo"
-            className="w-10 h-10 flex-shrink-0"
-          />
+          {/* Logo e Título na Sidebar */}
           <div
             className={cn(
-              "overflow-hidden transition-all duration-200",
-              isSidebarCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+              "flex items-center gap-3 px-2 transition-all",
+              isSidebarCollapsed && "justify-center"
             )}
           >
-            <h1 className="text-xl font-bold text-primary whitespace-nowrap">
-              Central SPX
-            </h1>
-            <p className="text-muted-foreground text-xs">Apoio Logístico</p>
-          </div>
-        </div>
-
-        {/* Navegação Vertical */}
-        <nav className="flex flex-col gap-2 flex-grow">
-          <Button
-            variant={adminView === "kanban" ? "secondary" : "ghost"}
-            className={cn(
-              "gap-2",
-              adminView === "kanban" && "text-primary font-semibold",
-              isSidebarCollapsed ? "justify-center" : "justify-start"
-            )}
-            onClick={() => setAdminView("kanban")}
-          >
-            <LayoutDashboard size={18} />
-            <span
-              className={cn(
-                "transition-opacity",
-                isSidebarCollapsed && "opacity-0 hidden"
-              )}
-            >
-              Acompanhamento
-            </span>
-          </Button>
-          <Button
-            variant={adminView === "approvals" ? "secondary" : "ghost"}
-            className={cn(
-              "gap-2 relative",
-              adminView === "approvals" && "text-primary font-semibold",
-              isSidebarCollapsed ? "justify-center" : "justify-start"
-            )}
-            onClick={() => setAdminView("approvals")}
-          >
-            <CheckCheck size={18} />
-            <span
-              className={cn(
-                "transition-opacity",
-                isSidebarCollapsed && "opacity-0 hidden"
-              )}
-            >
-              Aprovações
-            </span>
-            {pendingApprovalCalls.length > 0 && (
-              <Badge
-                variant="destructive"
-                className={cn(
-                  "absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 text-xs",
-                  isSidebarCollapsed && "opacity-0 hidden"
-                )}
-              >
-                {pendingApprovalCalls.length}
-              </Badge>
-            )}
-          </Button>
-          <Button
-            variant={adminView === "excluded" ? "secondary" : "ghost"}
-            className={cn(
-              "gap-2",
-              adminView === "excluded" && "text-primary font-semibold",
-              isSidebarCollapsed ? "justify-center" : "justify-start"
-            )}
-            onClick={() => setAdminView("excluded")}
-          >
-            <Trash2 size={18} />
-            <span
-              className={cn(
-                "transition-opacity",
-                isSidebarCollapsed && "opacity-0 hidden"
-              )}
-            >
-              Lixeira
-            </span>
-          </Button>
-          <Button
-            variant={adminView === "history" ? "secondary" : "ghost"}
-            className={cn(
-              "gap-2",
-              adminView === "history" && "text-primary font-semibold",
-              isSidebarCollapsed ? "justify-center" : "justify-start"
-            )}
-            onClick={() => setAdminView("history")}
-          >
-            <History size={18} />
-            <span
-              className={cn(
-                "transition-opacity",
-                isSidebarCollapsed && "opacity-0 hidden"
-              )}
-            >
-              Histórico
-            </span>
-          </Button>
-        </nav>
-      </aside>
-
-      {/* ===== 2. ÁREA DE CONTEÚDO PRINCIPAL ===== */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
-        {/* Header DENTRO do conteúdo principal */}
-        <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 sm:p-6 flex justify-between items-center">
-          <h2 className="text-xl font-semibold">{viewTitles[adminView]}</h2>
-          <div className="w-full sm:w-auto sm:min-w-[250px]">
-            <SearchableSelect
-              options={allHubsForFilter}
-              value={globalHubFilter}
-              onChange={setGlobalHubFilter}
-              placeholder="Filtrar Hub Global..."
-              icon={Building}
+            <img
+              src={spxLogo}
+              alt="SPX Logo"
+              className="w-10 h-10 flex-shrink-0"
             />
-          </div>
-        </header>
-
-        {/* Conteúdo Principal com Padding */}
-        <main className="flex-grow p-4 sm:p-6 space-y-6">
-          {adminView === "kanban" && (
-            <div className="flex-grow flex flex-col space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <SummaryCard
-                  title="Abertos"
-                  value={openCalls.length}
-                  icon={<AlertTriangle />}
-                  subtext="Aguardando atendimento"
-                  colorClass="#F59E0B"
-                />
-                <SummaryCard
-                  title="Em Andamento"
-                  value={inProgressCalls.length}
-                  icon={<Clock />}
-                  subtext="Sendo atendidos"
-                  colorClass="#3B82F6"
-                />
-                <SummaryCard
-                  title="Concluídos"
-                  value={concludedCalls.length}
-                  icon={<CheckCircle />}
-                  subtext="Finalizados hoje"
-                  colorClass="#10B981"
-                />
-                <SummaryCard
-                  title="Drivers Disponíveis"
-                  value={availableDrivers.length}
-                  icon={<Users />}
-                  subtext="Prontos para apoio"
-                  colorClass="#8B5CF6"
-                />
-              </div>
-
-              {/* Kanban Resizable */}
-              <ResizablePanelGroup
-                direction="horizontal"
-                className="flex-grow rounded-xl border border-border bg-card shadow-sm min-h-[600px]"
-              >
-                <ResizablePanel defaultSize={25} minSize={15}>
-                  <KanbanColumn
-                    title="Chamados Abertos"
-                    count={filteredOpenCalls.length}
-                    colorClass="#F59E0B"
-                    headerControls={filterControls}
-                  >
-                    {filteredOpenCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-                <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                  <div className="w-1 h-10 bg-border rounded-full" />
-                </ResizableHandle>
-                <ResizablePanel defaultSize={25} minSize={15}>
-                  <KanbanColumn
-                    title="Em Andamento"
-                    count={inProgressCalls.length}
-                    colorClass="#3B82F6"
-                  >
-                    {inProgressCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-                <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                  <div className="w-1 h-10 bg-border rounded-full" />
-                </ResizableHandle>
-                <ResizablePanel defaultSize={25} minSize={15}>
-                  <KanbanColumn
-                    title="Concluídos"
-                    count={concludedCalls.length}
-                    colorClass="#10B981"
-                  >
-                    {concludedCalls.map((call) => (
-                      <CallCard
-                        key={call.id}
-                        call={call}
-                        onDelete={handleDeleteClick}
-                        onClick={setSelectedCall}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-                <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                  <div className="w-1 h-10 bg-border rounded-full" />
-                </ResizableHandle>
-                <ResizablePanel defaultSize={25} minSize={15}>
-                  <KanbanColumn
-                    title="Motoristas Disponíveis"
-                    count={availableDrivers.length}
-                    colorClass="#8B5CF6"
-                    headerControls={driverFilterControls}
-                  >
-                    {availableDrivers.map((driver) => (
-                      <EnhancedDriverCard
-                        key={driver.uid}
-                        driver={driver}
-                        onInfoClick={() => setInfoModalDriver(driver)}
-                      />
-                    ))}
-                  </KanbanColumn>
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            </div>
-          )}
-          {adminView === "approvals" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pendingApprovalCalls.length > 0 ? (
-                pendingApprovalCalls.map((call) => (
-                  <ApprovalCard
-                    key={call.id}
-                    call={call}
-                    onApprove={handleApprove}
-                    onReject={handleReject}
-                    onDelete={handleDeleteClick}
-                    drivers={drivers}
-                  />
-                ))
-              ) : (
-                <Card className="md:col-span-2 lg:col-span-3 text-center py-10 px-4 shadow-sm bg-card">
-                  <CheckCircle className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-2 text-sm font-semibold text-foreground">
-                    Tudo certo!
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Não há solicitações pendentes de aprovação.
-                  </p>
-                </Card>
+            <div
+              className={cn(
+                "overflow-hidden transition-all duration-200",
+                isSidebarCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
               )}
+            >
+              <h1 className="text-xl font-bold text-primary whitespace-nowrap">
+                Central SPX
+              </h1>
+              <p className="text-muted-foreground text-xs">Apoio Logístico</p>
             </div>
-          )}
-          {adminView === "history" && (
-            <div className="space-y-6">
-              <Card className="shadow-lg bg-card">
-                <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
-                  <div className="lg:col-span-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Data Início
-                    </label>
-                    <SearchInput
-                      value={tempHistoryFilters.start}
-                      onChange={(value) =>
-                        handleHistoryFilterChange("start", value)
-                      }
-                      placeholder="Data de Início"
-                      icon={CalendarDays}
-                      type="date"
-                    />
-                  </div>
-                  <div className="lg:col-span-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Data Fim
-                    </label>
-                    <SearchInput
-                      value={tempHistoryFilters.end}
-                      onChange={(value) =>
-                        handleHistoryFilterChange("end", value)
-                      }
-                      placeholder="Data Final"
-                      icon={CalendarDays}
-                      type="date"
-                    />
-                  </div>
-                  <div className="lg:col-span-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Hub
-                    </label>
-                    <SearchableSelect
-                      options={allHubs}
-                      value={tempHistoryFilters.hub}
-                      onChange={(value) =>
-                        handleHistoryFilterChange("hub", value)
-                      }
-                      placeholder="Filtrar por Hub..."
-                      icon={Building}
-                    />
-                  </div>
-                  <div className="lg:col-span-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      ID da Rota
-                    </label>
-                    <SearchInput
-                      value={tempHistoryFilters.routeId}
-                      onChange={(value) =>
-                        handleHistoryFilterChange("routeId", value)
-                      }
-                      placeholder="Pesquisar ID da Rota..."
-                      icon={Ticket}
-                    />
-                  </div>
-                  <div className="lg:col-span-1">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Status
-                    </label>
-                    <SearchableSelect
-                      options={["Todos", "Concluidas", "Nao Concluidas"]}
-                      value={tempHistoryFilters.status}
-                      onChange={(value) =>
-                        handleHistoryFilterChange("status", value)
-                      }
-                      placeholder="Filtrar por Status..."
-                      icon={ListFilter}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleApplyHistoryFilters}
-                    className="rounded-lg h-10 w-full xl:w-auto"
+          </div>
+
+          {/* Navegação Vertical */}
+          <nav className="flex flex-col gap-2 flex-grow">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={adminView === "kanban" ? "secondary" : "ghost"}
+                  className={cn(
+                    "gap-2",
+                    adminView === "kanban" && "text-primary font-semibold",
+                    isSidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  onClick={() => setAdminView("kanban")}
+                >
+                  <LayoutDashboard size={18} />
+                  <span
+                    className={cn(
+                      "transition-opacity",
+                      isSidebarCollapsed && "opacity-0 hidden"
+                    )}
                   >
-                    <Search size={16} className="mr-1.5" /> Filtrar
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card className="shadow-lg bg-card overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left text-foreground">
-                    <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3">
-                          Solicitante
-                        </th>
-                        <th scope="col" className="px-6 py-3">
-                          Apoio
-                        </th>
-                        <th scope="col" className="px-6 py-3">
-                          Hub
-                        </th>
-                        <th scope="col" className="px-6 py-3">
-                          Status
-                        </th>
-                        <th scope="col" className="px-6 py-3">
-                          Data
-                        </th>
-                        <th scope="col" className="px-6 py-3">
-                          Aprovado Por
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredHistoryCalls.map((call) => {
-                        const assignedDriver = drivers.find(
-                          (d) => d.uid === call.assignedTo
-                        );
-                        const callTimestamp = call.timestamp;
-                        const formattedDate = callTimestamp
-                          ? format(
-                              callTimestamp instanceof Timestamp
-                                ? callTimestamp.toDate()
-                                : new Date(
-                                    (callTimestamp as any).seconds * 1000
-                                  ),
-                              "dd/MM/yy HH:mm",
-                              { locale: ptBR }
-                            )
-                          : "N/A";
-                        return (
-                          <tr
-                            key={call.id}
-                            className="bg-card border-b border-border hover:bg-muted/50"
-                          >
-                            <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
-                              {call.solicitante.name}
-                            </td>
-                            <td className="px-6 py-4">
-                              {assignedDriver?.name || "N/A"}
-                            </td>
-                            <td className="px-6 py-4">{call.hub || "N/A"}</td>
-                            <td className="px-6 py-4">
-                              {call.status.replace("_", " ")}
-                            </td>
-                            <td className="px-6 py-4">{formattedDate}</td>
-                            <td className="px-6 py-4">
-                              {call.approvedBy || "N/A"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                    Acompanhamento
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              {isSidebarCollapsed && (
+                <TooltipContent side="right">Acompanhamento</TooltipContent>
+              )}
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={adminView === "approvals" ? "secondary" : "ghost"}
+                  className={cn(
+                    "gap-2 relative",
+                    adminView === "approvals" && "text-primary font-semibold",
+                    isSidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  onClick={() => setAdminView("approvals")}
+                >
+                  <CheckCheck size={18} />
+                  <span
+                    className={cn(
+                      "transition-opacity",
+                      isSidebarCollapsed && "opacity-0 hidden"
+                    )}
+                  >
+                    Aprovações
+                  </span>
+                  {pendingApprovalCalls.length > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className={cn(
+                        "absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 text-xs",
+                        isSidebarCollapsed && "top-0 -right-1" // Ajuste para modo colapsado
+                      )}
+                    >
+                      {pendingApprovalCalls.length}
+                    </Badge>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {isSidebarCollapsed && (
+                <TooltipContent side="right">Aprovações</TooltipContent>
+              )}
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={adminView === "excluded" ? "secondary" : "ghost"}
+                  className={cn(
+                    "gap-2",
+                    adminView === "excluded" && "text-primary font-semibold",
+                    isSidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  onClick={() => setAdminView("excluded")}
+                >
+                  <Trash2 size={18} />
+                  <span
+                    className={cn(
+                      "transition-opacity",
+                      isSidebarCollapsed && "opacity-0 hidden"
+                    )}
+                  >
+                    Lixeira
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              {isSidebarCollapsed && (
+                <TooltipContent side="right">Lixeira</TooltipContent>
+              )}
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={adminView === "history" ? "secondary" : "ghost"}
+                  className={cn(
+                    "gap-2",
+                    adminView === "history" && "text-primary font-semibold",
+                    isSidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  onClick={() => setAdminView("history")}
+                >
+                  <History size={18} />
+                  <span
+                    className={cn(
+                      "transition-opacity",
+                      isSidebarCollapsed && "opacity-0 hidden"
+                    )}
+                  >
+                    Histórico
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              {isSidebarCollapsed && (
+                <TooltipContent side="right">Histórico</TooltipContent>
+              )}
+            </Tooltip>
+          </nav>
+
+          {/* NOVO BOTÃO DE PERFIL (Rodapé da Sidebar) */}
+          <div className="mt-auto">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={adminView === "profile" ? "secondary" : "ghost"}
+                  className={cn(
+                    "gap-2 w-full",
+                    adminView === "profile" && "text-primary font-semibold",
+                    isSidebarCollapsed ? "justify-center" : "justify-start"
+                  )}
+                  onClick={() => setAdminView("profile")}
+                >
+                  <User size={18} />
+                  <span
+                    className={cn(
+                      "transition-opacity",
+                      isSidebarCollapsed && "opacity-0 hidden"
+                    )}
+                  >
+                    Perfil
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              {isSidebarCollapsed && (
+                <TooltipContent side="right">Perfil</TooltipContent>
+              )}
+            </Tooltip>
+          </div>
+        </aside>
+
+        {/* ===== 2. ÁREA DE CONTEÚDO PRINCIPAL ===== */}
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          {" "}
+          {/* Permite scroll do conteúdo */}
+          {/* Header DENTRO do conteúdo principal */}
+          <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 sm:p-6 flex justify-between items-center">
+            <h2 className="text-xl font-semibold">{viewTitles[adminView]}</h2>
+            <div className="w-full sm:w-auto sm:min-w-[250px]">
+              <SearchableSelect
+                options={allHubsForFilter}
+                value={globalHubFilter}
+                onChange={setGlobalHubFilter}
+                placeholder="Filtrar Hub Global..."
+                icon={Building}
+              />
+            </div>
+          </header>
+          {/* Conteúdo Principal com Padding */}
+          <main className="flex-grow p-4 sm:p-6 space-y-6">
+            {" "}
+            {/* Adicionado space-y-6 */}
+            {adminView === "kanban" && (
+              <div className="flex-grow flex flex-col space-y-6">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                  <SummaryCard
+                    title="Abertos"
+                    value={openCalls.length}
+                    icon={<AlertTriangle />}
+                    subtext="Aguardando atendimento"
+                    colorClass="#F59E0B" // Laranja
+                  />
+                  <SummaryCard
+                    title="Em Andamento"
+                    value={inProgressCalls.length}
+                    icon={<Clock />}
+                    subtext="Sendo atendidos"
+                    colorClass="#3B82F6" // Azul
+                  />
+                  <SummaryCard
+                    title="Concluídos"
+                    value={concludedCalls.length}
+                    icon={<CheckCircle />}
+                    subtext="Finalizados hoje"
+                    colorClass="#10B981" // Verde
+                  />
+                  <SummaryCard
+                    title="Drivers Disponíveis"
+                    value={availableDrivers.length}
+                    icon={<Users />}
+                    subtext="Prontos para apoio"
+                    colorClass="#8B5CF6" // Roxo
+                  />
                 </div>
-              </Card>
-            </div>
-          )}
-          {adminView === "excluded" && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-foreground">
-                  Solicitações Excluídas
-                </h2>
-                {excludedCalls.length > 0 && (
-                  <Button
-                    onClick={handleClearAllClick}
-                    variant="destructive"
-                    size="sm"
-                    className="rounded-lg"
-                  >
-                    <Trash2 size={14} className="mr-1.5" /> Limpar Tudo
-                  </Button>
-                )}
+
+                {/* Kanban Resizable */}
+                <ResizablePanelGroup
+                  direction="horizontal"
+                  className="flex-grow rounded-xl border border-border bg-transparent shadow-sm min-h-[600px]" // Fundo transparente
+                >
+                  <ResizablePanel defaultSize={25} minSize={15}>
+                    <KanbanColumn
+                      title="Chamados Abertos"
+                      count={filteredOpenCalls.length}
+                      colorClass="#F59E0B"
+                      headerControls={filterControls}
+                    >
+                      {filteredOpenCalls.map((call) => (
+                        <CallCard
+                          key={call.id}
+                          call={call}
+                          onDelete={handleDeleteClick}
+                          onClick={setSelectedCall}
+                        />
+                      ))}
+                    </KanbanColumn>
+                  </ResizablePanel>
+                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                    <div className="w-1 h-10 bg-border rounded-full" />
+                  </ResizableHandle>
+                  <ResizablePanel defaultSize={25} minSize={15}>
+                    <KanbanColumn
+                      title="Em Andamento"
+                      count={inProgressCalls.length}
+                      colorClass="#3B82F6"
+                    >
+                      {inProgressCalls.map((call) => (
+                        <CallCard
+                          key={call.id}
+                          call={call}
+                          onDelete={handleDeleteClick}
+                          onClick={setSelectedCall}
+                        />
+                      ))}
+                    </KanbanColumn>
+                  </ResizablePanel>
+                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                    <div className="w-1 h-10 bg-border rounded-full" />
+                  </ResizableHandle>
+                  <ResizablePanel defaultSize={25} minSize={15}>
+                    <KanbanColumn
+                      title="Concluídos"
+                      count={concludedCalls.length}
+                      colorClass="#10B981"
+                    >
+                      {concludedCalls.map((call) => (
+                        <CallCard
+                          key={call.id}
+                          call={call}
+                          onDelete={handleDeleteClick}
+                          onClick={setSelectedCall}
+                        />
+                      ))}
+                    </KanbanColumn>
+                  </ResizablePanel>
+                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
+                    <div className="w-1 h-10 bg-border rounded-full" />
+                  </ResizableHandle>
+                  <ResizablePanel defaultSize={25} minSize={15}>
+                    <KanbanColumn
+                      title="Motoristas Disponíveis"
+                      count={availableDrivers.length}
+                      colorClass="#8B5CF6"
+                      headerControls={driverFilterControls}
+                    >
+                      {availableDrivers.map((driver) => (
+                        <EnhancedDriverCard
+                          key={driver.uid}
+                          driver={driver}
+                          onInfoClick={() => setInfoModalDriver(driver)}
+                        />
+                      ))}
+                    </KanbanColumn>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               </div>
-              <Card className="p-4 bg-card shadow-md">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <SearchInput
-                    value={excludedNameFilter}
-                    onChange={setExcludedNameFilter}
-                    placeholder="Filtrar por nome..."
-                    icon={Search}
-                  />
-                  <SearchableSelect
-                    options={excludedCallHubs}
-                    value={excludedHubFilter}
-                    onChange={setExcludedHubFilter}
-                    placeholder="Filtrar por hub..."
-                    icon={Building}
-                  />
-                </div>
-              </Card>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredExcludedCalls.length > 0 ? (
-                  filteredExcludedCalls.map((call) => {
-                    const deletedTimestamp = call.deletedAt;
-                    const formattedDeletedDate = deletedTimestamp
-                      ? format(
-                          deletedTimestamp instanceof Timestamp
-                            ? deletedTimestamp.toDate()
-                            : new Date(
-                                (deletedTimestamp as any).seconds * 1000
-                              ),
-                          "dd/MM/yyyy 'às' HH:mm",
-                          { locale: ptBR }
-                        )
-                      : "Data indisponível";
-                    return (
-                      <Card
-                        key={call.id}
-                        className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                      >
-                        <div className="flex-grow">
-                          <p className="font-semibold text-foreground">
-                            {call.solicitante.name}
-                          </p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {call.description}
-                          </p>
-                          {call.deletedAt && (
-                            <p className="text-xs text-muted-foreground/70 mt-1">
-                              Excluído em: {formattedDeletedDate}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Button
-                            onClick={() => handleRestore(call.id)}
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 border-green-500 hover:bg-green-100 hover:text-green-700"
-                          >
-                            <RotateCcw size={14} className="mr-1.5" /> Restaurar
-                          </Button>
-                          <Button
-                            onClick={() => handlePermanentDeleteClick(call)}
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:bg-destructive/10"
-                            title="Excluir Permanentemente"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </Card>
-                    );
-                  })
+            )}
+            {adminView === "approvals" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pendingApprovalCalls.length > 0 ? (
+                  pendingApprovalCalls.map((call) => (
+                    <ApprovalCard
+                      key={call.id}
+                      call={call}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      onDelete={handleDeleteClick}
+                      drivers={drivers}
+                    />
+                  ))
                 ) : (
-                  <Card className="md:col-span-2 text-center py-10 px-4 shadow-sm bg-card">
-                    <Trash2 className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <Card className="md:col-span-2 lg:col-span-3 text-center py-10 px-4 shadow-sm bg-card">
+                    <CheckCircle className="mx-auto h-12 w-12 text-muted-foreground" />
                     <h3 className="mt-2 text-sm font-semibold text-foreground">
-                      Lixeira vazia
+                      Tudo certo!
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Não há solicitações excluídas.
+                      Não há solicitações pendentes de aprovação.
                     </p>
                   </Card>
                 )}
               </div>
-            </div>
-          )}
-        </main>
-      </div>
+            )}
+            {adminView === "history" && (
+              <div className="space-y-6">
+                <Card className="shadow-lg bg-card">
+                  <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+                    <div className="lg:col-span-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Data Início
+                      </label>
+                      <SearchInput
+                        value={tempHistoryFilters.start}
+                        onChange={(value) =>
+                          handleHistoryFilterChange("start", value)
+                        }
+                        placeholder="Data de Início"
+                        icon={CalendarDays}
+                        type="date"
+                      />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Data Fim
+                      </label>
+                      <SearchInput
+                        value={tempHistoryFilters.end}
+                        onChange={(value) =>
+                          handleHistoryFilterChange("end", value)
+                        }
+                        placeholder="Data Final"
+                        icon={CalendarDays}
+                        type="date"
+                      />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Hub
+                      </label>
+                      <SearchableSelect
+                        options={allHubs}
+                        value={tempHistoryFilters.hub}
+                        onChange={(value) =>
+                          handleHistoryFilterChange("hub", value)
+                        }
+                        placeholder="Filtrar por Hub..."
+                        icon={Building}
+                      />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        ID da Rota
+                      </label>
+                      <SearchInput
+                        value={tempHistoryFilters.routeId}
+                        onChange={(value) =>
+                          handleHistoryFilterChange("routeId", value)
+                        }
+                        placeholder="Pesquisar ID da Rota..."
+                        icon={Ticket}
+                      />
+                    </div>
+                    <div className="lg:col-span-1">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Status
+                      </label>
+                      <SearchableSelect
+                        options={["Todos", "Concluidas", "Nao Concluidas"]}
+                        value={tempHistoryFilters.status}
+                        onChange={(value) =>
+                          handleHistoryFilterChange("status", value)
+                        }
+                        placeholder="Filtrar por Status..."
+                        icon={ListFilter}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleApplyHistoryFilters}
+                      className="rounded-lg h-10 w-full xl:w-auto"
+                    >
+                      <Search size={16} className="mr-1.5" /> Filtrar
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card className="shadow-lg bg-card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-foreground">
+                      <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3">
+                            Solicitante
+                          </th>
+                          <th scope="col" className="px-6 py-3">
+                            Apoio
+                          </th>
+                          <th scope="col" className="px-6 py-3">
+                            Hub
+                          </th>
+                          <th scope="col" className="px-6 py-3">
+                            Status
+                          </th>
+                          <th scope="col" className="px-6 py-3">
+                            Data
+                          </th>
+                          <th scope="col" className="px-6 py-3">
+                            Aprovado Por
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHistoryCalls.map((call) => {
+                          const assignedDriver = drivers.find(
+                            (d) => d.uid === call.assignedTo
+                          );
+                          const callTimestamp = call.timestamp;
+                          const formattedDate = callTimestamp
+                            ? format(
+                                callTimestamp instanceof Timestamp
+                                  ? callTimestamp.toDate()
+                                  : new Date(
+                                      (callTimestamp as any).seconds * 1000
+                                    ),
+                                "dd/MM/yy HH:mm",
+                                { locale: ptBR }
+                              )
+                            : "N/A";
+                          return (
+                            <tr
+                              key={call.id}
+                              className="bg-card border-b border-border hover:bg-muted/50"
+                            >
+                              <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
+                                {call.solicitante.name}
+                              </td>
+                              <td className="px-6 py-4">
+                                {assignedDriver?.name || "N/A"}
+                              </td>
+                              <td className="px-6 py-4">{call.hub || "N/A"}</td>
+                              <td className="px-6 py-4">
+                                {call.status.replace("_", " ")}
+                              </td>
+                              <td className="px-6 py-4">{formattedDate}</td>
+                              <td className="px-6 py-4">
+                                {call.approvedBy || "N/A"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            )}
+            {adminView === "excluded" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-foreground">
+                    Solicitações Excluídas
+                  </h2>
+                  {excludedCalls.length > 0 && (
+                    <Button
+                      onClick={handleClearAllClick}
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-lg"
+                    >
+                      <Trash2 size={14} className="mr-1.5" /> Limpar Tudo
+                    </Button>
+                  )}
+                </div>
+                <Card className="p-4 bg-card shadow-md">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <SearchInput
+                      value={excludedNameFilter}
+                      onChange={setExcludedNameFilter}
+                      placeholder="Filtrar por nome..."
+                      icon={Search}
+                    />
+                    <SearchableSelect
+                      options={excludedCallHubs}
+                      value={excludedHubFilter}
+                      onChange={setExcludedHubFilter}
+                      placeholder="Filtrar por hub..."
+                      icon={Building}
+                    />
+                  </div>
+                </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredExcludedCalls.length > 0 ? (
+                    filteredExcludedCalls.map((call) => {
+                      const deletedTimestamp = call.deletedAt;
+                      const formattedDeletedDate = deletedTimestamp
+                        ? format(
+                            deletedTimestamp instanceof Timestamp
+                              ? deletedTimestamp.toDate()
+                              : new Date(
+                                  (deletedTimestamp as any).seconds * 1000
+                                ),
+                            "dd/MM/yyyy 'às' HH:mm",
+                            { locale: ptBR }
+                          )
+                        : "Data indisponível";
+                      return (
+                        <Card
+                          key={call.id}
+                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        >
+                          <div className="flex-grow">
+                            <p className="font-semibold text-foreground">
+                              {call.solicitante.name}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {call.description}
+                            </p>
+                            {call.deletedAt && (
+                              <p className="text-xs text-muted-foreground/70 mt-1">
+                                Excluído em: {formattedDeletedDate}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              onClick={() => handleRestore(call.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50 hover:bg-green-500/10" // Cores dark
+                            >
+                              <RotateCcw size={14} className="mr-1.5" />{" "}
+                              Restaurar
+                            </Button>
+                            <Button
+                              onClick={() => handlePermanentDeleteClick(call)}
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:bg-destructive/10" // Usa theme
+                              title="Excluir Permanentemente"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </Card>
+                      );
+                    })
+                  ) : (
+                    <Card className="md:col-span-2 text-center py-10 px-4 shadow-sm bg-card">
+                      <Trash2 className="mx-auto h-12 w-12 text-muted-foreground" />
+                      <h3 className="mt-2 text-sm font-semibold text-foreground">
+                        Lixeira vazia
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Não há solicitações excluídas.
+                      </p>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* ===== NOVA VIEW DE PERFIL ===== */}
+            {adminView === "profile" && (
+              <div className="space-y-6 max-w-2xl">
+                <Card className="shadow-lg bg-card">
+                  <CardHeader>
+                    <CardTitle>Configurações do Painel</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {isMuted ? (
+                          <VolumeX size={20} />
+                        ) : (
+                          <Volume2 size={20} />
+                        )}
+                        <label
+                          htmlFor="mute-toggle"
+                          className="text-base font-medium"
+                        >
+                          Som das Notificações
+                        </label>
+                      </div>
+                      <Button
+                        id="mute-toggle"
+                        onClick={toggleMute}
+                        variant={isMuted ? "secondary" : "default"}
+                        size="sm"
+                        className="w-28"
+                      >
+                        {isMuted ? "Ativar Som" : "Mutar Som"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
-      {/* --- Modais --- (Mantidos no final, fora da estrutura principal) */}
-      {infoModalDriver && (
-        <DriverInfoModal
-          driver={infoModalDriver}
-          call={activeCallForDriver}
-          onClose={() => setInfoModalDriver(null)}
+                <Card className="shadow-lg bg-card">
+                  <CardHeader>
+                    <CardTitle>Editar Perfil</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">
+                      (Em breve) Aqui você poderá editar seu nome, foto e
+                      alterar sua senha.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* --- Modais --- (Mantidos no final, fora da estrutura principal) */}
+        {infoModalDriver && (
+          <DriverInfoModal
+            driver={infoModalDriver}
+            call={activeCallForDriver}
+            onClose={() => setInfoModalDriver(null)}
+          />
+        )}
+        <CallDetailsModal
+          call={selectedCall}
+          onClose={() => setSelectedCall(null)}
+          onUpdateStatus={handleUpdateStatus}
         />
-      )}
-      <CallDetailsModal
-        call={selectedCall}
-        onClose={() => setSelectedCall(null)}
-        onUpdateStatus={handleUpdateStatus}
-      />
-      <ConfirmationModal
-        isOpen={confirmationType === "soft-delete"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Confirmar Exclusão"
-        confirmText="Excluir"
-      >
-        <p>
-          Tem certeza de que deseja excluir a solicitação de{" "}
-          <strong>{callToConfirm?.solicitante.name}</strong>? Esta ação pode ser
-          revertida.
-        </p>
-      </ConfirmationModal>
-      <ConfirmationModal
-        isOpen={confirmationType === "permanent-delete"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Confirmar Exclusão Permanente"
-        confirmText="Excluir Permanentemente"
-        confirmColor="bg-red-800"
-      >
-        <p>
-          Tem certeza de que deseja excluir permanentemente a solicitação de{" "}
-          <strong>{callToConfirm?.solicitante.name}</strong>?
-        </p>
-        <p className="font-bold text-red-700 mt-2">
-          Esta ação não pode ser desfeita.
-        </p>
-      </ConfirmationModal>
-      <ConfirmationModal
-        isOpen={confirmationType === "clear-all"}
-        onClose={closeModal}
-        onConfirm={confirmAction}
-        title="Limpar Todas as Solicitações"
-        confirmText="Sim, Limpar Tudo"
-        confirmColor="bg-red-800"
-      >
-        <p>
-          Tem certeza de que deseja excluir permanentemente{" "}
-          <strong>todas</strong> as solicitações da lixeira?
-        </p>
-        <p className="font-bold text-red-700 mt-2">
-          Esta ação não pode ser desfeita.
-        </p>
-      </ConfirmationModal>
-    </div>
+        <ConfirmationModal
+          isOpen={confirmationType === "soft-delete"}
+          onClose={closeModal}
+          onConfirm={confirmAction}
+          title="Confirmar Exclusão"
+          confirmText="Excluir"
+        >
+          <p>
+            Tem certeza de que deseja excluir a solicitação de{" "}
+            <strong>{callToConfirm?.solicitante.name}</strong>? Esta ação pode
+            ser revertida.
+          </p>
+        </ConfirmationModal>
+        <ConfirmationModal
+          isOpen={confirmationType === "permanent-delete"}
+          onClose={closeModal}
+          onConfirm={confirmAction}
+          title="Confirmar Exclusão Permanente"
+          confirmText="Excluir Permanentemente"
+          confirmColor="bg-red-800"
+        >
+          <p>
+            Tem certeza de que deseja excluir permanentemente a solicitação de{" "}
+            <strong>{callToConfirm?.solicitante.name}</strong>?
+          </p>
+          <p className="font-bold text-red-700 mt-2">
+            Esta ação não pode ser desfeita.
+          </p>
+        </ConfirmationModal>
+        <ConfirmationModal
+          isOpen={confirmationType === "clear-all"}
+          onClose={closeModal}
+          onConfirm={confirmAction}
+          title="Limpar Todas as Solicitações"
+          confirmText="Sim, Limpar Tudo"
+          confirmColor="bg-red-800"
+        >
+          <p>
+            Tem certeza de que deseja excluir permanentemente{" "}
+            <strong>todas</strong> as solicitações da lixeira?
+          </p>
+          <p className="font-bold text-red-700 mt-2">
+            Esta ação não pode ser desfeita.
+          </p>
+        </ConfirmationModal>
+      </div>
+    </TooltipProvider>
   );
 };
