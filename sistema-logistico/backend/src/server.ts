@@ -33,7 +33,7 @@ try {
 }
 
 const app: Express = express();
-const port = 3000;
+const port = 3001;
 
 // Middleware de CORS
 app.use(cors());
