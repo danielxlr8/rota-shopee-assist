@@ -54,7 +54,7 @@ export const generateDescription = https.onRequest(
 
       const model = genAI.getGenerativeModel({
         // model: "gemini-2.5-flash-preview-05-20", // Usando um modelo estável
-        model: "gemini-1.5-flash-latest",
+        model: "gemini-2.5-flash",
       });
 
       // --- CORREÇÃO: Prompt ajustado para resposta direta ---

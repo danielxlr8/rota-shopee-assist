@@ -3,8 +3,8 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
 import * as admin from "firebase-admin";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Ticket } from "./ticket.model";
+// 1. REMOVIDA: import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Ticket } from "./ticket.model"; // 2. CORRIGIDO: Removido o ".js"
 import fs from "fs";
 
 // Carrega variáveis de ambiente
@@ -18,7 +18,7 @@ if (!process.env.MONGO_URI || !process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-// 🔹 Inicializa o Firebase Admin SDK a partir de um arquivo local service-account.json
+// 🔹 Inicializa o Firebase Admin SDK
 try {
   const serviceAccount = JSON.parse(
     fs.readFileSync("./service-account.json", "utf-8")
@@ -35,10 +35,7 @@ try {
 const app: Express = express();
 const port = 3001;
 
-// Middleware de CORS
 app.use(cors());
-
-// Middleware para processar JSON
 app.use(express.json());
 
 // 🔹 Tipagem para req.userId
@@ -57,13 +54,10 @@ const authMiddleware = async (
   next: NextFunction
 ) => {
   const authHeader = req.headers.authorization;
-
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).send({ error: "Unauthorized: No token provided." });
   }
-
   const idToken = authHeader.split("Bearer ")[1];
-
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     req.userId = decodedToken.uid;
@@ -76,18 +70,14 @@ const authMiddleware = async (
 
 // Conecta ao MongoDB
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI as string)
   .then(() => console.log("Conectado ao MongoDB Atlas!"))
   .catch((err) => {
     console.error("Erro de conexão com MongoDB:", err);
     process.exit(1);
   });
 
-// Inicializa a API Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash-preview-05-20",
-});
+// 3. REMOVIDA: Inicialização global da API Gemini
 
 // --- Rotas da API ---
 
@@ -119,7 +109,14 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 
   try {
-    // --- ALTERAÇÃO FINAL: Construção do prompt detalhado para a Gemini ---
+    // --- 4. CORREÇÃO: Import dinâmico E nome do modelo corrigido ---
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash", // <<<--- CORREÇÃO AQUI
+    });
+    // --- FIM DA CORREÇÃO ---
+
     const bulkyText = isBulky ? ` Contém pacote volumoso.` : "";
     const geminiPrompt = `Crie uma descrição profissional para um chamado de apoio logístico com as seguintes informações, mantendo um tom natural:
 - Ação: "Solicito transferência"
@@ -136,7 +133,7 @@ Exemplo de resultado esperado: "Solicito transferência. Sou do HUB de Maringá,
 
     const newTicket = new Ticket({
       userId,
-      prompt: geminiPrompt, // Salva o prompt detalhado para referência
+      prompt: geminiPrompt,
       description,
       solicitante,
       location,
@@ -185,7 +182,6 @@ Exemplo de resultado esperado: "Solicito transferência. Sou do HUB de Maringá,
 // Buscar todos os tickets do usuário
 app.get("/tickets", authMiddleware, async (req: Request, res: Response) => {
   const userId = req.userId;
-
   try {
     const tickets = await Ticket.find({ userId }).sort({ createdAt: -1 });
     res.status(200).send(tickets);
@@ -199,7 +195,6 @@ app.get("/tickets", authMiddleware, async (req: Request, res: Response) => {
 app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
   const { id } = req.params;
   const userId = req.userId;
-
   try {
     const ticket = await Ticket.findOne({ _id: id, userId });
     if (!ticket) {
@@ -211,6 +206,100 @@ app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
     res.status(500).send({ error: "Erro ao buscar ticket." });
   }
 });
+
+// --- CÓDIGO DO CHATBOT ---
+
+const KNOWLEDGE_BASE = `
+APP - Acionando socorro
+Menu de transferência de pacotes
+Caso exista algum impedimento para entrega dos pacotes, como em
+casos de sinistro, é necessário acionar o socorro no aplicativo e
+contar com o apoio de outro entregador que possa realizar a entrega.
+No aplicativo, deve seguir o seguinte caminho: Menu > Transferência de Pacotes > Abas "Minhas
+Transferências" para transferir e "Meus recebidos" para receber.
+
+Como Iniciar uma transferência:
+Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes.
+Razão da transferência: Avaria.
+
+Como Cancelar transferência não recebida:
+Caminho: Minhas Transferências > Transferência em andamento >
+Cancelar solicitação > Confirmar.
+`;
+
+const CHAT_SYSTEM_PROMPT = `
+Você é um assistente virtual de apoio para motoristas da Shopee XPRESS (SPX).
+Seu nome é "ApoioBot".
+Sua função é responder perguntas *exclusivamente* sobre o processo de "Transferência de Pacotes" no aplicativo do motorista.
+Seja direto, amigável e use frases curtas.
+Baseie TODAS as suas respostas *apenas* no seguinte texto de conhecimento:
+---
+${KNOWLEDGE_BASE}
+---
+Se o motorista perguntar sobre qualquer outro assunto (clima, política, outros apps, etc.),
+responda educadamente que você só pode ajudar com dúvidas sobre a transferência de pacotes.
+`;
+
+// NOVO ENDPOINT DE CHAT
+app.post("/chat", authMiddleware, async (req: Request, res: Response) => {
+  const { message, history } = req.body;
+  const userId = req.userId;
+
+  if (!message) {
+    return res.status(400).json({ error: "Nenhuma mensagem fornecida." });
+  }
+  if (!userId) {
+    return res.status(401).send({ error: "Unauthorized." });
+  }
+
+  try {
+    // --- 4. CORREÇÃO: Import dinâmico E nome do modelo corrigido ---
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash", // <<<--- CORREÇÃO AQUI
+    });
+    // --- FIM DA CORREÇÃO ---
+
+    const geminiHistory = (history || []).map((msg: any) => ({
+      role: msg.role,
+      parts: [{ text: msg.parts[0].text }],
+    }));
+
+    const chat = model.startChat({
+      history: [
+        {
+          role: "user",
+          parts: [{ text: CHAT_SYSTEM_PROMPT }],
+        },
+        {
+          role: "model",
+          parts: [
+            {
+              text: "Olá! Sou o ApoioBot. Como posso ajudar com a transferência de pacotes?",
+            },
+          ],
+        },
+        ...geminiHistory,
+      ],
+      generationConfig: {
+        maxOutputTokens: 200,
+        temperature: 0.7,
+      },
+    });
+
+    const result = await chat.sendMessage(message);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({ response: text });
+  } catch (error) {
+    console.error("Erro na API Gemini:", error);
+    res.status(500).json({ error: "Falha ao comunicar com o assistente." });
+  }
+});
+
+// --- FIM DO CÓDIGO DO CHATBOT ---
 
 app.listen(port, () => {
   console.log(`Servidor rodando em http://localhost:${port}`);

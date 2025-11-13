@@ -31,7 +31,7 @@ export interface SupportCall {
     name: string;
     avatar?: string;
     initials?: string;
-    phone?: string; // --- ALTERAÇÃO 1: Adicionado shopeeId ao solicitante ---
+    phone?: string;
     shopeeId?: string;
   };
   assignedTo?: string;
@@ -46,10 +46,14 @@ export interface SupportCall {
   hub?: string;
   approvedBy?: string;
   deletedAt?: any;
-
-  // <-- NOVO CAMPO ADICIONADO PARA RASTREAMENTO -->
-  deletedBy?: string; // Armazena o nome ou email do admin que excluiu // --- ALTERAÇÃO 2: Adicionados campos para o prompt detalhado ---
-
+  deletedBy?: string;
   packageCount?: number;
   deliveryRegions?: string[];
+}
+
+// --- CORREÇÃO ADICIONADA ABAIXO ---
+// Interface para o histórico de mensagens do Chatbot
+export interface ChatHistoryMessage {
+  role: "user" | "model";
+  parts: [{ text: string }];
 }

@@ -8,55 +8,60 @@
 @layer base {
   :root {
     /* Este é o tema CLARO (light mode) - Vamos deixar profissional também */
-    --background: 240 5% 98%; /* slate-50 (Um cinza bem claro, não branco puro) */
-    --foreground: 240 10% 3.9%; /* slate-950 (Preto suave) */
+    --background: 0 0% 100%; /* slate-50 (Um cinza bem claro, não branco puro) */
+    --foreground: 0 0% 3.9%; /* slate-950 (Preto suave) */
     --card: 0 0% 100%; /* white */
-    --card-foreground: 240 10% 3.9%; /* slate-950 */
+    --card-foreground: 0 0% 3.9%; /* slate-950 */
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 0 0% 3.9%;
 
     /* Cor primária: Laranja Shopee (Mantido) */
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 5% 96%; /* slate-100 */
-    --secondary-foreground: 240 6% 10%; /* slate-900 */
-    --muted: 240 5% 90%; /* slate-200 */
-    --muted-foreground: 240 4% 46%; /* slate-500 */
-    --accent: 240 5% 96%; /* slate-100 */
-    --accent-foreground: 240 6% 10%; /* slate-900 */
+    --secondary: 0 0% 96.1%; /* slate-100 */
+    --secondary-foreground: 0 0% 9%; /* slate-900 */
+    --muted: 0 0% 96.1%; /* slate-200 */
+    --muted-foreground: 0 0% 45.1%; /* slate-500 */
+    --accent: 0 0% 96.1%; /* slate-100 */
+    --accent-foreground: 0 0% 9%; /* slate-900 */
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%; /* slate-200 */
-    --input: 240 6% 90%; /* slate-200 */
-    --ring: 24 95% 53%; /* Laranja para foco */
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%; /* slate-200 */
+    --input: 0 0% 89.8%; /* slate-200 */
+    --ring: 0 0% 3.9%; /* Laranja para foco */
     --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
   }
 
   .dark {
     /* Esta é a nossa paleta "TECH DARK" (Modo Cockpit) */
-    --background: 240 6% 10%; /* zinc-900 (Fundo principal) */
-    --foreground: 240 5% 96%; /* zinc-100 (Texto principal) */
-    --card: 240 6% 13%; /* zinc-800 (Fundo dos cards) */
-    --card-foreground: 240 5% 96%; /* zinc-100 */
-    --popover: 240 6% 10%; /* zinc-900 */
-    --popover-foreground: 240 5% 96%; /* zinc-100 */
+    --background: 0 0% 3.9%; /* zinc-900 (Fundo principal) */
+    --foreground: 0 0% 98%; /* zinc-100 (Texto principal) */
+    --card: 0 0% 3.9%; /* zinc-800 (Fundo dos cards) */
+    --card-foreground: 0 0% 98%; /* zinc-100 */
+    --popover: 0 0% 3.9%; /* zinc-900 */
+    --popover-foreground: 0 0% 98%; /* zinc-100 */
 
     /* Cor primária: Laranja Shopee (Mantido) */
-    --primary: 24 95% 53%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
 
-    --secondary: 240 5% 34%; /* zinc-600 (Botões secundários) */
-    --secondary-foreground: 240 5% 96%; /* zinc-100 */
-    --muted: 240 5% 20%; /* zinc-700 (Fundos "muted") */
-    --muted-foreground: 240 4% 65%; /* zinc-400 (Texto "muted") */
-    --accent: 240 5% 34%; /* zinc-600 (Hover de itens) */
-    --accent-foreground: 240 5% 96%; /* zinc-100 */
-    --destructive: 0 72% 51%; /* red-600 (Mais vibrante no escuro) */
-    --destructive-foreground: 240 5% 96%; /* zinc-100 */
-    --border: 240 5% 26%; /* zinc-700 (Bordas) */
-    --input: 240 5% 26%; /* zinc-700 (Inputs) */
-    --ring: 24 95% 53%; /* Laranja para foco */
+    --secondary: 0 0% 14.9%; /* zinc-600 (Botões secundários) */
+    --secondary-foreground: 0 0% 98%; /* zinc-100 */
+    --muted: 0 0% 14.9%; /* zinc-700 (Fundos "muted") */
+    --muted-foreground: 0 0% 63.9%; /* zinc-400 (Texto "muted") */
+    --accent: 0 0% 14.9%; /* zinc-600 (Hover de itens) */
+    --accent-foreground: 0 0% 98%; /* zinc-100 */
+    --destructive: 0 62.8% 30.6%; /* red-600 (Mais vibrante no escuro) */
+    --destructive-foreground: 0 0% 98%; /* zinc-100 */
+    --border: 0 0% 14.9%; /* zinc-700 (Bordas) */
+    --input: 0 0% 14.9%; /* zinc-700 (Inputs) */
+    --ring: 0 0% 83.1%; /* Laranja para foco */ --chart-1: 220 70% 50%; --chart-2: 160 60% 45%; --chart-3: 30 80% 55%; --chart-4: 280 65% 60%; --chart-5: 340 75% 55%;
   }
 }
 

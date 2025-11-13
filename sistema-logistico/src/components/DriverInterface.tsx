@@ -27,7 +27,8 @@ import {
   Volume2,
   VolumeX,
   ExternalLink,
-  CalendarClock, // Importado
+  CalendarClock,
+  BookOpen, // <<<--- 1. ÍCONE ADICIONADO
 } from "lucide-react";
 import { auth, db, storage } from "../firebase";
 import {
@@ -40,7 +41,7 @@ import {
   query,
   where,
   or,
-  Timestamp, // Importado
+  Timestamp,
   deleteField,
   getDocs,
 } from "firebase/firestore";
@@ -55,10 +56,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-// CORREÇÃO: Removemos a importação do toaster/hook antigo para evitar duplicidade
-// import { Toaster } from "./ui/toaster";
-// import { useToast } from "../hooks/use-toast";
-import { toast as sonnerToast } from "sonner"; // Usamos apenas o 'sonner'
+import { toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 import {
   Card,
@@ -70,51 +68,53 @@ import {
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/button";
 
-// Define a interface para as props que o componente receberá
+// --- 2. IMPORTAÇÕES ADICIONADAS (CORRIGINDO OS ERROS) ---
+import { cn } from "../lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "./ui/accordion";
+import { Chatbot } from "./Chatbot"; // Importa o Chatbot que criamos
+// --- FIM DAS IMPORTAÇÕES ADICIONADAS ---
+
 interface DriverInterfaceProps {
   driver: Driver;
 }
 
-// Constantes no topo do arquivo
 const hubs = [
   "LM Hub_PR_Londrina_Parque ABC II",
   "LM Hub_PR_Maringa",
   "LM Hub_PR_Foz do Iguaçu",
   "LM Hub_PR_Cascavel",
 ];
-
 const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
-
 const sessionNotifiedCallIds = new Set<string>();
 
-// --- AJUSTE: Função para formatar Timestamp ---
 const formatTimestamp = (
   timestamp: Timestamp | Date | null | undefined
 ): string => {
   if (!timestamp) return "Data indisponível";
   const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
-
   if (!(date instanceof Date) || isNaN(date.getTime())) {
     return "Data inválida";
   }
-
   const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // Mês começa do 0
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
-// --- COMPONENTE PRINCIPAL ---
 export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   // --- Estados ---
   const [allMyCalls, setAllMyCalls] = useState<SupportCall[]>([]);
   const [openSupportCalls, setOpenSupportCalls] = useState<SupportCall[]>([]);
   const [allDrivers, setAllDrivers] = useState<Driver[]>([]);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [initialTabSet, setInitialTabSet] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -151,21 +151,60 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [reauthError, setReauthError] = useState("");
   const [isReauthenticating, setIsReauthenticating] = useState(false);
-
-  // CORREÇÃO: Ref para controlar a carga inicial de notificações
   const isInitialOpenCallsLoad = useRef(true);
 
-  // --- Tipos e Memos ---
+  // --- 3. Tipos e Memos ATUALIZADOS ---
   const TABS = useMemo(
     () => [
       { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
       { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
-      { id: "activeCalls", label: "Meus Chamados", icon: <Clock size={16} /> },
+      { id: "activeCalls", label: "Chamados", icon: <Clock size={16} /> },
+      { id: "tutorial", label: "Ajuda", icon: <BookOpen size={16} /> }, // <<<--- ABA AJUDA (TUTORIAL) ADICIONADA
       { id: "profile", label: "Perfil", icon: <User size={16} /> },
     ],
     []
   );
-  type TabId = "availability" | "support" | "activeCalls" | "profile";
+
+  type TabId =
+    | "availability"
+    | "support"
+    | "activeCalls"
+    | "tutorial" // <<<--- TIPO ATUALIZADO
+    | "profile";
+
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+
+  // --- CONTEÚDO DOS TUTORIAIS (Extraído do PDF) ---
+  const tutorialsSolicitante = [
+    {
+      id: "sol-1",
+      question: "Como iniciar uma transferência?",
+      answer:
+        "Vá em: Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes. A razão da transferência é 'Avaria'.",
+    },
+    {
+      id: "sol-2",
+      question: "O que é o 'Acionando Socorro'?",
+      answer:
+        "Se você tiver um impedimento para a entrega (ex: sinistro), você deve acionar o socorro no app para que outro entregador possa te apoiar e realizar a entrega.",
+    },
+    {
+      id: "sol-3",
+      question: "Como cancelar uma transferência que não foi recebida?",
+      answer:
+        "Vá em: Minhas Transferências > Transferência em andamento > Cancelar solicitação > Confirmar.",
+    },
+  ];
+
+  const tutorialsPrestador = [
+    {
+      id: "pres-1",
+      question: "Onde vejo os pacotes que devo receber?",
+      answer:
+        "No menu 'Transferência de Pacotes', vá para a aba 'Meus recebidos' para ver as transferências destinadas a você.",
+    },
+  ];
+  // --- FIM DO CONTEÚDO DOS TUTORIAIS ---
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -190,6 +229,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   }, [allMyCalls, userId]);
 
   // --- Funções Handler (handleUpdateProfile, handleLogin, etc.) ---
+
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission();
@@ -262,7 +302,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
       }
 
-      // --- CORREÇÃO: Design moderno com botão de fechar ---
       sonnerToast.custom(
         (t) => (
           <div className="flex w-full max-w-sm items-start gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
@@ -279,7 +318,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                 Um novo chamado de {newCall.solicitante.name} está aberto.
               </p>
             </div>
-            {/* Botão de Fechar */}
             <button
               onClick={() => sonnerToast.dismiss(t)}
               className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
@@ -311,7 +349,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ ...doc.data(), uid: doc.id } as Driver) // uid é o ID do documento
+        (doc) => ({ ...doc.data(), uid: doc.id } as Driver)
       );
       setAllDrivers(driversData);
     });
@@ -356,7 +394,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
         if (callData.solicitante.id !== userId) {
           if (change.type === "added") {
-            // --- CORREÇÃO: Apenas notifica se NÃO for a carga inicial ---
             if (!isInitialOpenCallsLoad.current) {
               triggerNotificationRef.current(callData);
             }
@@ -367,7 +404,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         }
       });
 
-      // --- CORREÇÃO: Marca que a carga inicial já foi concluída ---
       isInitialOpenCallsLoad.current = false;
 
       const openCallsData = snapshot.docs.map(
@@ -949,7 +985,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   // --- COMPONENTES DEFINIDOS AQUI DENTRO ---
 
-  // Componente de Badge de Urgência
   const getUrgencyInfo = (urgency: UrgencyLevel | undefined) => {
     switch (urgency) {
       case "MEDIA":
@@ -992,7 +1027,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   };
 
-  // Card de Cabeçalho do Perfil (Estilizado)
   const ProfileHeaderCard = ({
     driver,
     onEditClick,
@@ -1114,7 +1148,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   };
 
-  // Card Histórico de Chamados (Estilizado)
   const DriverCallHistoryCard = ({ call }: { call: SupportCall }) => {
     const isRequester = call.solicitante.id === userId;
     const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
@@ -1303,7 +1336,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     );
   };
 
-  // Card Chamado Aberto (Estilizado)
   const OpenCallCard = ({ call }: { call: SupportCall }) => {
     const requesterPhone = call.solicitante.phone || "";
     const isAcceptingThisCall = acceptingCallId === call.id;
@@ -1430,14 +1462,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   };
 
   // --- RETURN PRINCIPAL (JSX) ---
+
   return (
     <>
-      {/* CORREÇÃO: O <Toaster /> foi removido daqui. 
-        Ele já está sendo renderizado no `main.tsx`, 
-        o que evita a duplicidade de notificações.
-      */}
-      {/* <Toaster richColors position="top-center" /> */}
-
       <div className="bg-background min-h-dvh font-sans">
         <div className="max-w-2xl mx-auto flex flex-col h-full">
           {!isProfileComplete && isProfileWarningVisible && (
@@ -1518,15 +1545,15 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       setActiveTab(tab.id as TabId);
                     }}
                     disabled={!isProfileComplete && tab.id !== "profile"}
-                    className={`flex-1 p-3 text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 border-b-2 transition-colors duration-200 ${
+                    className={cn(
+                      "flex-1 p-3 text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 border-b-2 transition-colors duration-200",
                       activeTab === tab.id
                         ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300 dark:hover:border-gray-700"
-                    } ${
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300 dark:hover:border-gray-700",
                       !isProfileComplete && tab.id !== "profile"
                         ? "cursor-not-allowed opacity-50"
                         : ""
-                    }`}
+                    )}
                   >
                     {React.cloneElement(tab.icon, { size: 16 })}
                     <span className="capitalize">{tab.label}</span>
@@ -1562,11 +1589,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         variant={
                           driver.status === "DISPONIVEL" ? "default" : "outline"
                         }
-                        className={`w-full sm:w-36 ${
+                        className={cn(
+                          "w-full sm:w-36 rounded-lg",
                           driver.status === "DISPONIVEL"
                             ? "bg-green-600 hover:bg-green-700 text-white"
                             : ""
-                        } rounded-lg`}
+                        )}
                       >
                         <CheckCircle size={16} className="mr-2" /> Disponível
                       </Button>
@@ -1584,7 +1612,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       </Button>
                     </CardContent>
                   </Card>
-
                   {driver.status === "DISPONIVEL" && (
                     <div className="pt-4">
                       <h3 className="text-xl font-semibold text-foreground mb-4 px-1">
@@ -1603,7 +1630,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm bg-card text-foreground focus:ring-primary focus:border-primary"
                         />
                       </div>
-
                       {filteredOpenCalls.length > 0 ? (
                         <div className="space-y-5">
                           {filteredOpenCalls.map((call) => (
@@ -1695,18 +1721,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           }
                           size="sm"
                           onClick={() => setHistoryFilter(filter)}
-                          className={`text-xs h-8 px-3 rounded-full ${
+                          className={cn(
+                            "text-xs h-8 px-3 rounded-full",
                             historyFilter === filter
                               ? "shadow-sm"
                               : "text-muted-foreground hover:bg-accent"
-                          }`}
+                          )}
                         >
                           {labels[filter]}
                         </Button>
                       );
                     })}
                   </div>
-
                   {filteredCalls.length > 0 ? (
                     <div className="space-y-5">
                       {filteredCalls.map((call) => (
@@ -1725,6 +1751,76 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     </Card>
                   )}
                 </div>
+
+                {/* --- 4. DIV DA ABA TUTORIAL ADICIONADA --- */}
+                <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6 space-y-6">
+                  <h2 className="text-2xl font-bold text-foreground px-1">
+                    Central de Ajuda (Tutorial)
+                  </h2>
+                  <Tabs defaultValue="solicitante" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="solicitante">
+                        Para Quem Pede Apoio
+                      </TabsTrigger>
+                      <TabsTrigger value="prestador">
+                        Para Quem Presta Apoio
+                      </TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="solicitante" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>
+                            Dúvidas Frequentes (Solicitante)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <Accordion
+                            type="single"
+                            collapsible
+                            className="w-full"
+                          >
+                            {tutorialsSolicitante.map((tut) => (
+                              <AccordionItem value={tut.id} key={tut.id}>
+                                <AccordionTrigger className="text-left">
+                                  {tut.question}
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  {tut.answer}
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                    <TabsContent value="prestador" className="mt-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Dúvidas Frequentes (Prestador)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <Accordion
+                            type="single"
+                            collapsible
+                            className="w-full"
+                          >
+                            {tutorialsPrestador.map((tut) => (
+                              <AccordionItem value={tut.id} key={tut.id}>
+                                <AccordionTrigger className="text-left">
+                                  {tut.question}
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  {tut.answer}
+                                </AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+                {/* --- FIM DA ABA TUTORIAL --- */}
 
                 {/* --- Aba Perfil --- */}
                 <div className="w-full flex-shrink-0 overflow-y-auto p-4 sm:p-6">
@@ -1746,11 +1842,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                           <button
                             id="soundToggle"
                             onClick={toggleMute}
-                            className={`p-2 rounded-full transition-colors ${
+                            className={cn(
+                              "p-2 rounded-full transition-colors",
                               isMuted
                                 ? "bg-muted text-muted-foreground"
                                 : "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
-                            }`}
+                            )}
                           >
                             {isMuted ? (
                               <VolumeX size={20} />
@@ -1761,7 +1858,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         </div>
                       </CardContent>
                     </Card>
-
                     <Card className="shadow-md bg-card">
                       <CardHeader>
                         <CardTitle className="text-lg font-semibold text-foreground">
@@ -1881,7 +1977,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         </Button>
                       </CardFooter>
                     </Card>
-
                     <Card className="shadow-md bg-card">
                       <CardHeader>
                         <CardTitle className="text-lg font-semibold text-foreground">
@@ -1937,7 +2032,6 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         </Button>
                       </CardFooter>
                     </Card>
-
                     <Card className="shadow-md border border-destructive/50 bg-card">
                       <CardContent className="p-4">
                         <Button
@@ -2307,6 +2401,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           </Card>
         </div>
       )}
+
+      {/* --- 5. CHATBOT RENDERIZADO NO FINAL --- */}
+      <Chatbot />
     </>
   );
 };
