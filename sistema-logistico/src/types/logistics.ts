@@ -51,9 +51,11 @@ export interface SupportCall {
   deliveryRegions?: string[];
 }
 
-// --- CORREÇÃO ADICIONADA ABAIXO ---
 // Interface para o histórico de mensagens do Chatbot
 export interface ChatHistoryMessage {
+  id: string;
   role: "user" | "model";
   parts: [{ text: string }];
+  gifUrls?: string[];
+  type?: "message" | "follow-up" | "role-selection" | "topic-selection"; // <<<--- ATUALIZADO
 }

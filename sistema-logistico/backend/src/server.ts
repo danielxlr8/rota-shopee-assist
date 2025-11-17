@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import * as admin from "firebase-admin";
 // 1. REMOVIDA: import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Ticket } from "./ticket.model"; // 2. CORRIGIDO: Removido o ".js"
+import { Ticket } from "./ticket.model"; // <<<--- Garantido que está sem ".js"
 import fs from "fs";
 
 // Carrega variáveis de ambiente
@@ -109,11 +109,11 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 
   try {
-    // --- 4. CORREÇÃO: Import dinâmico E nome do modelo corrigido ---
+    // --- 4. CORREÇÃO: Usar import dinâmico e modelo 'gemini-pro' ---
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash", // <<<--- CORREÇÃO AQUI
+      model: "gemini-2.5-flash", // <<<--- NOME DO MODELO CORRIGIDO
     });
     // --- FIM DA CORREÇÃO ---
 
@@ -209,35 +209,44 @@ app.get("/tickets/:id", authMiddleware, async (req: Request, res: Response) => {
 
 // --- CÓDIGO DO CHATBOT ---
 
+// <<< --- CORREÇÃO: ADICIONADA INFORMAÇÃO SOBRE 'MEUS RECEBIDOS' --- >>>
 const KNOWLEDGE_BASE = `
-APP - Acionando socorro
-Menu de transferência de pacotes
+APP - Acionando socorro (Transferência)
 Caso exista algum impedimento para entrega dos pacotes, como em
 casos de sinistro, é necessário acionar o socorro no aplicativo e
 contar com o apoio de outro entregador que possa realizar a entrega.
-No aplicativo, deve seguir o seguinte caminho: Menu > Transferência de Pacotes > Abas "Minhas
-Transferências" para transferir e "Meus recebidos" para receber.
+No aplicativo, deve seguir o seguinte caminho: Menu > Transferência de Pacotes.
 
-Como Iniciar uma transferência:
-Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes.
-Razão da transferência: Avaria.
+Para ENVIAR pacotes:
+Use a aba "Minhas Transferências" e clique em "Iniciar transferência de pacotes".
+A Razão da transferência deve ser: Avaria.
+Para cancelar: Vá em "Minhas Transferências" > "Transferência em andamento" > "Cancelar solicitação" > "Confirmar".
 
-Como Cancelar transferência não recebida:
-Caminho: Minhas Transferências > Transferência em andamento >
-Cancelar solicitação > Confirmar.
+Para RECEBER pacotes:
+Use a aba "Meus recebidos" para ver as transferências destinadas a você e confirmar o recebimento.
+
+Como baixar o romaneio (rota) para o aplicativo Circuit:
+1. No app da Shopee, vá em "Performance" e depois "Rotas de hoje".
+2. Toque na rota que você quer baixar (ex: M-11).
+3. Na tela de "Detalhes da Rota", toque nos três pontos (...) no canto superior direito.
+4. Escolha "Baixar Romaneio". Um arquivo (.csv) será baixado.
+5. Abra o aplicativo Circuit.
+6. Toque em "Importar" e selecione o arquivo .csv que você acabou de baixar.
 `;
 
+// <<< --- CORREÇÃO: PROMPT ATUALIZADO PARA INCLUIR O NOVO CONHECIMENTO --- >>>
 const CHAT_SYSTEM_PROMPT = `
-Você é um assistente virtual de apoio para motoristas da Shopee XPRESS (SPX).
-Seu nome é "ApoioBot".
-Sua função é responder perguntas *exclusivamente* sobre o processo de "Transferência de Pacotes" no aplicativo do motorista.
+Você é o "ApoioBot", o assistente virtual da Shopee XPRESS (SPX) para motoristas.
+Seu objetivo é guiar os motoristas *exclusivamente* em dúvidas sobre o "Processo de Transferência de Pacotes" (tanto enviar quanto receber) e "Como baixar o romaneio (rota) para o app Circuit".
 Seja direto, amigável e use frases curtas.
 Baseie TODAS as suas respostas *apenas* no seguinte texto de conhecimento:
 ---
 ${KNOWLEDGE_BASE}
 ---
-Se o motorista perguntar sobre qualquer outro assunto (clima, política, outros apps, etc.),
-responda educadamente que você só pode ajudar com dúvidas sobre a transferência de pacotes.
+**REGRA IMPORTANTE DE FALLBACK (SE NÃO SOUBER A RESPOSTA):**
+Se o motorista perguntar sobre qualquer outro assunto que não esteja no texto acima (como clima, política, outros apps, ou outros processos da Shopee),
+responda *exatamente* com a seguinte mensagem:
+"Desculpe, não consigo ajudar com esta questão. Para maiores informações, por favor, procure um responsável do monitoramento."
 `;
 
 // NOVO ENDPOINT DE CHAT
@@ -253,11 +262,11 @@ app.post("/chat", authMiddleware, async (req: Request, res: Response) => {
   }
 
   try {
-    // --- 4. CORREÇÃO: Import dinâmico E nome do modelo corrigido ---
+    // --- 4. CORREÇÃO: Usar import dinâmico e modelo 'gemini-pro' ---
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash", // <<<--- CORREÇÃO AQUI
+      model: "gemini-2.5-flash", // <<<--- NOME DO MODELO CORRIGIDO
     });
     // --- FIM DA CORREÇÃO ---
 
@@ -274,11 +283,8 @@ app.post("/chat", authMiddleware, async (req: Request, res: Response) => {
         },
         {
           role: "model",
-          parts: [
-            {
-              text: "Olá! Sou o ApoioBot. Como posso ajudar com a transferência de pacotes?",
-            },
-          ],
+          // A saudação inicial agora é tratada pelo frontend
+          parts: [{ text: "Ok, entendi as regras." }],
         },
         ...geminiHistory,
       ],
