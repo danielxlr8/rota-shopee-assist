@@ -180,7 +180,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       id: "sol-1",
       question: "Como iniciar uma transferência?",
       answer:
-        "Vá em: Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes. A razão da transferência é 'Avaria'.",
+        "Vá em: Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes, escolha o motivo no qual se encaixa sua ocorrencia'.",
     },
     {
       id: "sol-2",
@@ -202,6 +202,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       question: "Onde vejo os pacotes que devo receber?",
       answer:
         "No menu 'Transferência de Pacotes', vá para a aba 'Meus recebidos' para ver as transferências destinadas a você.",
+    },
+
+    {
+      id: "pres-2",
+      question: "Como eu recebo os pacotes no meu APP?",
+      answer:
+        "No menu  Meus recebidos > Receber pacotes de Transferências de pacotes > Bipe pacotes > Finalizar Bipes",
+    },
+
+    {
+      id: "pres-3",
+      question: "Como eu importo minhas rotas transferidas para o APP circuit?",
+      // CORREÇÃO: Use crases (`) para criar uma única string com quebra de linha.
+      answer: `Clique nos 3 pontinhos dentro do app (...) e após isso clique em 'importar planilha' e faça o upload do arquivo.
+
+Selecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já estará organizado. :)`,
     },
   ];
   // --- FIM DO CONTEÚDO DOS TUTORIAIS ---
@@ -2110,262 +2126,260 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       )}
 
       {isSupportModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg max-h-[90vh] flex flex-col">
-            <CardHeader className="border-b">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-xl font-bold">
-                  Solicitar Apoio de Transferência
-                </CardTitle>
-                <button
-                  onClick={() => setIsSupportModalOpen(false)}
-                  className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          {/* ADICIONADO: max-h-[90vh] e overflow-y-auto para permitir rolagem em telas pequenas */}
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Solicitar Apoio de Transferência
+              </h2>
+              <button
+                onClick={() => setIsSupportModalOpen(false)}
+                className="p-1 rounded-full hover:bg-gray-200"
+              >
+                <X size={24} className="text-gray-600" />
+              </button>
+            </div>
+            <form onSubmit={handleSupportSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="hubModal"
+                  className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  <X size={20} />
-                </button>
+                  Selecione o seu Hub
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <select
+                    id="hubModal"
+                    name="hub"
+                    value={hub}
+                    onChange={(e) => setHub(e.target.value)}
+                    className="w-full pl-10 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary appearance-none text-sm bg-white text-gray-900"
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    {hubs.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg
+                      className="fill-current h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
-            </CardHeader>
-            <form onSubmit={handleSupportSubmit}>
-              <CardContent className="p-6 space-y-5 overflow-y-auto">
-                <div>
-                  <label
-                    htmlFor="hubModal"
-                    className="block text-sm font-medium text-muted-foreground mb-1"
-                  >
-                    Selecione o seu Hub
-                  </label>
-                  <div className="relative">
-                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-                    <select
-                      id="hubModal"
-                      name="hub"
-                      value={hub}
-                      onChange={(e) => setHub(e.target.value)}
-                      className="w-full pl-10 pr-8 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary appearance-none text-sm bg-background"
-                      required
-                    >
-                      <option value="">Selecione...</option>
-                      {hubs.map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                      <svg
-                        className="fill-current h-4 w-4"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
 
-                <div>
-                  <label
-                    htmlFor="currentLocationModal"
-                    className="block text-sm font-medium text-muted-foreground mb-1"
-                  >
-                    Sua Localização Atual
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <div className="relative flex-grow">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-                      <input
-                        id="currentLocationModal"
-                        name="currentLocation"
-                        type="text"
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="Clique no ícone para obter ou digite"
-                        className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleGetLocation}
-                      disabled={isLocating}
-                      className="border-primary text-primary hover:bg-primary/10"
-                    >
-                      {isLocating ? (
-                        <LoaderCircle className="animate-spin h-5 w-5" />
-                      ) : (
-                        <MapPin className="h-5 w-5" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="packageCountModal"
-                    className="block text-sm font-medium text-muted-foreground mb-1"
-                  >
-                    Número de Pacotes (mín. 20)
-                  </label>
-                  <div className="relative">
-                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
+              <div>
+                <label
+                  htmlFor="currentLocationModal"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Sua Localização Atual
+                </label>
+                <div className="flex items-center space-x-2">
+                  <div className="relative flex-grow">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
                     <input
-                      id="packageCountModal"
-                      name="packageCount"
-                      type="number"
-                      min="20"
-                      placeholder="Ex: 25"
-                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-background"
+                      id="currentLocationModal"
+                      name="currentLocation"
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Clique no ícone para obter ou digite"
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white text-gray-900"
                       required
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
-                    Região(ões) de Entrega
-                  </label>
-                  <div className="space-y-2">
-                    {deliveryRegions.map((region, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <div className="relative flex-grow">
-                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-                          <input
-                            type="text"
-                            value={region}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                index,
-                                e.target.value,
-                                setDeliveryRegions
-                              )
-                            }
-                            placeholder={`Região ${index + 1}`}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm bg-background"
-                            required
-                          />
-                        </div>
-                        {deliveryRegions.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleRemoveField(index, setDeliveryRegions)
-                            }
-                            className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 h-9 w-9"
-                          >
-                            <MinusCircle size={18} />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={() => handleAddField(setDeliveryRegions)}
-                    className="mt-2 text-xs h-8"
+                    size="icon"
+                    onClick={handleGetLocation}
+                    disabled={isLocating}
+                    className="border-primary text-primary hover:bg-primary/10"
                   >
-                    <PlusCircle size={14} className="mr-1.5" />
-                    Adicionar Região
+                    {isLocating ? (
+                      <LoaderCircle className="animate-spin h-5 w-5" />
+                    ) : (
+                      <MapPin className="h-5 w-5" />
+                    )}
                   </Button>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
-                    Veículo(s) Necessário(s)
-                  </label>
-                  <div className="space-y-2">
-                    {neededVehicles.map((vehicle, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <div className="relative flex-grow">
-                          <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-5 w-5" />
-                          <select
-                            value={vehicle}
-                            onChange={(e) =>
-                              handleFieldChange(
-                                index,
-                                e.target.value,
-                                setNeededVehicles
-                              )
-                            }
-                            className="w-full pl-10 pr-8 py-2 border rounded-lg appearance-none text-sm bg-background"
-                            required
-                          >
-                            <option value="">Selecione...</option>
-                            {vehicleTypesList.map((v) => (
-                              <option key={v} value={v}>
-                                {v.charAt(0).toUpperCase() + v.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                            <svg
-                              className="fill-current h-4 w-4"
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                            </svg>
-                          </div>
-                        </div>
-                        {neededVehicles.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              handleRemoveField(index, setNeededVehicles)
-                            }
-                            className="text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 h-9 w-9"
-                          >
-                            <MinusCircle size={18} />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAddField(setNeededVehicles)}
-                    className="mt-2 text-xs h-8"
-                  >
-                    <PlusCircle size={14} className="mr-1.5" />
-                    Adicionar Veículo
-                  </Button>
-                </div>
-
-                <div className="flex items-center space-x-2 pt-2">
+              <div>
+                <label
+                  htmlFor="packageCountModal"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Número de Pacotes (mín. 20)
+                </label>
+                <div className="relative">
+                  <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
-                    id="isBulkyModal"
-                    name="isBulky"
-                    type="checkbox"
-                    className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    id="packageCountModal"
+                    name="packageCount"
+                    type="number"
+                    min="20"
+                    placeholder="Ex: 25"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white text-gray-900"
+                    required
                   />
-                  <label
-                    htmlFor="isBulkyModal"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Contém pacote volumoso
-                  </label>
                 </div>
+              </div>
 
-                {modalError && (
-                  <div className="text-sm text-center text-red-600 bg-red-100 p-3 rounded-md border border-red-200">
-                    {modalError}
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="p-4 border-t">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Região(ões) de Entrega
+                </label>
+                <div className="space-y-2">
+                  {deliveryRegions.map((region, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <div className="relative flex-grow">
+                        <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <input
+                          type="text"
+                          value={region}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              index,
+                              e.target.value,
+                              setDeliveryRegions
+                            )
+                          }
+                          placeholder={`Região ${index + 1}`}
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm bg-white text-gray-900"
+                          required
+                        />
+                      </div>
+                      {deliveryRegions.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleRemoveField(index, setDeliveryRegions)
+                          }
+                          className="text-red-500 hover:bg-red-100 h-9 w-9"
+                        >
+                          <MinusCircle size={18} />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddField(setDeliveryRegions)}
+                  className="mt-2 text-xs h-8 text-gray-700 border-gray-300"
+                >
+                  <PlusCircle size={14} className="mr-1.5" />
+                  Adicionar Região
+                </Button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Veículo(s) Necessário(s)
+                </label>
+                <div className="space-y-2">
+                  {neededVehicles.map((vehicle, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <div className="relative flex-grow">
+                        <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <select
+                          value={vehicle}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              index,
+                              e.target.value,
+                              setNeededVehicles
+                            )
+                          }
+                          className="w-full pl-10 pr-8 py-2 border rounded-lg appearance-none text-sm bg-white text-gray-900"
+                          required
+                        >
+                          <option value="">Selecione...</option>
+                          {vehicleTypesList.map((v) => (
+                            <option key={v} value={v}>
+                              {v.charAt(0).toUpperCase() + v.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                          <svg
+                            className="fill-current h-4 w-4"
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                          </svg>
+                        </div>
+                      </div>
+                      {neededVehicles.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            handleRemoveField(index, setNeededVehicles)
+                          }
+                          className="text-red-500 hover:bg-red-100 h-9 w-9"
+                        >
+                          <MinusCircle size={18} />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddField(setNeededVehicles)}
+                  className="mt-2 text-xs h-8 text-gray-700 border-gray-300"
+                >
+                  <PlusCircle size={14} className="mr-1.5" />
+                  Adicionar Veículo
+                </Button>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  id="isBulkyModal"
+                  name="isBulky"
+                  type="checkbox"
+                  className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <label
+                  htmlFor="isBulkyModal"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Contém pacote volumoso
+                </label>
+              </div>
+
+              {modalError && (
+                <div className="text-sm text-center text-red-600 bg-red-100 p-3 rounded-md border border-red-200">
+                  {modalError}
+                </div>
+              )}
+
+              <div className="pt-2">
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full h-11 text-base"
+                  className="w-full h-11 text-base bg-orange-600 hover:bg-orange-700 text-white font-bold"
                 >
                   {isSubmitting ? (
                     <LoaderCircle className="animate-spin mr-2 h-5 w-5" />
@@ -2373,9 +2387,9 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     "Enviar Solicitação"
                   )}
                 </Button>
-              </CardFooter>
+              </div>
             </form>
-          </Card>
+          </div>
         </div>
       )}
 

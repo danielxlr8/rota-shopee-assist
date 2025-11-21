@@ -325,7 +325,7 @@ export const AuthPage = () => {
                 type="text"
                 value={driverId}
                 onChange={(e) => setDriverId(e.target.value)}
-                className="mt-1 block w-full input-style"
+                className="mt-1 block w-full input-style text-gray-900" // ADICIONADO text-gray-900
                 placeholder="Seu ID único"
                 required
                 autoComplete="off"
@@ -460,7 +460,7 @@ export const AuthPage = () => {
                           placeholder="E-mail"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -475,7 +475,7 @@ export const AuthPage = () => {
                           placeholder="Senha"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="new-password"
                         />
@@ -511,7 +511,7 @@ export const AuthPage = () => {
                           placeholder="Nome"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -526,7 +526,7 @@ export const AuthPage = () => {
                           placeholder="Sobrenome"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -541,7 +541,7 @@ export const AuthPage = () => {
                           placeholder="Data de Nascimento"
                           value={birthDate}
                           onChange={(e) => setBirthDate(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -558,7 +558,7 @@ export const AuthPage = () => {
                           onChange={(e) =>
                             setPhone(formatAndLimitPhone(e.target.value))
                           }
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -574,7 +574,7 @@ export const AuthPage = () => {
                             placeholder="ID de Motorista (fornecido pelo admin)"
                             value={driverId}
                             onChange={(e) => setDriverId(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                             required
                             autoComplete="off"
                           />
@@ -590,7 +590,7 @@ export const AuthPage = () => {
                           placeholder="E-mail"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="off"
                         />
@@ -605,7 +605,7 @@ export const AuthPage = () => {
                           placeholder="Senha (mínimo 6 caracteres)"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
                           required
                           autoComplete="new-password"
                         />

@@ -5,11 +5,11 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
-// A configuração do seu projeto Firebase
-// As variáveis de ambiente devem ser configuradas para segurança
+// Configuração EXATA do projeto shopee-apoio-9b103
+// O authDomain DEVE ser o domínio do firebaseapp.com, NÃO o do ngrok ou localhost.
 const firebaseConfig = {
-  apiKey: "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo", // A CHAVE DEVE VIR DAS VARIAVEIS DE AMBIENTE EM PRODUCAO
-  authDomain: "shopee-apoio-9b103.firebaseapp.com",
+  apiKey: "AIzaSyCdVoWcUqnLoHGQzs4a91nx7epHs5iDyVo",
+  authDomain: "shopee-apoio-9b103.firebaseapp.com", // 🔥 Correção: Voltar para o domínio oficial do Firebase
   projectId: "shopee-apoio-9b103",
   storageBucket: "shopee-apoio-9b103.firebasestorage.app",
   messagingSenderId: "610673332843",

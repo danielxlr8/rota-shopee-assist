@@ -40,7 +40,7 @@ const stepMap: {
     {
       parts: [
         {
-          text: "No app Shopee, vá para a aba de pacotes pendentes No canto superior direito ao lado de 'mostrar no mapa' tem um icone de flecha para baixo clique-o para baixar o arquivo automaticamente",
+          text: "No app Shopee, vá para a aba de pacotes pendentes No canto superior direito ao lado de 'mostrar no mapa' tem um icone de flecha para baixo clique-o para baixar o arquivo automaticamente, OBS: 'pacotes não devem ficar em ocorrencia no processo de transferencia' ",
         },
       ],
       gifUrls: ["/Gifs.Chatbot/Romaneio-1.gif"],
