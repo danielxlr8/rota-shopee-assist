@@ -1,4 +1,3 @@
-import React from "react";
 import { ArrowRight, ArrowLeft, X } from "lucide-react";
 import type { SupportCall, CallStatus } from "../../types/logistics";
 import { AvatarComponent } from "../UI";

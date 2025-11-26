@@ -45,6 +45,7 @@ export const mockDrivers: Driver[] = driverData.map((driver, index) => ({
   status: "INDISPONIVEL",
   initials: getInitials(driver.name),
   avatar: `https://i.pravatar.cc/150?u=${formatNameForAvatar(driver.name)}`,
+  email: `motorista${index + 1}@exemplo.com`, // CORREÇÃO: Adicionado campo email
 }));
 
 // Dados mock corrigidos para o tipo SupportCall

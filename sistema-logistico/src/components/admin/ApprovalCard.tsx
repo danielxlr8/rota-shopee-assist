@@ -1,4 +1,3 @@
-import React from "react";
 import {
   ArrowRight,
   Ticket,
@@ -9,9 +8,9 @@ import {
   Phone,
 } from "lucide-react";
 import type { SupportCall, Driver } from "../../types/logistics";
-import { AvatarComponent, UrgencyBadge } from "../UI"; // Sobe 1 nível
-import { Card, CardHeader, CardContent, CardFooter } from "../ui/card"; // Sobe 1 nível
-import { Button } from "../ui/button"; // Sobe 1 nível
+import { AvatarComponent, UrgencyBadge } from "../UI";
+import { Card, CardHeader, CardContent, CardFooter } from "../ui/card";
+import { Button } from "../ui/button";
 
 interface ApprovalCardProps {
   call: SupportCall;

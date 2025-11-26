@@ -5,6 +5,7 @@ import cors from "cors";
 import * as admin from "firebase-admin";
 import { Ticket } from "./ticket.model";
 import fs from "fs";
+import path from "path"; // <--- Importação necessária
 
 dotenv.config();
 
@@ -21,28 +22,58 @@ try {
   const serviceAccount = JSON.parse(
     fs.readFileSync("./service-account.json", "utf-8")
   );
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  console.log("Firebase Admin SDK inicializado com sucesso.");
+  // Verifica se já existe uma app inicializada para evitar erro de duplicidade
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("Firebase Admin SDK inicializado com sucesso.");
+  }
 } catch (error) {
   console.error("Erro ao carregar service-account.json:", error);
   process.exit(1);
 }
 
 const app: Express = express();
-const port = 3002;
+const port = 3000;
 
-// 🔹 CORS total — necessário para tunnel + frontend local
+// 🔹 CORS total
 app.use(
   cors({
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "ngrok-skip-browser-warning",
+    ],
   })
 );
 
 app.use(express.json());
+
+// ---------------------------------------------------------
+// 1. SERVIR ARQUIVOS ESTÁTICOS (O SITE) - ESTRATÉGIA DOMÍNIO ÚNICO
+// ---------------------------------------------------------
+const distPath = path.join(__dirname, "../../dist");
+
+// --- Logs de Diagnóstico ---
+console.log("---------------------------------------------------");
+console.log("🔍 Diagnóstico de Caminhos:");
+console.log("📂 Diretório do Server:", __dirname);
+console.log("🎯 Procurando site em:", distPath);
+
+if (fs.existsSync(distPath)) {
+  console.log("✅ Pasta 'dist' ENCONTRADA! O site será servido.");
+} else {
+  console.log(
+    "❌ Pasta 'dist' NÃO encontrada. Rode 'npm run build' na pasta raiz."
+  );
+}
+console.log("---------------------------------------------------");
+
+// Serve os arquivos da pasta dist
+app.use(express.static(distPath));
 
 // 🔹 Tipagem de req.userId
 declare global {
@@ -85,19 +116,65 @@ mongoose
     process.exit(1);
   });
 
-// Rota raiz — teste rápido
-app.get("/", (req: Request, res: Response) => {
-  res.send("API Shopee Daniel está online! 🚀");
-});
+// ---------------------------------------------------
+// ROTAS DA API
+// ---------------------------------------------------
 
-// ---------------------------------------------------
 // CRIAR TICKET
-// ---------------------------------------------------
-app.post(
-  "/api/tickets",
-  authMiddleware,
-  async (req: Request, res: Response) => {
-    const {
+// IMPORTANTE: Mudado de /api/tickets para /tickets para bater com o frontend
+app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
+  const {
+    solicitante,
+    location,
+    hub,
+    vehicleType,
+    isBulky,
+    routeId,
+    urgency,
+    packageCount,
+    deliveryRegions,
+    prompt: userPrompt, // Pega o prompt se vier
+  } = req.body;
+
+  const userId = req.userId;
+
+  if (
+    !solicitante ||
+    !location ||
+    !hub ||
+    !urgency ||
+    !routeId ||
+    !packageCount ||
+    !deliveryRegions
+  ) {
+    return res.status(400).send({ error: "Dados da solicitação incompletos." });
+  }
+
+  try {
+    // Importação dinâmica do Google Generative AI
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Se o frontend mandar um prompt pronto (da IA do cliente), usa ele.
+    // Se não, cria um aqui.
+    const finalPrompt =
+      userPrompt ||
+      `Crie uma descrição curta para solicitação de apoio logístico. Hub: ${hub}, Veículo: ${vehicleType}, Pacotes: ${packageCount}.`;
+
+    let description = "";
+    try {
+      const result = await model.generateContent(finalPrompt);
+      description = result.response.text().substring(0, 200); // Limita tamanho
+    } catch (aiError) {
+      console.error("Erro na IA, usando descrição padrão:", aiError);
+      description = finalPrompt; // Fallback
+    }
+
+    const newTicket = new Ticket({
+      userId,
+      prompt: finalPrompt,
+      description,
       solicitante,
       location,
       hub,
@@ -107,94 +184,44 @@ app.post(
       urgency,
       packageCount,
       deliveryRegions,
-    } = req.body;
+      status: "ABERTO",
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
 
-    const userId = req.userId;
+    await newTicket.save();
 
-    if (
-      !solicitante ||
-      !location ||
-      !hub ||
-      !urgency ||
-      !routeId ||
-      !packageCount ||
-      !deliveryRegions
-    ) {
-      return res
-        .status(400)
-        .send({ error: "Dados da solicitação incompletos." });
-    }
+    // Salvar no Firestore também (para o Realtime do Painel funcionar)
+    const firestoreDb = admin.firestore();
+    const supportCallRef = firestoreDb.collection("supportCalls").doc();
 
-    try {
-      const { GoogleGenerativeAI } = await import("@google/generative-ai");
-      const genAI = new GoogleGenerativeAI(
-        process.env.GEMINI_API_KEY as string
-      );
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    await supportCallRef.set({
+      id: supportCallRef.id,
+      description,
+      solicitante,
+      location,
+      hub,
+      vehicleType,
+      isBulky,
+      routeId,
+      urgency,
+      status: "ABERTO",
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      packageCount,
+      deliveryRegions,
+    });
 
-      const bulkyText = isBulky ? ` Contém pacote volumoso.` : "";
-      const geminiPrompt = `
-Crie uma descrição profissional...
-`;
+    console.log("Chamado salvo no Firestore com ID:", supportCallRef.id);
 
-      const result = await model.generateContent(geminiPrompt);
-      const description = result.response.text();
-
-      const newTicket = new Ticket({
-        userId,
-        prompt: geminiPrompt,
-        description,
-        solicitante,
-        location,
-        hub,
-        vehicleType,
-        isBulky,
-        routeId,
-        urgency,
-        packageCount,
-        deliveryRegions,
-        status: "ABERTO",
-        timestamp: new Date(),
-        createdAt: new Date(),
-      });
-
-      await newTicket.save();
-
-      const firestoreDb = admin.firestore();
-      const supportCallRef = firestoreDb.collection("supportCalls").doc();
-
-      await supportCallRef.set({
-        id: supportCallRef.id,
-        description,
-        solicitante,
-        location,
-        hub,
-        vehicleType,
-        isBulky,
-        routeId,
-        urgency,
-        status: "ABERTO",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        packageCount,
-        deliveryRegions,
-      });
-
-      console.log("Chamado salvo no Firestore com ID:", supportCallRef.id);
-
-      res.status(201).send(newTicket);
-    } catch (error) {
-      console.error("Erro ao criar ticket:", error);
-      res.status(500).send({ error: "Erro ao processar a solicitação." });
-    }
+    res.status(201).send(newTicket);
+  } catch (error) {
+    console.error("Erro ao criar ticket:", error);
+    res.status(500).send({ error: "Erro ao processar a solicitação." });
   }
-);
+});
 
-// ---------------------------------------------------
 // CHATBOT
-// ---------------------------------------------------
-const KNOWLEDGE_BASE = `...`;
-const CHAT_SYSTEM_PROMPT = `...`;
-
+// Mantive /api/chat pois o componente Chatbot pode estar usando essa rota específica
 app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
   const { message, history } = req.body;
   const userId = req.userId;
@@ -209,7 +236,7 @@ app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const geminiHistory = (history || []).map((msg: any) => ({
       role: msg.role,
@@ -218,8 +245,11 @@ app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
 
     const chat = model.startChat({
       history: [
-        { role: "user", parts: [{ text: CHAT_SYSTEM_PROMPT }] },
-        { role: "model", parts: [{ text: "Ok, entendi as regras." }] },
+        {
+          role: "user",
+          parts: [{ text: "Você é um assistente logístico útil." }],
+        },
+        { role: "model", parts: [{ text: "Entendido." }] },
         ...geminiHistory,
       ],
       generationConfig: {
@@ -238,7 +268,15 @@ app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
-// Listen — necessário para ngrok
+// ---------------------------------------------------------
+// 2. ROTA CURINGA (SPA FALLBACK)
+// Se a rota não for API, entrega o index.html para o React assumir
+// ---------------------------------------------------------
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// Listen
 app.listen(port, "0.0.0.0", () => {
   console.log(`Servidor rodando em http://localhost:${port}`);
 });

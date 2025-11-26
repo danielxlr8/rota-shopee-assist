@@ -28,7 +28,7 @@ import {
   VolumeX,
   ExternalLink,
   CalendarClock,
-  BookOpen, // <<<--- 1. ÍCONE ADICIONADO
+  BookOpen,
 } from "lucide-react";
 import { auth, db, storage } from "../firebase";
 import {
@@ -36,7 +36,6 @@ import {
   onSnapshot,
   updateDoc,
   collection,
-  addDoc,
   serverTimestamp,
   query,
   where,
@@ -56,6 +55,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
+// ALTERAÇÃO AQUI: Removido 'Toaster' da importação
 import { toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
 import {
@@ -65,10 +65,8 @@ import {
   CardTitle,
   CardFooter,
 } from "./ui/card";
-import { Badge } from "./ui/Badge";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-
-// --- 2. IMPORTAÇÕES ADICIONADAS (CORRIGINDO OS ERROS) ---
 import { cn } from "../lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
@@ -77,8 +75,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "./ui/accordion";
-import { Chatbot } from "./Chatbot"; // Importa o Chatbot que criamos
-// --- FIM DAS IMPORTAÇÕES ADICIONADAS ---
+import { Chatbot } from "./Chatbot";
 
 interface DriverInterfaceProps {
   driver: Driver;
@@ -153,13 +150,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const isInitialOpenCallsLoad = useRef(true);
 
-  // --- 3. Tipos e Memos ATUALIZADOS ---
+  // --- Tipos e Memos ---
   const TABS = useMemo(
     () => [
       { id: "availability", label: "Disponibilidade", icon: <Zap size={16} /> },
       { id: "support", label: "Apoio", icon: <AlertTriangle size={16} /> },
       { id: "activeCalls", label: "Chamados", icon: <Clock size={16} /> },
-      { id: "tutorial", label: "Ajuda", icon: <BookOpen size={16} /> }, // <<<--- ABA AJUDA (TUTORIAL) ADICIONADA
+      { id: "tutorial", label: "Ajuda", icon: <BookOpen size={16} /> },
       { id: "profile", label: "Perfil", icon: <User size={16} /> },
     ],
     []
@@ -169,12 +166,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     | "availability"
     | "support"
     | "activeCalls"
-    | "tutorial" // <<<--- TIPO ATUALIZADO
+    | "tutorial"
     | "profile";
 
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  // --- CONTEÚDO DOS TUTORIAIS (Extraído do PDF) ---
+  // --- CONTEÚDO DOS TUTORIAIS ---
   const tutorialsSolicitante = [
     {
       id: "sol-1",
@@ -214,13 +211,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     {
       id: "pres-3",
       question: "Como eu importo minhas rotas transferidas para o APP circuit?",
-      // CORREÇÃO: Use crases (`) para criar uma única string com quebra de linha.
       answer: `Clique nos 3 pontinhos dentro do app (...) e após isso clique em 'importar planilha' e faça o upload do arquivo.
 
 Selecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já estará organizado. :)`,
     },
   ];
-  // --- FIM DO CONTEÚDO DOS TUTORIAIS ---
 
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
@@ -244,7 +239,7 @@ Selecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já
     );
   }, [allMyCalls, userId]);
 
-  // --- Funções Handler (handleUpdateProfile, handleLogin, etc.) ---
+  // --- Efeitos ---
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
@@ -454,37 +449,7 @@ Selecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já
     await updateDoc(callDocRef, updates as any);
   };
 
-  const addNewCall = async (
-    newCall: Omit<SupportCall, "id" | "timestamp" | "solicitante">
-  ) => {
-    if (!driver) return;
-
-    const getInitials = (name: string) => {
-      if (!name) return "??";
-      return name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .substring(0, 2);
-    };
-
-    const driverName = driver.name || "Nome não definido";
-
-    const callToAdd = {
-      ...newCall,
-      timestamp: serverTimestamp(),
-      solicitante: {
-        id: driver.uid,
-        name: driverName,
-        avatar: driver.avatar || null,
-        initials: driver.initials || getInitials(driverName),
-        phone: driver.phone || null,
-      },
-    };
-
-    await addDoc(collection(db, "supportCalls"), callToAdd as any);
-  };
+  // AQUI ESTAVA A FUNÇÃO addNewCall - REMOVIDA.
 
   const handleAvailabilityChange = (isAvailable: boolean) => {
     if (!isProfileComplete) {
@@ -817,9 +782,16 @@ Selecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
+          "ngrok-skip-browser-warning": "true",
         },
         body: JSON.stringify(ticketPayload),
       });
+
+      console.log(
+        ">> import.meta.env.VITE_API_URL (raw):",
+        import.meta.env.VITE_API_URL
+      );
+      console.log(">> apiUrl (used for fetch):", apiUrl);
 
       if (!response.ok) {
         const errorData = await response.json();

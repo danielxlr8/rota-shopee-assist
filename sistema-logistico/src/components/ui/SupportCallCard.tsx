@@ -5,13 +5,12 @@ import {
   CallStatus,
 } from "@/types/logistics";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/Avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Clock,
   MapPin,
-  MessageCircle,
   AlertTriangle,
   FileText,
   MoreVertical,

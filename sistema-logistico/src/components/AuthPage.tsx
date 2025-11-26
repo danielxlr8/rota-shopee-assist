@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react"; // CORREÇÃO: useEffect removido
 import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
 import {
@@ -33,11 +33,10 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import rocketAnimation from "../rocket-launch.json"; // Garanta que o nome e caminho estejam corretos
+import rocketAnimation from "../rocket-launch.json";
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 48 48">
-    {/* Paths do SVG */}
     <path
       fill="#FFC107"
       d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"
@@ -58,7 +57,6 @@ const GoogleIcon = () => (
 );
 
 export const AuthPage = () => {
-  // --- SEUS ESTADOS ORIGINAIS ---
   const [isLoginView, setIsLoginView] = useState(true);
   const [activeTab, setActiveTab] = useState<"admin" | "driver">("driver");
   const [email, setEmail] = useState("");
@@ -75,22 +73,15 @@ export const AuthPage = () => {
   const [googleUser, setGoogleUser] = useState<any>(null);
   const [linkingError, setLinkingError] = useState("");
 
-  // --- NOVOS ESTADOS ---
   const [showPassword, setShowPassword] = useState(false);
-  // Estados para controlar as fases da animação:
-  // 'playing': Foguete visível e tocando
-  // 'exiting': Foguete animando a saída (ainda no DOM)
-  // 'finished': Foguete saiu, formulário visível
   const [animationState, setAnimationState] = useState<
     "playing" | "exiting" | "finished"
   >("playing");
 
-  // --- Função chamada quando o Lottie termina ---
   const handleLottieComplete = () => {
-    setAnimationState("exiting"); // Inicia a animação de SAÍDA do foguete
+    setAnimationState("exiting");
   };
 
-  // --- SUAS FUNÇÕES ORIGINAIS (COMPLETAS E CORRIGIDAS) ---
   const formatAndLimitPhone = (value: string) => {
     let digits = value.replace(/\D/g, "");
     digits = digits.slice(0, 11);
@@ -301,7 +292,6 @@ export const AuthPage = () => {
     }
   };
 
-  // --- TELA DE VINCULAR CONTA ---
   if (isLinkingGoogleAccount) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB]">
@@ -325,7 +315,7 @@ export const AuthPage = () => {
                 type="text"
                 value={driverId}
                 onChange={(e) => setDriverId(e.target.value)}
-                className="mt-1 block w-full input-style text-gray-900" // ADICIONADO text-gray-900
+                className="mt-1 block w-full input-style text-gray-900"
                 placeholder="Seu ID único"
                 required
                 autoComplete="off"
@@ -362,7 +352,6 @@ export const AuthPage = () => {
     );
   }
 
-  // --- JSX PRINCIPAL COM ANIMAÇÃO CORRIGIDA ---
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#FDF0EB] overflow-hidden">
       <div className="relative w-full max-w-md h-[700px] flex items-center justify-center">
@@ -460,7 +449,7 @@ export const AuthPage = () => {
                           placeholder="E-mail"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -475,7 +464,7 @@ export const AuthPage = () => {
                           placeholder="Senha"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="new-password"
                         />
@@ -511,7 +500,7 @@ export const AuthPage = () => {
                           placeholder="Nome"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -526,7 +515,7 @@ export const AuthPage = () => {
                           placeholder="Sobrenome"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -541,7 +530,7 @@ export const AuthPage = () => {
                           placeholder="Data de Nascimento"
                           value={birthDate}
                           onChange={(e) => setBirthDate(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -558,7 +547,7 @@ export const AuthPage = () => {
                           onChange={(e) =>
                             setPhone(formatAndLimitPhone(e.target.value))
                           }
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -574,7 +563,7 @@ export const AuthPage = () => {
                             placeholder="ID de Motorista (fornecido pelo admin)"
                             value={driverId}
                             onChange={(e) => setDriverId(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                             required
                             autoComplete="off"
                           />
@@ -590,7 +579,7 @@ export const AuthPage = () => {
                           placeholder="E-mail"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="off"
                         />
@@ -605,7 +594,7 @@ export const AuthPage = () => {
                           placeholder="Senha (mínimo 6 caracteres)"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900" // ADICIONADO text-gray-900
+                          className="w-full pl-10 pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-900"
                           required
                           autoComplete="new-password"
                         />
@@ -642,10 +631,11 @@ export const AuthPage = () => {
                       className="font-medium text-orange-600 hover:text-orange-500"
                     >
                       {isLoginView
-                        ? "Não tem conta? Cadastre-se"
-                        : "Já tem conta? Faça login"}
+                        ? "Não tem uma conta? Cadastre-se"
+                        : "Já tem uma conta? Faça login"}
                     </button>
                   </div>
+
                   <div className="mt-6 relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-gray-300" />
@@ -654,6 +644,7 @@ export const AuthPage = () => {
                       <span className="px-2 bg-white text-gray-500">Ou</span>
                     </div>
                   </div>
+
                   <div className="mt-6">
                     <button
                       onClick={() => handleGoogleSignIn(activeTab)}

@@ -27,12 +27,12 @@ import {
   LayoutDashboard,
   CheckCheck,
   History,
-  PanelLeft, // <-- Ícone Adicionado
-  PanelRight, // <-- Ícone Adicionado
-  Phone, // <-- Ícone Adicionado
-  User, // <-- Ícone Adicionado
-  Volume2, // <-- Ícone Adicionado
-  VolumeX, // <-- Ícone Adicionado
+  PanelLeft,
+  PanelRight,
+  Phone,
+  User,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -41,15 +41,15 @@ import {
   doc,
   updateDoc,
   deleteField,
-  serverTimestamp,
-} from "firebase/firestore"; // <-- serverTimestamp adicionado
+  // serverTimestamp removido pois não estava sendo usado
+} from "firebase/firestore";
 import { db } from "../firebase";
 import {
   AvatarComponent,
   UrgencyBadge,
-  SummaryCard, // <-- Vem do UI.tsx corrigido
-  KanbanColumn, // <-- Vem do UI.tsx corrigido
-  DriverInfoModal, // <-- Vem do UI.tsx corrigido
+  SummaryCard,
+  KanbanColumn,
+  DriverInfoModal,
 } from "./UI";
 import {
   Panel as ResizablePanel,
@@ -58,7 +58,6 @@ import {
 } from "react-resizable-panels";
 import { toast as sonnerToast } from "sonner";
 import spxLogo from "/spx-logo.png";
-// --- IMPORTAÇÕES SHADCN/UI ---
 import {
   Card,
   CardContent,
@@ -66,7 +65,7 @@ import {
   CardTitle,
   CardFooter,
 } from "./ui/card";
-import { Badge } from "./ui/Badge";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import {
@@ -74,7 +73,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "./ui/tooltip"; // <-- Adicionado Tooltip
+} from "./ui/tooltip";
 
 // --- NOVA FUNÇÃO DE CONTATO (WhatsApp) ---
 const handleContactDriver = (phone: string | undefined) => {
@@ -88,7 +87,7 @@ const handleContactDriver = (phone: string | undefined) => {
   }
 };
 
-// --- COMPONENTE: EnhancedDriverCard (CORRIGIDO PARA DARK MODE) ---
+// --- COMPONENTE: EnhancedDriverCard ---
 const EnhancedDriverCard = ({
   driver,
   onInfoClick,
@@ -96,21 +95,18 @@ const EnhancedDriverCard = ({
   driver: Driver;
   onInfoClick: (driver: Driver) => void;
 }) => (
-  // Usa bg-card do tema
   <Card className="p-3 rounded-xl shadow-lg flex items-center justify-between gap-2 border-l-4 border-green-500 bg-card">
     <div className="flex items-center gap-3 flex-1 min-w-0">
       <AvatarComponent user={driver} onClick={() => onInfoClick(driver)} />
       <div className="flex-1 min-w-0">
         <p
-          className="font-semibold text-foreground cursor-pointer truncate" // Usa text-foreground
+          className="font-semibold text-foreground cursor-pointer truncate"
           onClick={() => onInfoClick(driver)}
           title={driver.name}
         >
           {driver.name}
         </p>
         <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1">
-          {" "}
-          {/* Usa text-muted-foreground */}
           <div className="flex items-center gap-1 truncate" title={driver.hub}>
             <Building size={12} />
             <span className="truncate">{driver.hub || "N/A"}</span>
@@ -123,7 +119,6 @@ const EnhancedDriverCard = ({
       </div>
     </div>
     <div className="flex flex-col items-end gap-2">
-      {/* Badge corrigida para o tema dark */}
       <Badge
         variant="outline"
         className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50"
@@ -131,9 +126,9 @@ const EnhancedDriverCard = ({
         Disponível
       </Badge>
       <Button
-        onClick={() => handleContactDriver(driver.phone)} // Ação atualizada
+        onClick={() => handleContactDriver(driver.phone)}
         size="sm"
-        className="h-7 text-xs rounded-lg" // Button já usa theme
+        className="h-7 text-xs rounded-lg"
       >
         Acionar
       </Button>
@@ -141,7 +136,7 @@ const EnhancedDriverCard = ({
   </Card>
 );
 
-// --- COMPONENTE: SearchableSelect --- (Já usa theme)
+// --- COMPONENTE: SearchableSelect ---
 const SearchableSelect = ({
   options,
   value,
@@ -250,7 +245,7 @@ const SearchableSelect = ({
   );
 };
 
-// --- COMPONENTE: SearchInput --- (Já usa theme)
+// --- COMPONENTE: SearchInput ---
 const SearchInput = ({
   value,
   onChange,
@@ -279,7 +274,7 @@ const SearchInput = ({
   </div>
 );
 
-// --- COMPONENTE: ConfirmationModal --- (Corrigido para Dark Mode)
+// --- COMPONENTE: ConfirmationModal ---
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -301,25 +296,19 @@ const ConfirmationModal = ({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md bg-card">
-        {" "}
-        {/* Usa bg-card */}
         <CardHeader>
           <CardTitle className="text-xl font-bold text-foreground">
             {title}
-          </CardTitle>{" "}
-          {/* Usa text-foreground */}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="text-muted-foreground">{children}</CardContent>{" "}
-        {/* Usa text-muted-foreground */}
+        <CardContent className="text-muted-foreground">{children}</CardContent>
         <CardFooter className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={onClose}>
-            {" "}
-            {/* Usa variant */}
             Cancelar
           </Button>
           <Button
             onClick={onConfirm}
-            className={`${confirmColor} hover:opacity-90`} // Mantém cor de confirmação
+            className={`${confirmColor} hover:opacity-90`}
           >
             {confirmText}
           </Button>
@@ -329,7 +318,7 @@ const ConfirmationModal = ({
   );
 };
 
-// --- COMPONENTE: CallDetailsModal --- (Corrigido para Dark Mode)
+// --- COMPONENTE: CallDetailsModal ---
 const CallDetailsModal = ({
   call,
   onClose,
@@ -346,15 +335,15 @@ const CallDetailsModal = ({
   const getStatusColor = (status: CallStatus) => {
     switch (status) {
       case "ABERTO":
-        return "text-yellow-500"; // Mantido
+        return "text-yellow-500";
       case "EM ANDAMENTO":
-        return "text-blue-500"; // Mantido
+        return "text-blue-500";
       case "CONCLUIDO":
-        return "text-green-500"; // Mantido
+        return "text-green-500";
       case "AGUARDANDO_APROVACAO":
-        return "text-purple-500"; // Mantido
+        return "text-purple-500";
       default:
-        return "text-muted-foreground"; // Usa theme
+        return "text-muted-foreground";
     }
   };
   const cleanDescription = (desc: string) => {
@@ -367,18 +356,14 @@ const CallDetailsModal = ({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-lg relative bg-card">
-        {" "}
-        {/* Usa bg-card */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground" // Usa theme
+          className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
         >
           <X size={20} />
         </button>
         <CardHeader>
           <CardTitle className="text-xl font-bold text-foreground">
-            {" "}
-            {/* Usa theme */}
             Detalhes do Chamado
           </CardTitle>
         </CardHeader>
@@ -388,10 +373,8 @@ const CallDetailsModal = ({
             <div>
               <p className="font-semibold text-foreground">
                 {call.solicitante.name}
-              </p>{" "}
-              {/* Usa theme */}
-              <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
-              {/* Usa theme */}
+              </p>
+              <p className="text-sm text-muted-foreground">Solicitante</p>
             </div>
           </div>
           <p
@@ -402,16 +385,11 @@ const CallDetailsModal = ({
             {call.status.replace("_", " ")}
           </p>
           <div className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
-            {" "}
-            {/* Usa theme */}
             {cleanDescription(call.description)}
           </div>
         </CardContent>
         <CardFooter className="mt-2 pt-4 border-t border-border flex flex-wrap justify-between items-center gap-4">
-          {" "}
-          {/* Usa theme */}
-          <p className="text-sm text-muted-foreground">Mover para:</p>{" "}
-          {/* Usa theme */}
+          <p className="text-sm text-muted-foreground">Mover para:</p>
           <div className="flex gap-2">
             {call.status === "EM ANDAMENTO" && (
               <Button
@@ -419,8 +397,6 @@ const CallDetailsModal = ({
                 size="sm"
                 onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
               >
-                {" "}
-                {/* Usa theme */}
                 <ArrowLeft size={16} className="mr-1.5" /> Aberto
               </Button>
             )}
@@ -432,8 +408,6 @@ const CallDetailsModal = ({
                   onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
                 }
               >
-                {" "}
-                {/* Usa theme */}
                 <ArrowLeft size={16} className="mr-1.5" /> Em Andamento
               </Button>
             )}
@@ -468,7 +442,7 @@ const CallDetailsModal = ({
   );
 };
 
-// --- COMPONENTE: CallCard (CORRIGIDO PARA DARK MODE e Botão WhatsApp) ---
+// --- COMPONENTE: CallCard ---
 const CallCard = ({
   call,
   onDelete,
@@ -501,7 +475,6 @@ const CallCard = ({
   };
 
   return (
-    // Usa bg-card do tema
     <div
       className={cn(
         "bg-card p-4 rounded-lg shadow-md border border-border space-y-3 hover:shadow-lg transition-shadow cursor-pointer",
@@ -510,40 +483,35 @@ const CallCard = ({
       onClick={() => onClick(call)}
     >
       <div className="flex justify-between items-start">
-        {/* Bloco do Solicitante */}
         <div className="flex items-center space-x-3">
           <AvatarComponent user={call.solicitante} />
           <div>
             <div className="flex items-center gap-2">
               <p className="font-bold text-foreground">
                 {call.solicitante.name}
-              </p>{" "}
-              {/* Usa theme */}
+              </p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(call);
                 }}
-                className="p-1 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors" // Usa theme
+                className="p-1 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                 title="Excluir Solicitação"
               >
                 <Trash2 size={14} />
               </button>
             </div>
-            <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
-            {/* Usa theme */}
+            <p className="text-sm text-muted-foreground">Solicitante</p>
           </div>
         </div>
-        {/* Bloco de Urgência e Ação (WhatsApp) */}
         <div className="flex flex-col items-end gap-2">
           <UrgencyBadge urgency={call.urgency} />
-          {/* BOTÃO WHATSAPP */}
           <Button
             variant="ghost"
             size="icon"
             className="w-8 h-8 rounded-full text-green-500 hover:bg-green-500/10 hover:text-green-600"
             onClick={(e) => {
-              e.stopPropagation(); // Evita abrir o modal
+              e.stopPropagation();
               handleContactDriver(call.solicitante.phone);
             }}
           >
@@ -551,41 +519,32 @@ const CallCard = ({
           </Button>
         </div>
       </div>
-      {/* Restante do card */}
       <div className="text-sm text-muted-foreground space-y-2">
-        {" "}
-        {/* Usa theme */}
         <div className="flex items-center space-x-2">
-          {" "}
-          <Ticket size={16} className="text-primary" />{" "}
-          <span>{call.routeId || "N/A"}</span>{" "}
+          <Ticket size={16} className="text-primary" />
+          <span>{call.routeId || "N/A"}</span>
         </div>
         <div className="flex items-center space-x-2">
-          {" "}
-          <Building size={16} className="text-primary" />{" "}
-          <span>{call.hub || "N/A"}</span>{" "}
+          <Building size={16} className="text-primary" />
+          <span>{call.hub || "N/A"}</span>
         </div>
         <div className="flex items-center space-x-2">
-          {" "}
-          <Clock size={16} className="text-muted-foreground" />{" "}
-          <span>{timeAgo}</span>{" "}
+          <Clock size={16} className="text-muted-foreground" />
+          <span>{timeAgo}</span>
         </div>
         <div className="flex items-center space-x-2">
-          {" "}
-          <MapPin size={16} className="text-primary" />{" "}
-          <span>{call.location}</span>{" "}
+          <MapPin size={16} className="text-primary" />
+          <span>{call.location}</span>
         </div>
       </div>
       <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
-        {" "}
-        {/* Usa theme */}
         {cleanDescription(call.description)}
       </p>
     </div>
   );
 };
 
-// --- COMPONENTE: ApprovalCard (CORRIGIDO PARA DARK MODE e Botão WhatsApp) ---
+// --- COMPONENTE: ApprovalCard ---
 const ApprovalCard = ({
   call,
   onApprove,
@@ -609,24 +568,18 @@ const ApprovalCard = ({
   };
 
   return (
-    // Usa bg-card do tema
     <Card className="overflow-hidden shadow-lg border-l-8 border-purple-500 rounded-xl bg-card">
       <CardHeader className="p-4 bg-purple-500/10">
-        {" "}
-        {/* Fundo levemente roxo */}
         <div className="flex justify-between items-start">
           <div className="flex items-center space-x-3">
             <AvatarComponent user={call.solicitante} />
             <div>
               <p className="font-bold text-foreground">
                 {call.solicitante.name}
-              </p>{" "}
-              {/* Usa theme */}
-              <p className="text-sm text-muted-foreground">Solicitante</p>{" "}
-              {/* Usa theme */}
+              </p>
+              <p className="text-sm text-muted-foreground">Solicitante</p>
             </div>
           </div>
-          {/* Bloco de Urgência e Ação (WhatsApp) */}
           <div className="flex flex-col items-end gap-2">
             <UrgencyBadge urgency={call.urgency} />
             <Button
@@ -644,23 +597,18 @@ const ApprovalCard = ({
         </div>
         {assignedDriver && (
           <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground pl-1 pt-3">
-            {" "}
-            {/* Usa theme */}
             <div className="flex items-center gap-3">
               <ArrowRight size={16} className="text-muted-foreground/50" />
               <AvatarComponent user={assignedDriver} />
               <div>
                 <p className="font-semibold text-foreground">
                   {assignedDriver.name}
-                </p>{" "}
-                {/* Usa theme */}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Prestador do Apoio
-                </p>{" "}
-                {/* Usa theme */}
+                </p>
               </div>
             </div>
-            {/* Botão WhatsApp para o Prestador */}
             <Button
               variant="ghost"
               size="icon"
@@ -678,41 +626,33 @@ const ApprovalCard = ({
 
       <CardContent className="p-4 space-y-3">
         <div className="text-sm text-muted-foreground space-y-2">
-          {" "}
-          {/* Usa theme */}
           <div className="flex items-center space-x-2">
-            {" "}
-            <Ticket size={16} className="text-primary" />{" "}
-            <span>{call.routeId || "N/A"}</span>{" "}
+            <Ticket size={16} className="text-primary" />
+            <span>{call.routeId || "N/A"}</span>
           </div>
           <div className="flex items-center space-x-2">
-            {" "}
-            <Building size={16} className="text-primary" />{" "}
-            <span>{call.hub || "N/A"}</span>{" "}
+            <Building size={16} className="text-primary" />
+            <span>{call.hub || "N/A"}</span>
           </div>
         </div>
         <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
-          {" "}
-          {/* Usa theme */}
           {cleanDescription(call.description)}
         </p>
       </CardContent>
 
       <CardFooter className="mt-2 pt-3 border-t bg-muted/30 p-4 flex justify-end gap-3">
-        {" "}
-        {/* Usa theme */}
         <Button
           onClick={() => onDelete(call)}
           variant="ghost"
           size="icon"
-          className="text-destructive hover:bg-destructive/10" // Usa theme
+          className="text-destructive hover:bg-destructive/10"
           title="Excluir Solicitação"
         >
           <Trash2 size={16} />
         </Button>
         <Button
           onClick={() => onReject(call)}
-          variant="destructive" // Usa theme
+          variant="destructive"
           size="sm"
           className="rounded-lg"
         >
@@ -720,9 +660,9 @@ const ApprovalCard = ({
         </Button>
         <Button
           onClick={() => onApprove(call)}
-          variant="default" // Usa theme
+          variant="default"
           size="sm"
-          className="bg-green-600 hover:bg-green-700 rounded-lg" // Mantém verde para aprovar
+          className="bg-green-600 hover:bg-green-700 rounded-lg"
         >
           <CheckCircle size={16} className="mr-1.5" /> Aprovar
         </Button>
@@ -742,16 +682,15 @@ interface AdminDashboardProps {
   onDeleteAllExcluded: () => void;
 }
 
-// Mapeamento de Títulos para as Views
 const viewTitles: Record<string, string> = {
   kanban: "Acompanhamento Operacional",
   approvals: "Aprovações Pendentes",
   excluded: "Solicitações Excluídas (Lixeira)",
   history: "Histórico de Solicitações",
-  profile: "Perfil e Configurações", // <-- Novo Título
+  profile: "Perfil e Configurações",
 };
 
-type AdminView = "kanban" | "approvals" | "excluded" | "history" | "profile"; // <-- Novo Tipo
+type AdminView = "kanban" | "approvals" | "excluded" | "history" | "profile";
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   calls,
@@ -761,20 +700,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeletePermanently,
   onDeleteAllExcluded,
 }) => {
-  // --- Estados ---
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // <-- NOVO ESTADO
-  const [isMuted, setIsMuted] = useState(false); // <-- NOVO ESTADO
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
-  const [adminView, setAdminView] = useState<AdminView>("kanban"); // <-- Tipo Atualizado
+  const [adminView, setAdminView] = useState<AdminView>("kanban");
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
   const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
   const [confirmationType, setConfirmationType] = useState<
     "soft-delete" | "permanent-delete" | "clear-all" | null
   >(null);
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
-  const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs"); // <-- Corrigido valor inicial
+  const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs");
   const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
   const notifiedCallIds = useRef(new Set<string>());
   const prevCallsRef = useRef<SupportCall[]>([]);
@@ -799,7 +737,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [globalHubFilter, setGlobalHubFilter] =
     useState<string>("Todos os Hubs");
 
-  // --- Funções ---
   const updateDriver = async (
     driverUid: string,
     updates: Partial<Omit<Driver, "uid">>
@@ -819,15 +756,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
   };
 
-  // --- NOVA FUNÇÃO DE MUDO ---
   const toggleMute = () => {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     localStorage.setItem("notificationsMuted", String(newMutedState));
     if (!newMutedState) {
-      // Toca um som baixo para confirmar que não está mutado
       const audio = new Audio("/shopee-ringtone.mp3");
-      audio.volume = 0.3; // Volume baixo
+      audio.volume = 0.3;
       audio.play().catch(() => {});
     }
     sonnerToast.success(
@@ -837,14 +772,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
   };
 
-  // --- Efeitos ---
-  // Carrega preferência de mudo
   useEffect(() => {
     const savedMutePreference = localStorage.getItem("notificationsMuted");
     setIsMuted(savedMutePreference === "true");
   }, []);
 
-  // Escalonamento de Urgência (Mantido)
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -877,7 +809,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => clearInterval(interval);
   }, [calls, updateCall]);
 
-  // Arquivamento Automático (Mantido)
   useEffect(() => {
     const archiveOldCalls = () => {
       const now = new Date();
@@ -903,30 +834,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => clearInterval(intervalId);
   }, [calls, updateCall]);
 
-  // --- useEffect de Notificação (ATUALIZADO) ---
   useEffect(() => {
     const prevCallsMap = new Map(
       prevCallsRef.current.map((c) => [c.id, c.status])
     );
     const newOpenCalls = calls.filter((call) => {
       const prevStatus = prevCallsMap.get(call.id);
-      // LÓGICA CORRIGIDA: Só notifica se for um chamado novo ou que não estava "Aberto" antes
       return (
         call.status === "ABERTO" &&
         prevStatus !== "ABERTO" &&
-        !notifiedCallIds.current.has(call.id) // E não foi notificado (ex: restaurado)
+        !notifiedCallIds.current.has(call.id)
       );
     });
 
     if (newOpenCalls.length > 0) {
       if (!isMuted) {
-        // <-- Verifica se não está mutado
         const audio = new Audio("/shopee-ringtone.mp3");
         audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
       }
 
       newOpenCalls.forEach((newCall) => {
-        // --- NOTIFICAÇÃO ESTILIZADA ---
         sonnerToast.custom(
           (t) => (
             <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
@@ -964,9 +891,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         notifiedCallIds.current.delete(id);
       }
     });
-  }, [calls, isMuted]); // <-- Adicionado isMuted como dependência
+  }, [calls, isMuted]);
 
-  // --- Funções de Ação (Handle) ---
   const handleApprove = async (call: SupportCall) => {
     try {
       const updates = { status: "CONCLUIDO", approvedBy: "Admin" };
@@ -1023,16 +949,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setConfirmationType(null);
   };
 
-  // --- FUNÇÃO RESTAURAR (ATUALIZADA) ---
   const handleRestore = (callId: string) => {
-    // Adiciona o timestamp para que o 'deletedAt' seja removido
     updateCall(callId, { status: "ABERTO", deletedAt: deleteField() });
-
-    // LÓGICA DE NOTIFICAÇÃO
-    // Adiciona ao set para evitar a notificação de "Novo Chamado"
     notifiedCallIds.current.add(callId);
-
-    // NOTIFICAÇÃO PERSONALIZADA
     sonnerToast.custom((t) => (
       <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
         <RotateCcw size={28} className="text-green-500 flex-shrink-0" />
@@ -1064,7 +983,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSelectedCall(null);
   };
 
-  // --- Memos (Filtros) ---
   const filteredCalls = useMemo(
     () =>
       calls.filter(
@@ -1242,7 +1160,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       );
   }, [excludedCalls, excludedNameFilter, excludedHubFilter]);
 
-  // --- Controles de Filtro ---
   const filterControls = (
     <div className="flex flex-wrap gap-1">
       {(["TODOS", "URGENTE", "ALTA", "MEDIA", "BAIXA"] as const).map(
@@ -1290,29 +1207,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ) || null
     : null;
 
-  // --- ESTRUTURA JSX ATUALIZADA ---
   return (
     <TooltipProvider>
-      {" "}
-      {/* Adicionado TooltipProvider */}
       <div className="flex min-h-screen bg-background text-foreground">
-        {/* ===== 1. SIDEBAR (COM AJUSTES DE COR E TOGGLE) ===== */}
         <aside
           className={cn(
-            // CORRIGIDO: Voltando para bg-card (zinc-800 no modo dark)
-            "sticky top-0 h-screen flex-shrink-0 border-r border-border bg-card p-4 flex flex-col gap-6 transition-all duration-300 ease-in-out relative",
+            
             isSidebarCollapsed ? "w-20" : "w-64"
           )}
         >
-          {/* Botão de Toggle (VISIBILIDADE CORRIGIDA) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="secondary" // <-- Mudado para 'secondary'
+                variant="secondary"
                 size="icon"
                 className={cn(
                   "absolute top-4 -right-4 z-20 rounded-full w-8 h-8",
-                  !isSidebarCollapsed && "text-primary" // Laranja quando aberto
+                  !isSidebarCollapsed && "text-primary"
                 )}
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               >
@@ -1328,7 +1239,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Logo e Título na Sidebar */}
           <div
             className={cn(
               "flex items-center gap-3 px-2 transition-all",
@@ -1353,7 +1263,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Navegação Vertical */}
           <nav className="flex flex-col gap-2 flex-grow">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1407,7 +1316,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       variant="destructive"
                       className={cn(
                         "absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 text-xs",
-                        isSidebarCollapsed && "top-0 -right-1" // Ajuste para modo colapsado
+                        isSidebarCollapsed && "top-0 -right-1"
                       )}
                     >
                       {pendingApprovalCalls.length}
@@ -1475,7 +1384,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </Tooltip>
           </nav>
 
-          {/* NOVO BOTÃO DE PERFIL (Rodapé da Sidebar) */}
           <div className="mt-auto">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1506,11 +1414,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </aside>
 
-        {/* ===== 2. ÁREA DE CONTEÚDO PRINCIPAL ===== */}
         <div className="flex-1 flex flex-col overflow-y-auto">
-          {" "}
-          {/* Permite scroll do conteúdo */}
-          {/* Header DENTRO do conteúdo principal */}
           <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 sm:p-6 flex justify-between items-center">
             <h2 className="text-xl font-semibold">{viewTitles[adminView]}</h2>
             <div className="w-full sm:w-auto sm:min-w-[250px]">
@@ -1523,48 +1427,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               />
             </div>
           </header>
-          {/* Conteúdo Principal com Padding */}
           <main className="flex-grow p-4 sm:p-6 space-y-6">
-            {" "}
-            {/* Adicionado space-y-6 */}
             {adminView === "kanban" && (
               <div className="flex-grow flex flex-col space-y-6">
-                {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   <SummaryCard
                     title="Abertos"
                     value={openCalls.length}
                     icon={<AlertTriangle />}
                     subtext="Aguardando atendimento"
-                    colorClass="#F59E0B" // Laranja
+                    colorClass="#F59E0B"
                   />
                   <SummaryCard
                     title="Em Andamento"
                     value={inProgressCalls.length}
                     icon={<Clock />}
                     subtext="Sendo atendidos"
-                    colorClass="#3B82F6" // Azul
+                    colorClass="#3B82F6"
                   />
                   <SummaryCard
                     title="Concluídos"
                     value={concludedCalls.length}
                     icon={<CheckCircle />}
                     subtext="Finalizados hoje"
-                    colorClass="#10B981" // Verde
+                    colorClass="#10B981"
                   />
                   <SummaryCard
                     title="Drivers Disponíveis"
                     value={availableDrivers.length}
                     icon={<Users />}
                     subtext="Prontos para apoio"
-                    colorClass="#8B5CF6" // Roxo
+                    colorClass="#8B5CF6"
                   />
                 </div>
 
-                {/* Kanban Resizable */}
                 <ResizablePanelGroup
                   direction="horizontal"
-                  className="flex-grow rounded-xl border border-border bg-transparent shadow-sm min-h-[600px]" // Fundo transparente
+                  className="flex-grow rounded-xl border border-border bg-transparent shadow-sm min-h-[600px]"
                 >
                   <ResizablePanel defaultSize={25} minSize={15}>
                     <KanbanColumn
@@ -1892,7 +1791,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               onClick={() => handleRestore(call.id)}
                               variant="outline"
                               size="sm"
-                              className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50 hover:bg-green-500/10" // Cores dark
+                              className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50 hover:bg-green-500/10"
                             >
                               <RotateCcw size={14} className="mr-1.5" />{" "}
                               Restaurar
@@ -1901,7 +1800,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               onClick={() => handlePermanentDeleteClick(call)}
                               variant="ghost"
                               size="icon"
-                              className="text-destructive hover:bg-destructive/10" // Usa theme
+                              className="text-destructive hover:bg-destructive/10"
                               title="Excluir Permanentemente"
                             >
                               <Trash2 size={16} />
@@ -1924,7 +1823,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             )}
-            {/* ===== NOVA VIEW DE PERFIL ===== */}
             {adminView === "profile" && (
               <div className="space-y-6 max-w-2xl">
                 <Card className="shadow-lg bg-card">
@@ -1975,7 +1873,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </main>
         </div>
 
-        {/* --- Modais --- (Mantidos no final, fora da estrutura principal) */}
         {infoModalDriver && (
           <DriverInfoModal
             driver={infoModalDriver}

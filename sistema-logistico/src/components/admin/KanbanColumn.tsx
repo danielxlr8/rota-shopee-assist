@@ -17,7 +17,8 @@ import { SupportCall, CallStatus, Driver } from "../../types/logistics";
 import { updateDoc, doc, deleteField, Timestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useToast } from "../../hooks/use-toast";
-import SupportCallCard from "./SupportCallCard";
+// CORREÇÃO: Importando da pasta UI
+import SupportCallCard from "../ui/SupportCallCard";
 
 type Props = {
   title: string;

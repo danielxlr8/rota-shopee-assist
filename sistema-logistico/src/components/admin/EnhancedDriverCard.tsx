@@ -1,14 +1,13 @@
-import React from "react";
 import { Building, Truck } from "lucide-react";
 import type { Driver } from "../../types/logistics";
 import { AvatarComponent } from "../UI";
 import { Card } from "../ui/card";
-import { Badge } from "../ui/Badge";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
 interface EnhancedDriverCardProps {
   driver: Driver;
-  onAction: (phone?: string) => void; // Alterado para receber telefone, pois o "Acionar" é contato
+  onAction: (phone?: string) => void;
   onInfoClick: (driver: Driver) => void;
 }
 

@@ -1,12 +1,11 @@
-import React from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Timestamp } from "firebase/firestore";
 import { Trash2, Ticket, Building, Clock, MapPin, Phone } from "lucide-react";
 import type { SupportCall } from "../../types/logistics";
-import { AvatarComponent, UrgencyBadge } from "../UI"; // Sobe 1 nível
-import { Button } from "../ui/button"; // Sobe 1 nível
-import { cn } from "../../lib/utils"; // Sobe 2 níveis
+import { AvatarComponent, UrgencyBadge } from "../UI";
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 interface CallCardProps {
   call: SupportCall;
