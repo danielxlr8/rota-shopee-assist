@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ExternalLink,
-  Trash2, // <-- 1. ÍCONE DE LIXEIRA IMPORTADO
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,7 +37,7 @@ interface SupportCallCardProps {
   onContactRequester: (phone: string) => void;
   onContactAssigned: (phone: string) => void;
   onUpdateStatus?: (id: string, newStatus: CallStatus) => void;
-  onDelete?: (id: string) => void; // <-- 2. NOVA PROPRIEDADE PARA EXCLUIR
+  onDelete?: (id: string) => void;
   statusColorClass?: string;
   onCardClick?: () => void;
 }
@@ -73,7 +73,7 @@ export default function SupportCallCard({
   onContactRequester,
   onContactAssigned,
   onUpdateStatus,
-  onDelete, // <-- 3. PROP DESESTRUTURADA
+  onDelete,
   statusColorClass = "border-gray-200",
   onCardClick,
 }: SupportCallCardProps) {
@@ -135,7 +135,6 @@ export default function SupportCallCard({
       className={cn(
         "w-full border-2 hover:shadow-lg transition-all duration-300 cursor-pointer",
         statusColorClass,
-        // <-- 4. ANIMAÇÃO ALTERADA DE 'animate-pulse' PARA 'blink-critical' -->
         isCritical && "blink-critical shadow-lg shadow-red-600/20"
       )}
       onClick={onCardClick}
@@ -206,8 +205,6 @@ export default function SupportCallCard({
                     <span>Mover para {prevStatus.replace("_", " ")}</span>
                   </DropdownMenuItem>
                 )}
-
-                {/* <-- 5. NOVO ITEM DE MENU ADICIONADO --> */}
                 {onDelete && (
                   <DropdownMenuItem
                     onClick={(e) => {
@@ -333,13 +330,16 @@ export default function SupportCallCard({
           )}
         </div>
 
-        {/* Descrição */}
+        {/* Descrição - CORRIGIDA */}
         {call.description && (
           <div className="bg-gray-50 rounded-lg p-3 border">
             <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
               <FileText size={12} /> <span>Descrição Gerada</span>
             </div>
-            <p className="text-sm text-gray-800">{call.description}</p>
+            {/* ADICIONADO whitespace-pre-wrap AQUI */}
+            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+              {call.description}
+            </p>
           </div>
         )}
       </CardContent>

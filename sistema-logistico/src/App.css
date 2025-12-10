@@ -1,42 +1,22 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
+:root {
+  --primary: 258 100% 66%;
+  --primary-light: 258 100% 72%;
+  --primary-dark: 259 44% 21%;
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
+  --accent: 160 100% 61%;
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+  --background: 240 5% 12%;
+  --foreground: 0 0% 100%;
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
+  --card: 259 44% 21%;
+  --card-foreground: 0 0% 100%;
 
-.card {
-  padding: 2em;
-}
+  --radius: 12px;
 
-.read-the-docs {
-  color: #888;
+  /* Status */
+  --status-available: 160 100% 61%;
+  --status-unavailable: 0 70% 55%;
+  --status-progress: 220 90% 60%;
+  --status-open: 40 90% 60%;
+  --status-completed: 130 60% 50%;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import type {
-  SupportCall,
+  SupportCall as OriginalSupportCall,
   Driver,
   UrgencyLevel,
   CallStatus,
@@ -12,7 +12,6 @@ import {
   Users,
   Trash2,
   RotateCcw,
-  MapPin,
   ArrowRight,
   ArrowLeft,
   X,
@@ -25,7 +24,6 @@ import {
   ListFilter,
   ChevronDown,
   LayoutDashboard,
-  CheckCheck,
   History,
   PanelLeft,
   PanelRight,
@@ -33,16 +31,17 @@ import {
   User,
   Volume2,
   VolumeX,
+  Package,
+  MapPin,
+  Weight,
+  ExternalLink,
+  Settings2,
+  GripVertical,
+  AlertOctagon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  Timestamp,
-  doc,
-  updateDoc,
-  deleteField,
-  // serverTimestamp removido pois não estava sendo usado
-} from "firebase/firestore";
+import { Timestamp, doc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "../firebase";
 import {
   AvatarComponent,
@@ -68,14 +67,130 @@ import {
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
+import { TooltipProvider } from "./ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Switch } from "./ui/switch";
 
-// --- NOVA FUNÇÃO DE CONTATO (WhatsApp) ---
+// --- DND KIT IMPORTS ---
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// --- TIPOS ---
+interface SupportCall extends OriginalSupportCall {
+  reason?: string;
+  packageCount?: number;
+  deliveryRegions?: string[];
+}
+
+type ColumnId =
+  | "abertos"
+  | "em_andamento"
+  | "aprovacao"
+  | "devolucao"
+  | "concluidos"
+  | "motoristas";
+
+interface ColumnConfig {
+  id: ColumnId;
+  label: string;
+  isVisible: boolean;
+  colorClass: string;
+}
+
+// --- ITEM SORTABLE PARA O MENU ---
+const SortableItem = ({
+  id,
+  label,
+  isVisible,
+  onToggle,
+}: {
+  id: string;
+  label: string;
+  isVisible: boolean;
+  onToggle: () => void;
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center justify-between p-2 mb-2 bg-muted/30 rounded-md border border-border"
+    >
+      <div className="flex items-center gap-2">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab hover:text-primary active:cursor-grabbing p-1"
+        >
+          <GripVertical size={16} className="text-muted-foreground" />
+        </button>
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      <Switch checked={isVisible} onCheckedChange={onToggle} />
+    </div>
+  );
+};
+
+// --- FUNÇÕES AUXILIARES ---
+const showNotification = (
+  type: "success" | "error" | "warning" | "info",
+  title: string,
+  message: string
+) => {
+  const styles = {
+    success: { icon: CheckCircle, color: "text-green-600", bg: "bg-green-100" },
+    error: { icon: AlertTriangle, color: "text-red-600", bg: "bg-red-100" },
+    warning: {
+      icon: AlertTriangle,
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+    },
+    info: { icon: CheckCircle, color: "text-blue-600", bg: "bg-blue-100" },
+  };
+
+  const { icon: Icon, color, bg } = styles[type];
+
+  sonnerToast.custom((t) => (
+    <div className="flex w-full max-w-sm items-start gap-4 rounded-xl bg-card p-4 shadow-lg border border-border ring-1 ring-black/5 transition-all animate-in slide-in-from-top-2">
+      <div className={cn("p-2 rounded-full shrink-0", bg, color)}>
+        <Icon size={20} />
+      </div>
+      <div className="flex-1 pt-0.5">
+        <p className="font-semibold text-sm text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground mt-1">{message}</p>
+      </div>
+      <button
+        onClick={() => sonnerToast.dismiss(t)}
+        className="text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  ));
+};
+
 const handleContactDriver = (phone: string | undefined) => {
   if (phone) {
     const message = encodeURIComponent(
@@ -83,11 +198,16 @@ const handleContactDriver = (phone: string | undefined) => {
     );
     window.open(`https://wa.me/55${phone}?text=${message}`, "_blank");
   } else {
-    sonnerToast.error("Número de telefone não disponível.");
+    showNotification(
+      "error",
+      "Contato Indisponível",
+      "O número de telefone deste motorista não está cadastrado."
+    );
   }
 };
 
-// --- COMPONENTE: EnhancedDriverCard ---
+// --- COMPONENTES VISUAIS ---
+
 const EnhancedDriverCard = ({
   driver,
   onInfoClick,
@@ -136,7 +256,6 @@ const EnhancedDriverCard = ({
   </Card>
 );
 
-// --- COMPONENTE: SearchableSelect ---
 const SearchableSelect = ({
   options,
   value,
@@ -165,6 +284,7 @@ const SearchableSelect = ({
     );
     return allOption ? [allOption, ...filtered] : filtered;
   }, [options, searchTerm]);
+
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -180,12 +300,15 @@ const SearchableSelect = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [wrapperRef]);
+
   const handleSelect = (option: string) => {
     onChange(option);
     setSearchTerm("");
     setIsOpen(false);
   };
+
   const displayValue = isOpen ? searchTerm : value;
+
   return (
     <div className="relative w-full" ref={wrapperRef}>
       <div className="relative">
@@ -245,7 +368,6 @@ const SearchableSelect = ({
   );
 };
 
-// --- COMPONENTE: SearchInput ---
 const SearchInput = ({
   value,
   onChange,
@@ -274,7 +396,6 @@ const SearchInput = ({
   </div>
 );
 
-// --- COMPONENTE: ConfirmationModal ---
 const ConfirmationModal = ({
   isOpen,
   onClose,
@@ -318,7 +439,6 @@ const ConfirmationModal = ({
   );
 };
 
-// --- COMPONENTE: CallDetailsModal ---
 const CallDetailsModal = ({
   call,
   onClose,
@@ -342,6 +462,8 @@ const CallDetailsModal = ({
         return "text-green-500";
       case "AGUARDANDO_APROVACAO":
         return "text-purple-500";
+      case "DEVOLUCAO":
+        return "text-red-500";
       default:
         return "text-muted-foreground";
     }
@@ -353,9 +475,10 @@ const CallDetailsModal = ({
     }
     return desc;
   };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-lg relative bg-card">
+      <Card className="w-full max-w-lg relative bg-card max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
           className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -368,15 +491,26 @@ const CallDetailsModal = ({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <AvatarComponent user={call.solicitante} />
-            <div>
-              <p className="font-semibold text-foreground">
-                {call.solicitante.name}
-              </p>
-              <p className="text-sm text-muted-foreground">Solicitante</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AvatarComponent user={call.solicitante} />
+              <div>
+                <p className="font-semibold text-foreground">
+                  {call.solicitante.name}
+                </p>
+                <p className="text-sm text-muted-foreground">Solicitante</p>
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-green-600 border-green-200 hover:bg-green-50"
+              onClick={() => handleContactDriver(call.solicitante.phone)}
+            >
+              <Phone size={16} className="mr-2" /> WhatsApp
+            </Button>
           </div>
+
           <p
             className={`font-bold text-sm uppercase ${getStatusColor(
               call.status
@@ -384,22 +518,112 @@ const CallDetailsModal = ({
           >
             {call.status.replace("_", " ")}
           </p>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {call.reason && (
+              <div className="col-span-2 bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                <span className="font-semibold text-red-600 dark:text-red-400">
+                  Motivo:
+                </span>{" "}
+                {call.reason}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Package size={16} className="text-primary" />
+              <span>{call.packageCount || "N/A"} Pacotes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Truck size={16} className="text-primary" />
+              <span className="capitalize">{call.vehicleType || "N/A"}</span>
+            </div>
+            {call.isBulky && (
+              <div className="flex items-center gap-2 text-orange-600">
+                <Weight size={16} />
+                <span>Volumoso</span>
+              </div>
+            )}
+
+            <div className="col-span-2">
+              <a
+                href={call.location}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-blue-600 hover:underline hover:text-blue-800 transition-colors p-2 rounded bg-blue-50 dark:bg-blue-900/10"
+              >
+                <MapPin size={16} className="shrink-0" />
+                <span className="truncate">{call.location}</span>
+                <ExternalLink size={12} className="ml-auto opacity-50" />
+              </a>
+            </div>
+
+            {call.deliveryRegions && call.deliveryRegions.length > 0 && (
+              <div className="col-span-2">
+                <span className="font-semibold text-muted-foreground block mb-1">
+                  Regiões:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {call.deliveryRegions.map((region, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {region}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
             {cleanDescription(call.description)}
           </div>
         </CardContent>
         <CardFooter className="mt-2 pt-4 border-t border-border flex flex-wrap justify-between items-center gap-4">
           <p className="text-sm text-muted-foreground">Mover para:</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             {call.status === "EM ANDAMENTO" && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
+                >
+                  <ArrowLeft size={16} className="mr-1.5" /> Aberto
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200"
+                  onClick={() =>
+                    onUpdateStatus(call.id, { status: "DEVOLUCAO" })
+                  }
+                >
+                  <AlertOctagon size={16} className="mr-1.5" /> Devolução
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-purple-600 hover:bg-purple-700"
+                  onClick={() =>
+                    onUpdateStatus(call.id, { status: "AGUARDANDO_APROVACAO" })
+                  }
+                >
+                  Aguard. Aprovação <ArrowRight size={16} className="ml-1.5" />
+                </Button>
+              </>
+            )}
+
+            {call.status === "DEVOLUCAO" && (
               <Button
-                variant="outline"
+                variant="default"
                 size="sm"
-                onClick={() => onUpdateStatus(call.id, { status: "ABERTO" })}
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() =>
+                  onUpdateStatus(call.id, { status: "EM ANDAMENTO" })
+                }
               >
-                <ArrowLeft size={16} className="mr-1.5" /> Aberto
+                <RotateCcw size={16} className="mr-1.5" /> Retomar Rota
               </Button>
             )}
+
             {call.status === "CONCLUIDO" && (
               <Button
                 variant="outline"
@@ -423,18 +647,6 @@ const CallDetailsModal = ({
                 Em Andamento <ArrowRight size={16} className="ml-1.5" />
               </Button>
             )}
-            {call.status === "EM ANDAMENTO" && (
-              <Button
-                variant="default"
-                size="sm"
-                className="bg-purple-600 hover:bg-purple-700"
-                onClick={() =>
-                  onUpdateStatus(call.id, { status: "AGUARDANDO_APROVACAO" })
-                }
-              >
-                Aguard. Aprovação <ArrowRight size={16} className="ml-1.5" />
-              </Button>
-            )}
           </div>
         </CardFooter>
       </Card>
@@ -442,7 +654,6 @@ const CallDetailsModal = ({
   );
 };
 
-// --- COMPONENTE: CallCard ---
 const CallCard = ({
   call,
   onDelete,
@@ -452,99 +663,143 @@ const CallCard = ({
   onDelete: (call: SupportCall) => void;
   onClick: (call: SupportCall) => void;
 }) => {
-  const formatTimestamp = (timestamp: any): string => {
-    if (!timestamp) return "Horário indisponível";
+  const formatTime = (timestamp: any): string => {
+    if (!timestamp) return "--:--";
     let date;
     if (timestamp instanceof Timestamp) {
       date = timestamp.toDate();
     } else if (timestamp && typeof timestamp.seconds === "number") {
       date = new Date(timestamp.seconds * 1000);
     } else {
-      return "Data inválida";
+      return "--:--";
     }
-    if (isNaN(date.getTime())) return "Data inválida";
-    return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
+    if (isNaN(date.getTime())) return "--:--";
+    return format(date, "HH:mm", { locale: ptBR });
   };
-  const timeAgo = formatTimestamp(call.timestamp);
-  const cleanDescription = (desc: string) => {
-    if (desc.includes("Aqui está a descrição")) {
-      const parts = desc.split('"');
-      return parts[1] || desc;
-    }
-    return desc;
-  };
+
+  const timeString = formatTime(call.timestamp);
+
+  const urgencyColor =
+    {
+      BAIXA: "border-l-blue-400",
+      MEDIA: "border-l-yellow-400",
+      ALTA: "border-l-orange-500",
+      URGENTE: "border-l-red-600",
+    }[call.urgency] || "border-l-gray-300";
 
   return (
     <div
       className={cn(
-        "bg-card p-4 rounded-lg shadow-md border border-border space-y-3 hover:shadow-lg transition-shadow cursor-pointer",
-        call.urgency === "URGENTE" && "animate-blink"
+        "bg-card p-3 rounded-md shadow-sm border border-border hover:shadow-md transition-all cursor-pointer group relative flex flex-col gap-2",
+        "border-l-4",
+        urgencyColor
       )}
       onClick={() => onClick(call)}
     >
-      <div className="flex justify-between items-start">
-        <div className="flex items-center space-x-3">
-          <AvatarComponent user={call.solicitante} />
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-bold text-foreground">
-                {call.solicitante.name}
-              </p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(call);
-                }}
-                className="p-1 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                title="Excluir Solicitação"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground">Solicitante</p>
-          </div>
+      <div className="flex justify-between items-center pr-7">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Ticket size={14} className="text-muted-foreground flex-shrink-0" />
+          <span className="text-xs font-bold font-mono text-primary truncate">
+            {call.routeId || "SEM ID"}
+          </span>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <UrgencyBadge urgency={call.urgency} />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-8 h-8 rounded-full text-green-500 hover:bg-green-500/10 hover:text-green-600"
+        <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+          <Clock size={12} />
+          <span>{timeString}</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-primary/50"></div>
+        <span className="text-sm font-semibold text-foreground truncate leading-none">
+          {call.solicitante.name}
+        </span>
+      </div>
+
+      {call.reason && (
+        <div className="mt-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] py-0 h-5 border-red-200 text-red-700 bg-red-50 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/50 truncate max-w-full"
+          >
+            {call.reason}
+          </Badge>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+        <div className="flex items-center gap-1" title="Pacotes">
+          <Package size={12} />
+          <span>{call.packageCount || "?"}</span>
+        </div>
+        <div className="flex items-center gap-1 capitalize" title="Veículo">
+          <Truck size={12} />
+          <span className="truncate max-w-[60px]">
+            {call.vehicleType?.split(" ")[0] || "?"}
+          </span>
+        </div>
+        {call.isBulky && (
+          <div
+            className="flex items-center gap-1 text-orange-600"
+            title="Volumoso"
+          >
+            <Weight size={12} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground truncate max-w-[50%]">
+          <Building size={12} className="shrink-0" />
+          <span className="truncate" title={call.hub}>
+            {call.hub || "Hub..."}
+          </span>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (call.location) window.open(call.location, "_blank");
+              else
+                showNotification(
+                  "error",
+                  "Erro",
+                  "Localização não disponível para este chamado."
+                );
+            }}
+            className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors"
+            title="Abrir no Maps"
+          >
+            <MapPin size={14} />
+          </button>
+          <button
             onClick={(e) => {
               e.stopPropagation();
               handleContactDriver(call.solicitante.phone);
             }}
+            className="p-1.5 rounded hover:bg-green-100 text-green-600 transition-colors"
+            title="Chamar no WhatsApp"
           >
-            <Phone size={16} />
-          </Button>
+            <Phone size={14} />
+          </button>
         </div>
       </div>
-      <div className="text-sm text-muted-foreground space-y-2">
-        <div className="flex items-center space-x-2">
-          <Ticket size={16} className="text-primary" />
-          <span>{call.routeId || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Building size={16} className="text-primary" />
-          <span>{call.hub || "N/A"}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Clock size={16} className="text-muted-foreground" />
-          <span>{timeAgo}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <MapPin size={16} className="text-primary" />
-          <span>{call.location}</span>
-        </div>
-      </div>
-      <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
-        {cleanDescription(call.description)}
-      </p>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(call);
+        }}
+        className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Excluir"
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 };
 
-// --- COMPONENTE: ApprovalCard ---
 const ApprovalCard = ({
   call,
   onApprove,
@@ -625,17 +880,29 @@ const ApprovalCard = ({
       </CardHeader>
 
       <CardContent className="p-4 space-y-3">
-        <div className="text-sm text-muted-foreground space-y-2">
-          <div className="flex items-center space-x-2">
-            <Ticket size={16} className="text-primary" />
-            <span>{call.routeId || "N/A"}</span>
+        {call.reason && (
+          <Badge
+            variant="outline"
+            className="w-full justify-center border-red-200 text-red-700 bg-red-50 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/50"
+          >
+            {call.reason}
+          </Badge>
+        )}
+        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Package size={14} className="text-primary" />
+            <span>{call.packageCount || "N/A"}</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <Building size={16} className="text-primary" />
+          <div className="flex items-center gap-2">
+            <Truck size={14} className="text-primary" />
+            <span className="capitalize">{call.vehicleType || "N/A"}</span>
+          </div>
+          <div className="col-span-2 flex items-center gap-2">
+            <Building size={14} className="text-primary" />
             <span>{call.hub || "N/A"}</span>
           </div>
         </div>
-        <p className="font-sans text-base font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
+        <p className="font-sans text-sm font-medium text-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
           {cleanDescription(call.description)}
         </p>
       </CardContent>
@@ -682,15 +949,14 @@ interface AdminDashboardProps {
   onDeleteAllExcluded: () => void;
 }
 
+type AdminView = "kanban" | "excluded" | "history" | "profile";
+
 const viewTitles: Record<string, string> = {
   kanban: "Acompanhamento Operacional",
-  approvals: "Aprovações Pendentes",
   excluded: "Solicitações Excluídas (Lixeira)",
   history: "Histórico de Solicitações",
   profile: "Perfil e Configurações",
 };
-
-type AdminView = "kanban" | "approvals" | "excluded" | "history" | "profile";
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   calls,
@@ -702,20 +968,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [adminView, setAdminView] = useState<AdminView>("kanban");
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyLevel | "TODOS">(
     "TODOS"
   );
-  const [adminView, setAdminView] = useState<AdminView>("kanban");
+
   const [infoModalDriver, setInfoModalDriver] = useState<Driver | null>(null);
   const [callToConfirm, setCallToConfirm] = useState<SupportCall | null>(null);
   const [confirmationType, setConfirmationType] = useState<
     "soft-delete" | "permanent-delete" | "clear-all" | null
   >(null);
+  const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
+
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs");
-  const [selectedCall, setSelectedCall] = useState<SupportCall | null>(null);
-  const notifiedCallIds = useRef(new Set<string>());
-  const prevCallsRef = useRef<SupportCall[]>([]);
+  const [globalHubFilter, setGlobalHubFilter] =
+    useState<string>("Todos os Hubs");
   const [tempHistoryFilters, setTempHistoryFilters] = useState({
     start: "",
     end: "",
@@ -734,8 +1002,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     useState<string>("Todos os Hubs");
   const [driverVehicleFilter, setDriverVehicleFilter] =
     useState<string>("Todos os Veículos");
-  const [globalHubFilter, setGlobalHubFilter] =
-    useState<string>("Todos os Hubs");
+
+  const notifiedCallIds = useRef(new Set<string>());
+  const prevCallsRef = useRef<SupportCall[]>([]);
+
+  // --- CONFIGURAÇÃO DE COLUNAS (Drag & Drop) ---
+  const [columns, setColumns] = useState<ColumnConfig[]>([
+    { id: "abertos", label: "Abertos", isVisible: true, colorClass: "#F59E0B" },
+    {
+      id: "em_andamento",
+      label: "Em Andamento",
+      isVisible: true,
+      colorClass: "#3B82F6",
+    },
+    {
+      id: "aprovacao",
+      label: "Aprovação",
+      isVisible: true,
+      colorClass: "#8B5CF6",
+    },
+    {
+      id: "devolucao",
+      label: "Devolução",
+      isVisible: true,
+      colorClass: "#EF4444",
+    },
+    {
+      id: "concluidos",
+      label: "Concluídos",
+      isVisible: true,
+      colorClass: "#10B981",
+    },
+    {
+      id: "motoristas",
+      label: "Motoristas",
+      isVisible: true,
+      colorClass: "#6B7280",
+    },
+  ]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      setColumns((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const toggleColumn = (id: string) => {
+    setColumns((prev) =>
+      prev.map((col) =>
+        col.id === id ? { ...col, isVisible: !col.isVisible } : col
+      )
+    );
+  };
 
   const updateDriver = async (
     driverUid: string,
@@ -745,10 +1073,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const driverDocRef = doc(db, "motoristas_pre_aprovados", driverUid);
     await updateDoc(driverDocRef, updates);
   };
+
   const handleApplyHistoryFilters = () => {
     setAppliedHistoryFilters(tempHistoryFilters);
-    sonnerToast.info("Filtros do histórico aplicados!");
+    showNotification(
+      "info",
+      "Filtros Aplicados",
+      "Os filtros do histórico foram atualizados com sucesso."
+    );
   };
+
   const handleHistoryFilterChange = (
     filterName: keyof typeof tempHistoryFilters,
     value: string
@@ -765,10 +1099,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       audio.volume = 0.3;
       audio.play().catch(() => {});
     }
-    sonnerToast.success(
-      newMutedState
-        ? "Som das notificações desativado."
-        : "Som das notificações ativado."
+    showNotification(
+      "info",
+      newMutedState ? "Silenciado" : "Som Ativado",
+      newMutedState ? "Notificações silenciadas." : "Alertas sonoros ativos."
     );
   };
 
@@ -799,9 +1133,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             initialUrgencyIndex + escalationLevels,
             urgencyLevels.length - 1
           );
-          const newUrgency = urgencyLevels[newUrgencyIndex];
-          if (newUrgency !== call.urgency) {
-            updateCall(call.id, { urgency: newUrgency });
+          if (urgencyLevels[newUrgencyIndex] !== call.urgency) {
+            updateCall(call.id, { urgency: urgencyLevels[newUrgencyIndex] });
           }
         }
       });
@@ -813,21 +1146,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const archiveOldCalls = () => {
       const now = new Date();
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const callsToCheck = calls.filter(
-        (call) => !["ARQUIVADO", "EXCLUIDO", "ABERTO"].includes(call.status)
-      );
-      callsToCheck.forEach((call) => {
-        if (call.timestamp) {
-          const callDate =
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toDate()
-              : new Date((call.timestamp as any).seconds * 1000);
-          if (callDate < twentyFourHoursAgo) {
-            console.log(`Arquivando chamado antigo: ${call.id}`);
-            updateCall(call.id, { status: "ARQUIVADO" });
+      calls
+        .filter(
+          (call) => !["ARQUIVADO", "EXCLUIDO", "ABERTO"].includes(call.status)
+        )
+        .forEach((call) => {
+          if (call.timestamp) {
+            const callDate =
+              call.timestamp instanceof Timestamp
+                ? call.timestamp.toDate()
+                : new Date((call.timestamp as any).seconds * 1000);
+            if (callDate < twentyFourHoursAgo) {
+              updateCall(call.id, { status: "ARQUIVADO" });
+            }
           }
-        }
-      });
+        });
     };
     const intervalId = setInterval(archiveOldCalls, 60 * 60 * 1000);
     archiveOldCalls();
@@ -850,76 +1183,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (newOpenCalls.length > 0) {
       if (!isMuted) {
         const audio = new Audio("/shopee-ringtone.mp3");
-        audio.play().catch((e) => console.error("Erro ao tocar o som:", e));
+        audio.play().catch((e) => console.error("Erro som:", e));
       }
-
       newOpenCalls.forEach((newCall) => {
-        sonnerToast.custom(
-          (t) => (
-            <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
-              <AlertTriangle size={32} className="text-primary flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-lg font-bold text-foreground">
-                  Novo Chamado Aberto!
-                </p>
-                <p className="text-base text-muted-foreground">
-                  {newCall.solicitante.name} do hub{" "}
-                  {newCall.hub || "desconhecido"} precisa de apoio.
-                </p>
-              </div>
-              <button
-                onClick={() => sonnerToast.dismiss(t)}
-                className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ),
-          { duration: 10000 }
+        showNotification(
+          "warning",
+          "Novo Chamado!",
+          `${newCall.solicitante.name} precisa de apoio.`
         );
         notifiedCallIds.current.add(newCall.id);
       });
     }
-
     prevCallsRef.current = calls;
-
     const openCallIds = new Set(
       calls.filter((c) => c.status === "ABERTO").map((c) => c.id)
     );
     notifiedCallIds.current.forEach((id) => {
-      if (!openCallIds.has(id)) {
-        notifiedCallIds.current.delete(id);
-      }
+      if (!openCallIds.has(id)) notifiedCallIds.current.delete(id);
     });
   }, [calls, isMuted]);
 
   const handleApprove = async (call: SupportCall) => {
     try {
       const updates = { status: "CONCLUIDO", approvedBy: "Admin" };
-      await updateCall(call.id, updates as Partial<Omit<SupportCall, "id">>);
-      if (call.solicitante.id) {
+      await updateCall(call.id, updates as any);
+      if (call.solicitante.id)
         await updateDriver(call.solicitante.id, { status: "DISPONIVEL" });
-      }
-      if (call.assignedTo) {
+      if (call.assignedTo)
         await updateDriver(call.assignedTo, { status: "DISPONIVEL" });
-      }
-      sonnerToast.success("Chamado aprovado e concluído com sucesso!");
+      showNotification("success", "Aprovado", "Chamado concluído com sucesso.");
     } catch (error) {
-      console.error("Erro ao aprovar chamado:", error);
-      sonnerToast.error("Falha ao aprovar o chamado.");
+      showNotification("error", "Erro", "Falha ao aprovar.");
     }
   };
+
   const handleReject = async (call: SupportCall) => {
     try {
       await updateCall(call.id, { status: "EM ANDAMENTO" });
-      sonnerToast.warning(
-        "Aprovação rejeitada. O chamado voltou para 'Em Andamento'."
+      showNotification(
+        "warning",
+        "Rejeitado",
+        "Chamado voltou para Em Andamento."
       );
     } catch (error) {
-      console.error("Erro ao rejeitar chamado:", error);
-      sonnerToast.error("Falha ao rejeitar o chamado.");
+      showNotification("error", "Erro", "Falha ao rejeitar.");
     }
   };
+
   const handleDeleteClick = (call: SupportCall) => {
     setCallToConfirm(call);
     setConfirmationType("soft-delete");
@@ -931,56 +1241,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleClearAllClick = () => {
     setConfirmationType("clear-all");
   };
-  const confirmAction = () => {
-    if (confirmationType === "soft-delete" && callToConfirm) {
-      onDeleteCall(callToConfirm.id);
-      sonnerToast.success("Chamado movido para a lixeira.");
-    } else if (confirmationType === "permanent-delete" && callToConfirm) {
-      onDeletePermanently(callToConfirm.id);
-      sonnerToast.success("Chamado excluído permanentemente.");
-    } else if (confirmationType === "clear-all") {
-      onDeleteAllExcluded();
-      sonnerToast.success("Lixeira esvaziada com sucesso.");
-    }
-    closeModal();
-  };
   const closeModal = () => {
     setCallToConfirm(null);
     setConfirmationType(null);
   };
 
-  const handleRestore = (callId: string) => {
-    updateCall(callId, { status: "ABERTO", deletedAt: deleteField() });
-    notifiedCallIds.current.add(callId);
-    sonnerToast.custom((t) => (
-      <div className="flex w-full max-w-sm items-center gap-4 rounded-lg bg-card p-4 shadow-lg ring-1 ring-border">
-        <RotateCcw size={28} className="text-green-500 flex-shrink-0" />
-        <div className="flex-1">
-          <p className="text-base font-semibold text-foreground">
-            Chamado Restaurado
-          </p>
-          <p className="text-sm text-muted-foreground">
-            O chamado foi movido de volta para "Abertos".
-          </p>
-        </div>
-        <button
-          onClick={() => sonnerToast.dismiss(t)}
-          className="p-1 rounded-md text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    ));
+  const confirmAction = () => {
+    if (confirmationType === "soft-delete" && callToConfirm) {
+      onDeleteCall(callToConfirm.id);
+      showNotification("success", "Lixeira", "Chamado movido para lixeira.");
+    } else if (confirmationType === "permanent-delete" && callToConfirm) {
+      onDeletePermanently(callToConfirm.id);
+      showNotification(
+        "success",
+        "Excluído",
+        "Chamado excluído permanentemente."
+      );
+    } else if (confirmationType === "clear-all") {
+      onDeleteAllExcluded();
+      showNotification("success", "Limpo", "Lixeira esvaziada.");
+    }
+    closeModal();
   };
 
-  const handleUpdateStatus = (
-    callId: string,
-    updates: Partial<Omit<SupportCall, "id">>
-  ) => {
-    updateCall(callId, updates);
-    const status = (updates.status || "").replace("_", " ");
-    sonnerToast.info(`Chamado movido para ${status}`);
-    setSelectedCall(null);
+  const handleRestore = (callId: string) => {
+    updateCall(callId, { status: "ABERTO", deletedAt: deleteField() });
+    showNotification("success", "Restaurado", "Chamado voltou para Abertos.");
   };
 
   const filteredCalls = useMemo(
@@ -990,14 +1276,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter
       ),
     [calls, globalHubFilter]
-  );
-  const filteredDrivers = useMemo(
-    () =>
-      drivers.filter(
-        (driver) =>
-          globalHubFilter === "Todos os Hubs" || driver.hub === globalHubFilter
-      ),
-    [drivers, globalHubFilter]
   );
   const activeCalls = useMemo(
     () =>
@@ -1010,6 +1288,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     () => filteredCalls.filter((c) => c.status === "EXCLUIDO"),
     [filteredCalls]
   );
+
   const openCalls = useMemo(
     () => activeCalls.filter((c) => c.status === "ABERTO"),
     [activeCalls]
@@ -1018,69 +1297,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     () => activeCalls.filter((c) => c.status === "EM ANDAMENTO"),
     [activeCalls]
   );
-  const concludedCalls = useMemo(
-    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
-    [activeCalls]
-  );
   const pendingApprovalCalls = useMemo(
     () => activeCalls.filter((c) => c.status === "AGUARDANDO_APROVACAO"),
     [activeCalls]
   );
-  const availableDriverHubs = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h)),
-      ].sort(),
-    [drivers]
+  const devolutionCalls = useMemo(
+    () => activeCalls.filter((c) => c.status === "DEVOLUCAO"),
+    [activeCalls]
   );
-  const allHubsForFilter = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
-      ].sort(),
-    [calls]
+  const concludedCalls = useMemo(
+    () => activeCalls.filter((c) => c.status === "CONCLUIDO"),
+    [activeCalls]
   );
-  const allHubs = useMemo(
+
+  const filteredDrivers = useMemo(
     () =>
-      [
-        "Todos",
-        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
-      ].sort(),
-    [calls]
+      drivers.filter(
+        (driver) =>
+          globalHubFilter === "Todos os Hubs" || driver.hub === globalHubFilter
+      ),
+    [drivers, globalHubFilter]
   );
-  const vehicleTypes = useMemo(
+  const availableDrivers = useMemo(
     () =>
-      [
-        "Todos os Veículos",
-        ...new Set(
-          drivers.map((d) => d.vehicleType).filter((v): v is string => !!v)
-        ),
-      ].sort(),
-    [drivers]
+      filteredDrivers.filter((d) => {
+        const isAvailable = d.status === "DISPONIVEL";
+        const hubMatch =
+          driverHubFilter === "Todos os Hubs" || d.hub === driverHubFilter;
+        const vehicleMatch =
+          driverVehicleFilter === "Todos os Veículos" ||
+          d.vehicleType === driverVehicleFilter;
+        return isAvailable && hubMatch && vehicleMatch;
+      }),
+    [filteredDrivers, driverHubFilter, driverVehicleFilter]
   );
-  const excludedCallHubs = useMemo(
+
+  const filteredOpenCalls = useMemo(
     () =>
-      [
-        "Todos os Hubs",
-        ...new Set(
-          excludedCalls.map((c) => c.hub).filter((h): h is string => !!h)
-        ),
-      ] as string[],
-    [excludedCalls]
+      urgencyFilter === "TODOS"
+        ? openCalls
+        : openCalls.filter((call) => call.urgency === urgencyFilter),
+    [openCalls, urgencyFilter]
   );
-  const availableDrivers = useMemo(() => {
-    return filteredDrivers.filter((d) => {
-      const isAvailable = d.status === "DISPONIVEL";
-      const hubMatch =
-        driverHubFilter === "Todos os Hubs" || d.hub === driverHubFilter;
-      const vehicleMatch =
-        driverVehicleFilter === "Todos os Veículos" ||
-        d.vehicleType === driverVehicleFilter;
-      return isAvailable && hubMatch && vehicleMatch;
-    });
-  }, [filteredDrivers, driverHubFilter, driverVehicleFilter]);
+
+  const filteredExcludedCalls = useMemo(
+    () =>
+      excludedCalls.filter(
+        (call) =>
+          (excludedNameFilter === "" ||
+            call.solicitante.name
+              .toLowerCase()
+              .includes(excludedNameFilter.toLowerCase())) &&
+          (excludedHubFilter === "Todos os Hubs" ||
+            call.hub === excludedHubFilter)
+      ),
+    [excludedCalls, excludedNameFilter, excludedHubFilter]
+  );
+
   const filteredHistoryCalls = useMemo(() => {
     return filteredCalls
       .filter((call) => {
@@ -1107,21 +1380,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           (call.status === "CONCLUIDO" || call.status === "ARQUIVADO")
         )
           return false;
-        const callTimestamp = call.timestamp;
-        if (!callTimestamp) return true;
+
         const callDate =
-          callTimestamp instanceof Timestamp
-            ? callTimestamp.toDate()
-            : new Date((callTimestamp as any).seconds * 1000);
-        if (appliedHistoryFilters.start) {
-          const startDate = new Date(appliedHistoryFilters.start);
-          startDate.setHours(0, 0, 0, 0);
-          if (callDate < startDate) return false;
-        }
+          call.timestamp instanceof Timestamp
+            ? call.timestamp.toDate()
+            : new Date((call.timestamp as any).seconds * 1000);
+        if (
+          appliedHistoryFilters.start &&
+          callDate < new Date(appliedHistoryFilters.start)
+        )
+          return false;
         if (appliedHistoryFilters.end) {
-          const endDate = new Date(appliedHistoryFilters.end);
-          endDate.setHours(23, 59, 59, 999);
-          if (callDate > endDate) return false;
+          const end = new Date(appliedHistoryFilters.end);
+          end.setHours(23, 59, 59, 999);
+          if (callDate > end) return false;
         }
         return true;
       })
@@ -1137,28 +1409,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return timeB - timeA;
       });
   }, [filteredCalls, appliedHistoryFilters]);
-  const filteredOpenCalls = useMemo(
+
+  // Listas de Dropdowns
+  const allHubs = useMemo(
     () =>
-      urgencyFilter === "TODOS"
-        ? openCalls
-        : openCalls.filter((call) => call.urgency === urgencyFilter),
-    [openCalls, urgencyFilter]
+      [
+        "Todos",
+        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
+      ].sort(),
+    [calls]
   );
-  const filteredExcludedCalls = useMemo(() => {
-    return excludedCalls
-      .filter(
-        (call) =>
-          excludedNameFilter === "" ||
-          call.solicitante.name
-            .toLowerCase()
-            .includes(excludedNameFilter.toLowerCase())
-      )
-      .filter((call) =>
-        excludedHubFilter === "" || excludedHubFilter === "Todos os Hubs"
-          ? true
-          : call.hub === excludedHubFilter
-      );
-  }, [excludedCalls, excludedNameFilter, excludedHubFilter]);
+  const availableDriverHubs = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h)),
+      ].sort(),
+    [drivers]
+  );
+  const allHubsForFilter = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
+      ].sort(),
+    [calls]
+  );
+  const vehicleTypes = useMemo(
+    () =>
+      [
+        "Todos os Veículos",
+        ...new Set(
+          drivers.map((d) => d.vehicleType).filter((v): v is string => !!v)
+        ),
+      ].sort(),
+    [drivers]
+  );
+  const excludedCallHubs = useMemo(
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(
+          excludedCalls.map((c) => c.hub).filter((h): h is string => !!h)
+        ),
+      ] as string[],
+    [excludedCalls]
+  );
 
   const filterControls = (
     <div className="flex flex-wrap gap-1">
@@ -1169,9 +1465,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onClick={() => setUrgencyFilter(level)}
             variant={urgencyFilter === level ? "default" : "secondary"}
             size="sm"
-            className={`text-xs h-7 px-2.5 rounded-full ${
-              urgencyFilter === level ? "shadow-sm" : "text-muted-foreground"
-            }`}
+            className="text-xs h-7 px-2.5 rounded-full"
           >
             {level === "TODOS"
               ? "Todos"
@@ -1181,6 +1475,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
     </div>
   );
+
   const driverFilterControls = (
     <div className="flex flex-col gap-3 w-full">
       <SearchableSelect
@@ -1199,6 +1494,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       />
     </div>
   );
+
   const activeCallForDriver = infoModalDriver
     ? calls.find(
         (c) =>
@@ -1207,38 +1503,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ) || null
     : null;
 
+  const getColumnData = (columnId: ColumnId) => {
+    switch (columnId) {
+      case "abertos":
+        return filteredOpenCalls;
+      case "em_andamento":
+        return inProgressCalls;
+      case "aprovacao":
+        return pendingApprovalCalls;
+      case "devolucao":
+        return devolutionCalls;
+      case "concluidos":
+        return concludedCalls;
+      case "motoristas":
+        return availableDrivers;
+      default:
+        return [];
+    }
+  };
+
+  const renderColumnContent = (columnId: ColumnId, data: any[]) => {
+    if (columnId === "motoristas") {
+      return (
+        <KanbanColumn
+          title="Motoristas"
+          count={data.length}
+          colorClass="#6B7280"
+          headerControls={driverFilterControls}
+        >
+          {data.map((driver) => (
+            <EnhancedDriverCard
+              key={driver.uid}
+              driver={driver}
+              onInfoClick={() => setInfoModalDriver(driver)}
+            />
+          ))}
+        </KanbanColumn>
+      );
+    }
+    if (columnId === "aprovacao") {
+      return (
+        <KanbanColumn
+          title="Aprovação"
+          count={data.length}
+          colorClass="#8B5CF6"
+        >
+          {data.map((call) => (
+            <ApprovalCard
+              key={call.id}
+              call={call}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onDelete={handleDeleteClick}
+              drivers={drivers}
+            />
+          ))}
+        </KanbanColumn>
+      );
+    }
+    const titleMap = {
+      abertos: "Abertos",
+      em_andamento: "Em Andamento",
+      devolucao: "Devolução",
+      concluidos: "Concluídos",
+    };
+    const colorMap = {
+      abertos: "#F59E0B",
+      em_andamento: "#3B82F6",
+      devolucao: "#EF4444",
+      concluidos: "#10B981",
+    };
+    return (
+      <KanbanColumn
+        title={titleMap[columnId as keyof typeof titleMap]}
+        count={data.length}
+        colorClass={colorMap[columnId as keyof typeof colorMap]}
+        headerControls={columnId === "abertos" ? filterControls : undefined}
+      >
+        {data.map((call) => (
+          <CallCard
+            key={call.id}
+            call={call}
+            onDelete={handleDeleteClick}
+            onClick={setSelectedCall}
+          />
+        ))}
+      </KanbanColumn>
+    );
+  };
+
   return (
     <TooltipProvider>
       <div className="flex min-h-screen bg-background text-foreground">
         <aside
           className={cn(
-            
+            "sticky top-0 h-screen flex-shrink-0 border-r border-border bg-card p-4 flex flex-col gap-6 transition-all duration-300 ease-in-out",
             isSidebarCollapsed ? "w-20" : "w-64"
           )}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="secondary"
-                size="icon"
-                className={cn(
-                  "absolute top-4 -right-4 z-20 rounded-full w-8 h-8",
-                  !isSidebarCollapsed && "text-primary"
-                )}
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              >
-                {isSidebarCollapsed ? (
-                  <PanelRight size={18} />
-                ) : (
-                  <PanelLeft size={18} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-            </TooltipContent>
-          </Tooltip>
-
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute top-4 -right-4 z-20 rounded-full w-8 h-8"
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          >
+            {isSidebarCollapsed ? (
+              <PanelRight size={18} />
+            ) : (
+              <PanelLeft size={18} />
+            )}
+          </Button>
           <div
             className={cn(
               "flex items-center gap-3 px-2 transition-all",
@@ -1247,7 +1621,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <img
               src={spxLogo}
-              alt="SPX Logo"
+              alt="spx-logo.png"
               className="w-10 h-10 flex-shrink-0"
             />
             <div
@@ -1259,164 +1633,103 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <h1 className="text-xl font-bold text-primary whitespace-nowrap">
                 Central SPX
               </h1>
-              <p className="text-muted-foreground text-xs">Apoio Logístico</p>
             </div>
           </div>
-
           <nav className="flex flex-col gap-2 flex-grow">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={adminView === "kanban" ? "secondary" : "ghost"}
-                  className={cn(
-                    "gap-2",
-                    adminView === "kanban" && "text-primary font-semibold",
-                    isSidebarCollapsed ? "justify-center" : "justify-start"
-                  )}
-                  onClick={() => setAdminView("kanban")}
-                >
-                  <LayoutDashboard size={18} />
-                  <span
-                    className={cn(
-                      "transition-opacity",
-                      isSidebarCollapsed && "opacity-0 hidden"
-                    )}
-                  >
-                    Acompanhamento
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              {isSidebarCollapsed && (
-                <TooltipContent side="right">Acompanhamento</TooltipContent>
+            <Button
+              variant={adminView === "kanban" ? "secondary" : "ghost"}
+              className={cn(
+                "gap-2 justify-start",
+                isSidebarCollapsed && "justify-center"
               )}
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={adminView === "approvals" ? "secondary" : "ghost"}
-                  className={cn(
-                    "gap-2 relative",
-                    adminView === "approvals" && "text-primary font-semibold",
-                    isSidebarCollapsed ? "justify-center" : "justify-start"
-                  )}
-                  onClick={() => setAdminView("approvals")}
-                >
-                  <CheckCheck size={18} />
-                  <span
-                    className={cn(
-                      "transition-opacity",
-                      isSidebarCollapsed && "opacity-0 hidden"
-                    )}
-                  >
-                    Aprovações
-                  </span>
-                  {pendingApprovalCalls.length > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className={cn(
-                        "absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 text-xs",
-                        isSidebarCollapsed && "top-0 -right-1"
-                      )}
-                    >
-                      {pendingApprovalCalls.length}
-                    </Badge>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              {isSidebarCollapsed && (
-                <TooltipContent side="right">Aprovações</TooltipContent>
+              onClick={() => setAdminView("kanban")}
+            >
+              <LayoutDashboard size={18} />{" "}
+              <span className={cn(isSidebarCollapsed && "hidden")}>
+                Quadro Geral
+              </span>
+            </Button>
+            <Button
+              variant={adminView === "excluded" ? "secondary" : "ghost"}
+              className={cn(
+                "gap-2 justify-start",
+                isSidebarCollapsed && "justify-center"
               )}
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={adminView === "excluded" ? "secondary" : "ghost"}
-                  className={cn(
-                    "gap-2",
-                    adminView === "excluded" && "text-primary font-semibold",
-                    isSidebarCollapsed ? "justify-center" : "justify-start"
-                  )}
-                  onClick={() => setAdminView("excluded")}
-                >
-                  <Trash2 size={18} />
-                  <span
-                    className={cn(
-                      "transition-opacity",
-                      isSidebarCollapsed && "opacity-0 hidden"
-                    )}
-                  >
-                    Lixeira
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              {isSidebarCollapsed && (
-                <TooltipContent side="right">Lixeira</TooltipContent>
+              onClick={() => setAdminView("excluded")}
+            >
+              <Trash2 size={18} />{" "}
+              <span className={cn(isSidebarCollapsed && "hidden")}>
+                Lixeira
+              </span>
+            </Button>
+            <Button
+              variant={adminView === "history" ? "secondary" : "ghost"}
+              className={cn(
+                "gap-2 justify-start",
+                isSidebarCollapsed && "justify-center"
               )}
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={adminView === "history" ? "secondary" : "ghost"}
-                  className={cn(
-                    "gap-2",
-                    adminView === "history" && "text-primary font-semibold",
-                    isSidebarCollapsed ? "justify-center" : "justify-start"
-                  )}
-                  onClick={() => setAdminView("history")}
-                >
-                  <History size={18} />
-                  <span
-                    className={cn(
-                      "transition-opacity",
-                      isSidebarCollapsed && "opacity-0 hidden"
-                    )}
-                  >
-                    Histórico
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              {isSidebarCollapsed && (
-                <TooltipContent side="right">Histórico</TooltipContent>
-              )}
-            </Tooltip>
+              onClick={() => setAdminView("history")}
+            >
+              <History size={18} />{" "}
+              <span className={cn(isSidebarCollapsed && "hidden")}>
+                Histórico
+              </span>
+            </Button>
           </nav>
-
           <div className="mt-auto">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={adminView === "profile" ? "secondary" : "ghost"}
-                  className={cn(
-                    "gap-2 w-full",
-                    adminView === "profile" && "text-primary font-semibold",
-                    isSidebarCollapsed ? "justify-center" : "justify-start"
-                  )}
-                  onClick={() => setAdminView("profile")}
-                >
-                  <User size={18} />
-                  <span
-                    className={cn(
-                      "transition-opacity",
-                      isSidebarCollapsed && "opacity-0 hidden"
-                    )}
-                  >
-                    Perfil
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              {isSidebarCollapsed && (
-                <TooltipContent side="right">Perfil</TooltipContent>
+            <Button
+              variant={adminView === "profile" ? "secondary" : "ghost"}
+              className={cn(
+                "gap-2 w-full justify-start",
+                isSidebarCollapsed && "justify-center"
               )}
-            </Tooltip>
+              onClick={() => setAdminView("profile")}
+            >
+              <User size={18} />{" "}
+              <span className={cn(isSidebarCollapsed && "hidden")}>Perfil</span>
+            </Button>
           </div>
         </aside>
 
         <div className="flex-1 flex flex-col overflow-y-auto">
           <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border p-4 sm:p-6 flex justify-between items-center">
-            <h2 className="text-xl font-semibold">{viewTitles[adminView]}</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-semibold">{viewTitles[adminView]}</h2>
+              {adminView === "kanban" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Settings2 size={16} /> Configurar Painel
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-4" align="start">
+                    <h4 className="font-medium mb-2 text-sm">
+                      Exibir e Reordenar
+                    </h4>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={columns}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {columns.map((col) => (
+                          <SortableItem
+                            key={col.id}
+                            id={col.id}
+                            label={col.label}
+                            isVisible={col.isVisible}
+                            onToggle={() => toggleColumn(col.id)}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
             <div className="w-full sm:w-auto sm:min-w-[250px]">
               <SearchableSelect
                 options={allHubsForFilter}
@@ -1427,147 +1740,184 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               />
             </div>
           </header>
+
           <main className="flex-grow p-4 sm:p-6 space-y-6">
             {adminView === "kanban" && (
-              <div className="flex-grow flex flex-col space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              <div className="flex-grow flex flex-col space-y-4 h-[calc(100vh-140px)]">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <SummaryCard
                     title="Abertos"
                     value={openCalls.length}
                     icon={<AlertTriangle />}
-                    subtext="Aguardando atendimento"
+                    subtext="Fila"
                     colorClass="#F59E0B"
                   />
                   <SummaryCard
-                    title="Em Andamento"
-                    value={inProgressCalls.length}
+                    title="Pendentes"
+                    value={pendingApprovalCalls.length}
                     icon={<Clock />}
-                    subtext="Sendo atendidos"
+                    subtext="Aprovação"
+                    colorClass="#8B5CF6"
+                  />
+                  <SummaryCard
+                    title="Andamento"
+                    value={inProgressCalls.length}
+                    icon={<Truck />}
+                    subtext="Rota"
                     colorClass="#3B82F6"
                   />
                   <SummaryCard
-                    title="Concluídos"
-                    value={concludedCalls.length}
-                    icon={<CheckCircle />}
-                    subtext="Finalizados hoje"
-                    colorClass="#10B981"
+                    title="Devoluções"
+                    value={devolutionCalls.length}
+                    icon={<AlertOctagon />}
+                    subtext="Problemas"
+                    colorClass="#EF4444"
                   />
                   <SummaryCard
-                    title="Drivers Disponíveis"
+                    title="Disponíveis"
                     value={availableDrivers.length}
                     icon={<Users />}
-                    subtext="Prontos para apoio"
-                    colorClass="#8B5CF6"
+                    subtext="Motoristas"
+                    colorClass="#10B981"
                   />
                 </div>
 
                 <ResizablePanelGroup
                   direction="horizontal"
-                  className="flex-grow rounded-xl border border-border bg-transparent shadow-sm min-h-[600px]"
+                  className="flex-grow rounded-xl border border-border bg-transparent shadow-sm min-h-[500px]"
                 >
-                  <ResizablePanel defaultSize={25} minSize={15}>
-                    <KanbanColumn
-                      title="Chamados Abertos"
-                      count={filteredOpenCalls.length}
-                      colorClass="#F59E0B"
-                      headerControls={filterControls}
-                    >
-                      {filteredOpenCalls.map((call) => (
-                        <CallCard
-                          key={call.id}
-                          call={call}
-                          onDelete={handleDeleteClick}
-                          onClick={setSelectedCall}
-                        />
-                      ))}
-                    </KanbanColumn>
-                  </ResizablePanel>
-                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                    <div className="w-1 h-10 bg-border rounded-full" />
-                  </ResizableHandle>
-                  <ResizablePanel defaultSize={25} minSize={15}>
-                    <KanbanColumn
-                      title="Em Andamento"
-                      count={inProgressCalls.length}
-                      colorClass="#3B82F6"
-                    >
-                      {inProgressCalls.map((call) => (
-                        <CallCard
-                          key={call.id}
-                          call={call}
-                          onDelete={handleDeleteClick}
-                          onClick={setSelectedCall}
-                        />
-                      ))}
-                    </KanbanColumn>
-                  </ResizablePanel>
-                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                    <div className="w-1 h-10 bg-border rounded-full" />
-                  </ResizableHandle>
-                  <ResizablePanel defaultSize={25} minSize={15}>
-                    <KanbanColumn
-                      title="Concluídos"
-                      count={concludedCalls.length}
-                      colorClass="#10B981"
-                    >
-                      {concludedCalls.map((call) => (
-                        <CallCard
-                          key={call.id}
-                          call={call}
-                          onDelete={handleDeleteClick}
-                          onClick={setSelectedCall}
-                        />
-                      ))}
-                    </KanbanColumn>
-                  </ResizablePanel>
-                  <ResizableHandle className="w-2 bg-muted hover:bg-primary/20 transition-colors flex items-center justify-center">
-                    <div className="w-1 h-10 bg-border rounded-full" />
-                  </ResizableHandle>
-                  <ResizablePanel defaultSize={25} minSize={15}>
-                    <KanbanColumn
-                      title="Motoristas Disponíveis"
-                      count={availableDrivers.length}
-                      colorClass="#8B5CF6"
-                      headerControls={driverFilterControls}
-                    >
-                      {availableDrivers.map((driver) => (
-                        <EnhancedDriverCard
-                          key={driver.uid}
-                          driver={driver}
-                          onInfoClick={() => setInfoModalDriver(driver)}
-                        />
-                      ))}
-                    </KanbanColumn>
-                  </ResizablePanel>
+                  {columns
+                    .filter((c) => c.isVisible)
+                    .map((col, index, visibleCols) => (
+                      <React.Fragment key={col.id}>
+                        <ResizablePanel
+                          defaultSize={100 / visibleCols.length}
+                          minSize={10}
+                        >
+                          <div
+                            className={`h-full p-2 overflow-hidden flex flex-col ${
+                              col.id === "motoristas"
+                                ? "bg-gray-50"
+                                : `bg-[${col.colorClass}]/5`
+                            }`}
+                          >
+                            {renderColumnContent(col.id, getColumnData(col.id))}
+                          </div>
+                        </ResizablePanel>
+                        {index < visibleCols.length - 1 && (
+                          <ResizableHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
+                        )}
+                      </React.Fragment>
+                    ))}
                 </ResizablePanelGroup>
               </div>
             )}
-            {adminView === "approvals" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingApprovalCalls.length > 0 ? (
-                  pendingApprovalCalls.map((call) => (
-                    <ApprovalCard
-                      key={call.id}
-                      call={call}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onDelete={handleDeleteClick}
-                      drivers={drivers}
+
+            {adminView === "excluded" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-bold text-foreground">
+                    Solicitações Excluídas
+                  </h2>
+                  {excludedCalls.length > 0 && (
+                    <Button
+                      onClick={handleClearAllClick}
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-lg"
+                    >
+                      <Trash2 size={14} className="mr-1.5" /> Limpar Tudo
+                    </Button>
+                  )}
+                </div>
+                <Card className="p-4 bg-card shadow-md">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <SearchInput
+                      value={excludedNameFilter}
+                      onChange={setExcludedNameFilter}
+                      placeholder="Filtrar por nome..."
+                      icon={Search}
                     />
-                  ))
-                ) : (
-                  <Card className="md:col-span-2 lg:col-span-3 text-center py-10 px-4 shadow-sm bg-card">
-                    <CheckCircle className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-2 text-sm font-semibold text-foreground">
-                      Tudo certo!
-                    </h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Não há solicitações pendentes de aprovação.
-                    </p>
-                  </Card>
-                )}
+                    <SearchableSelect
+                      options={excludedCallHubs}
+                      value={excludedHubFilter}
+                      onChange={setExcludedHubFilter}
+                      placeholder="Filtrar por hub..."
+                      icon={Building}
+                    />
+                  </div>
+                </Card>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredExcludedCalls.length > 0 ? (
+                    filteredExcludedCalls.map((call) => {
+                      const deletedTimestamp = call.deletedAt;
+                      const formattedDeletedDate = deletedTimestamp
+                        ? format(
+                            deletedTimestamp instanceof Timestamp
+                              ? deletedTimestamp.toDate()
+                              : new Date(
+                                  (deletedTimestamp as any).seconds * 1000
+                                ),
+                            "dd/MM/yyyy 'às' HH:mm",
+                            { locale: ptBR }
+                          )
+                        : "Data indisponível";
+                      return (
+                        <Card
+                          key={call.id}
+                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        >
+                          <div className="flex-grow">
+                            <p className="font-semibold text-foreground">
+                              {call.solicitante.name}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {call.description}
+                            </p>
+                            {call.deletedAt && (
+                              <p className="text-xs text-muted-foreground/70 mt-1">
+                                Excluído em: {formattedDeletedDate}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              onClick={() => handleRestore(call.id)}
+                              variant="outline"
+                              size="sm"
+                              className="text-green-500 border-green-500/50 hover:bg-green-500/10"
+                            >
+                              <RotateCcw size={14} className="mr-1.5" />{" "}
+                              Restaurar
+                            </Button>
+                            <Button
+                              onClick={() => handlePermanentDeleteClick(call)}
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:bg-destructive/10"
+                              title="Excluir Permanentemente"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </Card>
+                      );
+                    })
+                  ) : (
+                    <Card className="md:col-span-2 text-center py-10 px-4 shadow-sm bg-card">
+                      <Trash2 className="mx-auto h-12 w-12 text-muted-foreground" />
+                      <h3 className="mt-2 text-sm font-semibold text-foreground">
+                        Lixeira vazia
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Não há solicitações excluídas.
+                      </p>
+                    </Card>
+                  )}
+                </div>
               </div>
             )}
+
             {adminView === "history" && (
               <div className="space-y-6">
                 <Card className="shadow-lg bg-card">
@@ -1654,24 +2004,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <table className="w-full text-sm text-left text-foreground">
                       <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                         <tr>
-                          <th scope="col" className="px-6 py-3">
-                            Solicitante
-                          </th>
-                          <th scope="col" className="px-6 py-3">
-                            Apoio
-                          </th>
-                          <th scope="col" className="px-6 py-3">
-                            Hub
-                          </th>
-                          <th scope="col" className="px-6 py-3">
-                            Status
-                          </th>
-                          <th scope="col" className="px-6 py-3">
-                            Data
-                          </th>
-                          <th scope="col" className="px-6 py-3">
-                            Aprovado Por
-                          </th>
+                          <th className="px-6 py-3">Solicitante</th>
+                          <th className="px-6 py-3">Apoio</th>
+                          <th className="px-6 py-3">Hub</th>
+                          <th className="px-6 py-3">Status</th>
+                          <th className="px-6 py-3">Data</th>
+                          <th className="px-6 py-3">Aprovado Por</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1679,13 +2017,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           const assignedDriver = drivers.find(
                             (d) => d.uid === call.assignedTo
                           );
-                          const callTimestamp = call.timestamp;
-                          const formattedDate = callTimestamp
+                          const formattedDate = call.timestamp
                             ? format(
-                                callTimestamp instanceof Timestamp
-                                  ? callTimestamp.toDate()
+                                call.timestamp instanceof Timestamp
+                                  ? call.timestamp.toDate()
                                   : new Date(
-                                      (callTimestamp as any).seconds * 1000
+                                      (call.timestamp as any).seconds * 1000
                                     ),
                                 "dd/MM/yy HH:mm",
                                 { locale: ptBR }
@@ -1719,110 +2056,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </Card>
               </div>
             )}
-            {adminView === "excluded" && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-bold text-foreground">
-                    Solicitações Excluídas
-                  </h2>
-                  {excludedCalls.length > 0 && (
-                    <Button
-                      onClick={handleClearAllClick}
-                      variant="destructive"
-                      size="sm"
-                      className="rounded-lg"
-                    >
-                      <Trash2 size={14} className="mr-1.5" /> Limpar Tudo
-                    </Button>
-                  )}
-                </div>
-                <Card className="p-4 bg-card shadow-md">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <SearchInput
-                      value={excludedNameFilter}
-                      onChange={setExcludedNameFilter}
-                      placeholder="Filtrar por nome..."
-                      icon={Search}
-                    />
-                    <SearchableSelect
-                      options={excludedCallHubs}
-                      value={excludedHubFilter}
-                      onChange={setExcludedHubFilter}
-                      placeholder="Filtrar por hub..."
-                      icon={Building}
-                    />
-                  </div>
-                </Card>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredExcludedCalls.length > 0 ? (
-                    filteredExcludedCalls.map((call) => {
-                      const deletedTimestamp = call.deletedAt;
-                      const formattedDeletedDate = deletedTimestamp
-                        ? format(
-                            deletedTimestamp instanceof Timestamp
-                              ? deletedTimestamp.toDate()
-                              : new Date(
-                                  (deletedTimestamp as any).seconds * 1000
-                                ),
-                            "dd/MM/yyyy 'às' HH:mm",
-                            { locale: ptBR }
-                          )
-                        : "Data indisponível";
-                      return (
-                        <Card
-                          key={call.id}
-                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-                        >
-                          <div className="flex-grow">
-                            <p className="font-semibold text-foreground">
-                              {call.solicitante.name}
-                            </p>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {call.description}
-                            </p>
-                            {call.deletedAt && (
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                Excluído em: {formattedDeletedDate}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button
-                              onClick={() => handleRestore(call.id)}
-                              variant="outline"
-                              size="sm"
-                              className="text-green-500 border-green-500/50 dark:text-green-400 dark:border-green-400/50 hover:bg-green-500/10"
-                            >
-                              <RotateCcw size={14} className="mr-1.5" />{" "}
-                              Restaurar
-                            </Button>
-                            <Button
-                              onClick={() => handlePermanentDeleteClick(call)}
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:bg-destructive/10"
-                              title="Excluir Permanentemente"
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          </div>
-                        </Card>
-                      );
-                    })
-                  ) : (
-                    <Card className="md:col-span-2 text-center py-10 px-4 shadow-sm bg-card">
-                      <Trash2 className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-2 text-sm font-semibold text-foreground">
-                        Lixeira vazia
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Não há solicitações excluídas.
-                      </p>
-                    </Card>
-                  )}
-                </div>
-              </div>
-            )}
+
             {adminView === "profile" && (
               <div className="space-y-6 max-w-2xl">
                 <Card className="shadow-lg bg-card">
@@ -1856,7 +2090,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </CardContent>
                 </Card>
-
                 <Card className="shadow-lg bg-card">
                   <CardHeader>
                     <CardTitle>Editar Perfil</CardTitle>
@@ -1883,52 +2116,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <CallDetailsModal
           call={selectedCall}
           onClose={() => setSelectedCall(null)}
-          onUpdateStatus={handleUpdateStatus}
+          onUpdateStatus={(id, updates) => {
+            updateCall(id, updates);
+            setSelectedCall(null);
+          }}
         />
         <ConfirmationModal
-          isOpen={confirmationType === "soft-delete"}
-          onClose={closeModal}
+          isOpen={!!confirmationType}
+          onClose={() => setConfirmationType(null)}
           onConfirm={confirmAction}
-          title="Confirmar Exclusão"
-          confirmText="Excluir"
+          title="Confirmar"
+          confirmText="Sim"
         >
-          <p>
-            Tem certeza de que deseja excluir a solicitação de{" "}
-            <strong>{callToConfirm?.solicitante.name}</strong>? Esta ação pode
-            ser revertida.
-          </p>
-        </ConfirmationModal>
-        <ConfirmationModal
-          isOpen={confirmationType === "permanent-delete"}
-          onClose={closeModal}
-          onConfirm={confirmAction}
-          title="Confirmar Exclusão Permanente"
-          confirmText="Excluir Permanentemente"
-          confirmColor="bg-red-800"
-        >
-          <p>
-            Tem certeza de que deseja excluir permanentemente a solicitação de{" "}
-            <strong>{callToConfirm?.solicitante.name}</strong>?
-          </p>
-          <p className="font-bold text-red-700 mt-2">
-            Esta ação não pode ser desfeita.
-          </p>
-        </ConfirmationModal>
-        <ConfirmationModal
-          isOpen={confirmationType === "clear-all"}
-          onClose={closeModal}
-          onConfirm={confirmAction}
-          title="Limpar Todas as Solicitações"
-          confirmText="Sim, Limpar Tudo"
-          confirmColor="bg-red-800"
-        >
-          <p>
-            Tem certeza de que deseja excluir permanentemente{" "}
-            <strong>todas</strong> as solicitações da lixeira?
-          </p>
-          <p className="font-bold text-red-700 mt-2">
-            Esta ação não pode ser desfeita.
-          </p>
+          Confirmar ação?
         </ConfirmationModal>
       </div>
     </TooltipProvider>

@@ -1,1 +1,1 @@
-ngrok http 5173 --domain=odoriferously-nonstringent-vergie.ngrok-free.dev
+ngrok http 3000 --domain=odoriferously-nonstringent-vergie.ngrok-free.dev

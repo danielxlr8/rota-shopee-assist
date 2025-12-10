@@ -5,43 +5,71 @@ import cors from "cors";
 import * as admin from "firebase-admin";
 import { Ticket } from "./ticket.model";
 import fs from "fs";
-import path from "path"; // <--- Importação necessária
+import path from "path";
 
 dotenv.config();
 
-// Validação das variáveis de ambiente
+// Validação das variáveis de ambiente críticas
 if (!process.env.MONGO_URI || !process.env.GEMINI_API_KEY) {
   console.error(
-    "Erro: Variáveis de ambiente MONGO_URI e GEMINI_API_KEY são obrigatórias."
+    "❌ Erro: Variáveis de ambiente MONGO_URI e GEMINI_API_KEY são obrigatórias."
   );
   process.exit(1);
 }
 
-// 🔹 Inicializa Firebase Admin
+// 🔹 Inicializa Firebase Admin (Lógica Inteligente)
 try {
-  const serviceAccount = JSON.parse(
-    fs.readFileSync("./service-account.json", "utf-8")
-  );
-  // Verifica se já existe uma app inicializada para evitar erro de duplicidade
+  let serviceAccount: any = null;
+
+  // PRIORIDADE 1: JSON via Variável de Ambiente
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      serviceAccount = JSON.parse(
+        process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+      );
+      console.log(
+        "✅ Configuração Firebase carregada via Variável de Ambiente (JSON)."
+      );
+    } catch (e) {
+      console.error(
+        "❌ Erro ao fazer parse do JSON da variável GOOGLE_APPLICATION_CREDENTIALS_JSON."
+      );
+    }
+  }
+
+  // PRIORIDADE 2: Arquivo local
+  if (!serviceAccount) {
+    const serviceAccountPath = "./service-account.json";
+    if (fs.existsSync(serviceAccountPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
+      console.log("✅ Configuração Firebase carregada via Arquivo Local.");
+    }
+  }
+
+  // Inicialização
   if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("Firebase Admin SDK inicializado com sucesso.");
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else {
+      console.warn(
+        "⚠️ Aviso: Nenhuma credencial explícita encontrada. Tentando Default Application Credentials."
+      );
+      admin.initializeApp();
+    }
   }
 } catch (error) {
-  console.error("Erro ao carregar service-account.json:", error);
-  process.exit(1);
+  console.error("❌ Erro crítico ao inicializar Firebase:", error);
 }
 
 const app: Express = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-// 🔹 CORS total
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: [
       "Content-Type",
       "Authorization",
@@ -53,15 +81,9 @@ app.use(
 app.use(express.json());
 
 // ---------------------------------------------------------
-// 1. SERVIR ARQUIVOS ESTÁTICOS (O SITE) - ESTRATÉGIA DOMÍNIO ÚNICO
+// 1. SERVIR ARQUIVOS ESTÁTICOS
 // ---------------------------------------------------------
 const distPath = path.join(__dirname, "../../dist");
-
-// --- Logs de Diagnóstico ---
-console.log("---------------------------------------------------");
-console.log("🔍 Diagnóstico de Caminhos:");
-console.log("📂 Diretório do Server:", __dirname);
-console.log("🎯 Procurando site em:", distPath);
 
 if (fs.existsSync(distPath)) {
   console.log("✅ Pasta 'dist' ENCONTRADA! O site será servido.");
@@ -70,9 +92,7 @@ if (fs.existsSync(distPath)) {
     "❌ Pasta 'dist' NÃO encontrada. Rode 'npm run build' na pasta raiz."
   );
 }
-console.log("---------------------------------------------------");
 
-// Serve os arquivos da pasta dist
 app.use(express.static(distPath));
 
 // 🔹 Tipagem de req.userId
@@ -110,9 +130,9 @@ const authMiddleware = async (
 // Conectar ao MongoDB
 mongoose
   .connect(process.env.MONGO_URI as string)
-  .then(() => console.log("Conectado ao MongoDB Atlas!"))
+  .then(() => console.log("✅ Conectado ao MongoDB Atlas!"))
   .catch((err) => {
-    console.error("Erro de conexão com MongoDB:", err);
+    console.error("❌ Erro fatal de conexão com MongoDB:", err);
     process.exit(1);
   });
 
@@ -121,7 +141,6 @@ mongoose
 // ---------------------------------------------------
 
 // CRIAR TICKET
-// IMPORTANTE: Mudado de /api/tickets para /tickets para bater com o frontend
 app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   const {
     solicitante,
@@ -133,7 +152,7 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
     urgency,
     packageCount,
     deliveryRegions,
-    prompt: userPrompt, // Pega o prompt se vier
+    prompt: userPrompt,
   } = req.body;
 
   const userId = req.userId;
@@ -151,30 +170,92 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
   }
 
   try {
-    // Importação dinâmica do Google Generative AI
-    const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // --- 1. LÓGICA DE EXTRAÇÃO (REGEX) ---
+    // a) Extrair Motivo
+    const reasonMatch = userPrompt
+      ? userPrompt.match(/MOTIVO:\s*(.*?)\./)
+      : null;
+    const extractedReason = reasonMatch
+      ? reasonMatch[1].trim()
+      : "Apoio Logístico";
 
-    // Se o frontend mandar um prompt pronto (da IA do cliente), usa ele.
-    // Se não, cria um aqui.
-    const finalPrompt =
-      userPrompt ||
-      `Crie uma descrição curta para solicitação de apoio logístico. Hub: ${hub}, Veículo: ${vehicleType}, Pacotes: ${packageCount}.`;
+    // b) Extrair Detalhes
+    let extractedDetails = "";
+    if (userPrompt) {
+      const detailsMatch = userPrompt.match(
+        /DETALHES DO OCORRIDO:\s*(.*?)(?=\.\s*Preciso)/
+      );
+      if (detailsMatch) {
+        extractedDetails = detailsMatch[1].trim();
+      } else {
+        const parts = userPrompt.split("DETALHES DO OCORRIDO:");
+        if (parts.length > 1) {
+          extractedDetails = parts[1]
+            .split(". Preciso")[0]
+            .substring(0, 100)
+            .trim();
+        }
+      }
+    }
+    if (!extractedDetails) extractedDetails = "Detalhes não informados.";
 
+    // --- 2. GERAÇÃO DE DESCRIÇÃO COM IA ---
     let description = "";
+    const bulkyIcon = isBulky ? "Sim ⚠️" : "Não";
+
+    // PROMPT ATUALIZADO (SEM ASTERISCOS **)
+    const finalPrompt = `Role: Formatador de Logística.
+       Tarefa: Gere uma lista técnica seguindo estritamente a ordem e o modelo abaixo.
+       
+       Dados Fixos:
+       - Hub: ${hub}
+       - Carga: ${packageCount} volumes
+       - Volumoso: ${bulkyIcon}
+       - Veículo: ${vehicleType}
+       - Relato: "${extractedDetails}"
+       
+       Regras Rígidas:
+       1. Siga EXATAMENTE a ordem do modelo.
+       2. NÃO use markdown de negrito (asteriscos).
+       3. NÃO invente dados.
+       
+       Modelo de Resposta (Copie este formato exato):
+       📍 Hub: ${hub}
+       📦 Carga: ${packageCount} volumes
+       📦 Volumoso: ${bulkyIcon}
+       🚛 Veículo: ${vehicleType}
+       📝 Descrição: ${extractedDetails}`;
+
     try {
-      const result = await model.generateContent(finalPrompt);
-      description = result.response.text().substring(0, 200); // Limita tamanho
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(
+        process.env.GEMINI_API_KEY as string
+      );
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: finalPrompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 200,
+        },
+      });
+      description = result.response.text().trim();
     } catch (aiError) {
-      console.error("Erro na IA, usando descrição padrão:", aiError);
-      description = finalPrompt; // Fallback
+      console.warn(
+        "⚠️ IA indisponível ou erro na chave. Usando fallback manual.",
+        aiError
+      );
+      // FALLBACK ATUALIZADO (SEM ASTERISCOS **)
+      description = `📍 Hub: ${hub}\n📦 Carga: ${packageCount} volumes\n📦 Volumoso: ${bulkyIcon}\n🚛 Veículo: ${vehicleType}\n📝 Relato: ${extractedDetails}`;
     }
 
+    // --- 3. SALVAR NO MONGODB ---
     const newTicket = new Ticket({
       userId,
-      prompt: finalPrompt,
+      prompt: userPrompt,
       description,
+      reason: extractedReason,
       solicitante,
       location,
       hub,
@@ -190,53 +271,111 @@ app.post("/tickets", authMiddleware, async (req: Request, res: Response) => {
     });
 
     await newTicket.save();
+    console.log(`✅ Ticket salvo no MongoDB. ID: ${newTicket._id}`);
 
-    // Salvar no Firestore também (para o Realtime do Painel funcionar)
-    const firestoreDb = admin.firestore();
-    const supportCallRef = firestoreDb.collection("supportCalls").doc();
+    // --- 4. SINCRONIZAR COM FIREBASE ---
+    try {
+      const firestoreDb = admin.firestore();
+      const supportCallRef = firestoreDb.collection("supportCalls").doc();
 
-    await supportCallRef.set({
-      id: supportCallRef.id,
-      description,
-      solicitante,
-      location,
-      hub,
-      vehicleType,
-      isBulky,
-      routeId,
-      urgency,
-      status: "ABERTO",
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      packageCount,
-      deliveryRegions,
-    });
-
-    console.log("Chamado salvo no Firestore com ID:", supportCallRef.id);
+      await supportCallRef.set({
+        id: supportCallRef.id,
+        mongoId: newTicket._id.toString(),
+        description,
+        reason: extractedReason,
+        solicitante,
+        location,
+        hub,
+        vehicleType,
+        isBulky,
+        routeId,
+        urgency,
+        status: "ABERTO",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        packageCount,
+        deliveryRegions,
+      });
+      console.log("✅ Sincronizado com Firestore (Real-time).");
+    } catch (firebaseError: any) {
+      console.error(
+        "⚠️ ALERTA: Falha ao salvar no Firestore.",
+        firebaseError.message
+      );
+    }
 
     res.status(201).send(newTicket);
   } catch (error) {
-    console.error("Erro ao criar ticket:", error);
-    res.status(500).send({ error: "Erro ao processar a solicitação." });
+    console.error("❌ Erro fatal ao processar ticket:", error);
+    res.status(500).send({ error: "Erro interno ao processar a solicitação." });
   }
 });
 
+// ATUALIZAR STATUS
+app.patch(
+  "/tickets/:id",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates = req.body;
+
+    if (!id || !updates) {
+      return res
+        .status(400)
+        .send({ error: "ID e dados de atualização necessários." });
+    }
+
+    try {
+      const updatedTicket = await Ticket.findByIdAndUpdate(id, updates, {
+        new: true,
+      });
+
+      if (!updatedTicket) {
+        return res
+          .status(404)
+          .send({ error: "Ticket não encontrado no MongoDB." });
+      }
+
+      // Sincronizar Firebase
+      try {
+        const firestoreDb = admin.firestore();
+        const snapshot = await firestoreDb
+          .collection("supportCalls")
+          .where("mongoId", "==", id)
+          .get();
+
+        if (!snapshot.empty) {
+          const firestoreDoc = snapshot.docs[0];
+          const firestoreRef = firestoreDoc.ref;
+          const terminalStatuses = ["CONCLUIDO", "EXCLUIDO", "ARQUIVADO"];
+          const newStatus = updates.status;
+
+          if (newStatus && terminalStatuses.includes(newStatus)) {
+            await firestoreRef.delete();
+          } else {
+            await firestoreRef.update(updates);
+          }
+        }
+      } catch (fbError) {
+        console.error("Erro sync Firebase:", fbError);
+      }
+
+      res.send(updatedTicket);
+    } catch (error) {
+      console.error("Erro ao atualizar ticket:", error);
+      res.status(500).send({ error: "Erro interno." });
+    }
+  }
+);
+
 // CHATBOT
-// Mantive /api/chat pois o componente Chatbot pode estar usando essa rota específica
 app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
   const { message, history } = req.body;
-  const userId = req.userId;
-
-  if (!message) {
-    return res.status(400).json({ error: "Nenhuma mensagem fornecida." });
-  }
-  if (!userId) {
-    return res.status(401).send({ error: "Unauthorized." });
-  }
+  if (!message) return res.status(400).json({ error: "Mensagem vazia." });
 
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const geminiHistory = (history || []).map((msg: any) => ({
       role: msg.role,
@@ -247,36 +386,31 @@ app.post("/api/chat", authMiddleware, async (req: Request, res: Response) => {
       history: [
         {
           role: "user",
-          parts: [{ text: "Você é um assistente logístico útil." }],
+          parts: [
+            { text: "Você é um assistente logístico útil da Shopee Xpress." },
+          ],
         },
-        { role: "model", parts: [{ text: "Entendido." }] },
+        { role: "model", parts: [{ text: "Entendido. Como posso ajudar?" }] },
         ...geminiHistory,
       ],
-      generationConfig: {
-        maxOutputTokens: 200,
-        temperature: 0.7,
-      },
+      generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
     });
 
     const result = await chat.sendMessage(message);
     const text = result.response.text();
-
     res.json({ response: text });
   } catch (error) {
     console.error("Erro na API Gemini:", error);
-    res.status(500).json({ error: "Falha ao comunicar com o assistente." });
+    res.json({
+      response: "Desculpe, estou com dificuldade de conexão no momento.",
+    });
   }
 });
 
-// ---------------------------------------------------------
-// 2. ROTA CURINGA (SPA FALLBACK)
-// Se a rota não for API, entrega o index.html para o React assumir
-// ---------------------------------------------------------
 app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-// Listen
-app.listen(port, "0.0.0.0", () => {
-  console.log(`Servidor rodando em http://localhost:${port}`);
+app.listen(port, () => {
+  console.log(`🚀 Servidor rodando na porta ${port}`);
 });

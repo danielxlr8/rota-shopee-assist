@@ -18,7 +18,7 @@ import {
 } from "firebase/firestore";
 import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
-import { DriverInterface } from "./components/DriverInterface"; // <-- CORREÇÃO AQUI
+import { DriverInterface } from "./components/DriverInterface";
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
 import type {
   SupportCall as OriginalSupportCall,

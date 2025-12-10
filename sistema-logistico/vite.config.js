@@ -18,6 +18,6 @@ export default defineConfig({
       "odoriferously-nonstringent-vergie.ngrok-free.dev", // coloque o domínio atual do ngrok
     ],
     host: true, // permite conexões externas
-    port: 5173, // porta do seu app
+    port: 3000, // porta do seu app
   },
 });

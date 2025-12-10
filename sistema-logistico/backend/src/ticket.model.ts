@@ -1,4 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
+// Se o import abaixo der erro de caminho, verifique se o caminho relativo está correto
+// ou use 'any' temporariamente se o arquivo de types não estiver acessível ao backend
 import type { UrgencyLevel, CallStatus } from "../../src/types/logistics";
 
 // --- Schema para o objeto aninhado 'solicitante' ---
@@ -9,16 +11,19 @@ const SolicitanteSchema: Schema = new Schema(
     avatar: { type: String, default: null },
     initials: { type: String },
     phone: { type: String, default: null },
-    shopeeId: { type: String, required: false }, // Adicionado aqui
+    shopeeId: { type: String, required: false },
   },
-  { _id: false } // Impede a criação de um _id para o subdocumento
+  { _id: false }
 );
 
-// --- Interface para o documento Ticket, agora completa ---
+// --- Interface para o documento Ticket ---
 export interface ITicket extends Document {
+  // ADIÇÃO CRÍTICA: Tipagem explícita do _id
+  _id: mongoose.Types.ObjectId;
   userId: string;
   prompt: string;
   description: string;
+  reason?: string; // <--- NOVO CAMPO: Motivo da solicitação
   createdAt: Date;
   solicitante: {
     id: string;
@@ -40,15 +45,13 @@ export interface ITicket extends Document {
   deliveryRegions: string[];
 }
 
-// --- Schema principal do Ticket, agora completo ---
+// --- Schema principal do Ticket ---
 const TicketSchema: Schema = new Schema({
   userId: { type: String, required: true },
   prompt: { type: String, required: true },
-  // --- ALTERAÇÃO 1: Removido o 'maxlength' ---
   description: { type: String, required: true },
+  reason: { type: String, required: false }, // <--- NOVO CAMPO NO SCHEMA
   createdAt: { type: Date, default: Date.now },
-
-  // --- ALTERAÇÃO 2: Adicionados todos os novos campos ---
   solicitante: { type: SolicitanteSchema, required: true },
   location: { type: String, required: true },
   hub: { type: String, required: true },

@@ -5,6 +5,7 @@ export type CallStatus =
   | "ABERTO"
   | "EM ANDAMENTO"
   | "AGUARDANDO_APROVACAO"
+  | "DEVOLUCAO"
   | "CONCLUIDO"
   | "EXCLUIDO"
   | "ARQUIVADO";
@@ -26,6 +27,7 @@ export interface Driver {
 
 export interface SupportCall {
   id: string;
+  mongoId?: string; // <--- CAMPO ADICIONADO AQUI
   solicitante: {
     id: string;
     name: string;
@@ -57,5 +59,5 @@ export interface ChatHistoryMessage {
   role: "user" | "model";
   parts: [{ text: string }];
   gifUrls?: string[];
-  type?: "message" | "follow-up" | "role-selection" | "topic-selection"; // <<<--- ATUALIZADO
+  type?: "message" | "follow-up" | "role-selection" | "topic-selection";
 }
