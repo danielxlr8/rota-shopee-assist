@@ -1,6 +1,7 @@
-import React, { useState } from "react"; // CORREÇÃO: useEffect removido
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
+import rocketAnimation from "../rocket-launch.json";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -32,8 +33,13 @@ import {
   Calendar,
   Eye,
   EyeOff,
+  Clock,
+  MapPin,
 } from "lucide-react";
-import rocketAnimation from "../rocket-launch.json";
+import { cn } from "../lib/utils";
+import { Loading } from "./ui/loading";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 48 48">
@@ -75,12 +81,215 @@ export const AuthPage = () => {
   const [linkingError, setLinkingError] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
-  const [animationState, setAnimationState] = useState<
-    "playing" | "exiting" | "finished"
-  >("playing");
+  const [animationPhase, setAnimationPhase] = useState<
+    "rocket" | "fadeIn" | "complete"
+  >("complete");
+  const [isInitialLoading] = useState(false);
 
-  const handleLottieComplete = () => {
-    setAnimationState("exiting");
+  const [adminProfile, setAdminProfile] = useState<{
+    name: string;
+    city: string;
+    avatar: string;
+    initials: string;
+  } | null>(null);
+  const [driverProfile, setDriverProfile] = useState<{
+    name: string;
+    city: string;
+    avatar: string;
+    initials: string;
+  } | null>(null);
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
+  
+  // Atualizar data/hora do Brasil
+  useEffect(() => {
+    const updateDateTime = () => {
+      const brazilTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      setCurrentDateTime(brazilTime);
+    };
+    
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Loading inicial removido - card aparece imediatamente
+  
+  // Buscar dados do admin quando a aba admin estiver selecionada
+  useEffect(() => {
+    if (activeTab === "admin") {
+      const currentUser = auth.currentUser;
+      
+      if (currentUser && currentUser.email?.endsWith("@shopee.com")) {
+        const fetchAdminProfile = async () => {
+          try {
+            const adminDocRef = doc(db, "admins_pre_aprovados", currentUser.uid);
+            const adminDoc = await getDoc(adminDocRef);
+            
+            if (adminDoc.exists()) {
+              const data = adminDoc.data();
+              const name = data.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Admin";
+              const initials = name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
+              
+              setAdminProfile({
+                name: name,
+                city: data.city || "Não informado",
+                avatar: data.avatar || currentUser.photoURL || "",
+                initials: initials,
+              });
+            } else {
+              const name = currentUser.displayName || currentUser.email?.split("@")[0] || "Admin";
+              const initials = name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
+              
+              setAdminProfile({
+                name: name,
+                city: "Não informado",
+                avatar: currentUser.photoURL || "",
+                initials: initials,
+              });
+            }
+          } catch (error) {
+            console.error("Erro ao buscar perfil do admin:", error);
+            setAdminProfile({
+              name: "Admin Shopee",
+              city: "Brasil",
+              avatar: "",
+              initials: "AS",
+            });
+          }
+        };
+        
+        fetchAdminProfile();
+      } else {
+        setAdminProfile({
+          name: "Admin Shopee",
+          city: "Brasil",
+          avatar: "",
+          initials: "AS",
+        });
+      }
+    } else {
+      setAdminProfile(null);
+    }
+  }, [activeTab]);
+  
+  // Buscar dados do motorista quando a aba driver estiver selecionada
+  useEffect(() => {
+    if (activeTab === "driver") {
+      const currentUser = auth.currentUser;
+      
+      if (currentUser && !currentUser.email?.endsWith("@shopee.com")) {
+        const fetchDriverProfile = async () => {
+          try {
+            const driversRef = collection(db, "motoristas_pre_aprovados");
+            const q = query(
+              driversRef,
+              where("uid", "==", currentUser.uid)
+            );
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              const driverData = querySnapshot.docs[0].data();
+              const name = driverData.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Motorista";
+              const initials = name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
+              
+              const hub = driverData.hub || "";
+              const city = hub.split("_")[2] || driverData.city || "Não informado";
+              
+              setDriverProfile({
+                name: name,
+                city: city,
+                avatar: driverData.avatar || currentUser.photoURL || "",
+                initials: initials,
+              });
+            } else {
+              const q2 = query(
+                driversRef,
+                where("googleUid", "==", currentUser.uid)
+              );
+              const querySnapshot2 = await getDocs(q2);
+              
+              if (!querySnapshot2.empty) {
+                const driverData = querySnapshot2.docs[0].data();
+                const name = driverData.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Motorista";
+                const initials = name
+                  .split(" ")
+                  .map((n: string) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2);
+                
+                const hub = driverData.hub || "";
+                const city = hub.split("_")[2] || driverData.city || "Não informado";
+                
+                setDriverProfile({
+                  name: name,
+                  city: city,
+                  avatar: driverData.avatar || currentUser.photoURL || "",
+                  initials: initials,
+                });
+              } else {
+                const name = currentUser.displayName || currentUser.email?.split("@")[0] || "Motorista";
+                const initials = name
+                  .split(" ")
+                  .map((n: string) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2);
+                
+                setDriverProfile({
+                  name: name,
+                  city: "Não informado",
+                  avatar: currentUser.photoURL || "",
+                  initials: initials,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Erro ao buscar perfil do motorista:", error);
+            setDriverProfile({
+              name: "Motorista",
+              city: "Brasil",
+              avatar: "",
+              initials: "M",
+            });
+          }
+        };
+        
+        fetchDriverProfile();
+      } else {
+        setDriverProfile({
+          name: "Motorista",
+          city: "Brasil",
+          avatar: "",
+          initials: "M",
+        });
+      }
+    } else {
+      setDriverProfile(null);
+    }
+  }, [activeTab]);
+
+  // Callback quando a animação do foguete termina
+  const handleRocketComplete = () => {
+    // Mostra o card quase instantaneamente
+    setAnimationPhase("fadeIn");
+    setTimeout(() => setAnimationPhase("complete"), 100);
   };
 
   const formatAndLimitPhone = (value: string) => {
@@ -295,36 +504,30 @@ export const AuthPage = () => {
 
   if (isLinkingGoogleAccount) {
     return (
-      <div 
+      <div
         className="min-h-screen w-full flex items-center justify-center p-4 relative"
-        style={{ minHeight: '100vh', minWidth: '100vw' }}
+        style={{ minHeight: "100vh", minWidth: "100vw" }}
       >
-        {/* Background da imagem do armazém - preenchendo toda a página */}
-        <div 
+        <div
           className="absolute inset-0 w-full h-full"
           style={{
             backgroundImage: 'url("/warehouse-background.jpg")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center center',
-            backgroundRepeat: 'no-repeat',
-            backgroundAttachment: 'fixed',
-            minHeight: '100vh',
-            imageRendering: 'auto',
+            backgroundSize: "cover",
+            backgroundPosition: "center center",
+            backgroundRepeat: "no-repeat",
+            backgroundAttachment: "fixed",
+            minHeight: "100vh",
+            imageRendering: "auto",
           }}
         />
-        
-        {/* Fallback com gradiente laranja caso a imagem não carregue */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#FFA832] via-[#FE8330] to-[#FE5F2F] -z-10 min-h-screen" />
-        
-        {/* Overlay sutil para melhorar legibilidade do formulário */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/40" />
-        
+
         <div
           className="w-full max-w-md p-8 relative z-10 rounded-3xl border-2"
           style={{
             background: "transparent",
-            borderImage:
-              "linear-gradient(120deg, #ffb347, #ff7a1a, #ffb347) 1",
+            borderImage: "linear-gradient(120deg, #ffb347, #ff7a1a, #ffb347) 1",
             boxShadow:
               "0 25px 60px -20px rgba(0,0,0,0.5), 0 0 25px rgba(255,122,26,0.4), inset 0 0 12px rgba(255,155,71,0.3)",
             transform: "translateZ(0)",
@@ -363,7 +566,17 @@ export const AuthPage = () => {
               disabled={loading}
               className="w-full btn-primary disabled:opacity-50"
             >
-              {loading ? "Verificando..." : "Vincular Conta"}
+              {loading ? (
+                <>
+                  <Loading size="sm" variant="spinner" />
+                  <span className="font-semibold tracking-wide" style={{ 
+                    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+                    letterSpacing: "0.5px"
+                  }}>Verificando...</span>
+                </>
+              ) : (
+                "Vincular Conta"
+              )}
             </button>
             <button
               type="button"
@@ -386,107 +599,447 @@ export const AuthPage = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white">
-      <div className="w-full max-w-6xl flex flex-col md:flex-row overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 shadow-[0_25px_80px_-30px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-        <div className="flex-1 relative p-10 md:p-16 lg:p-20">
-          {animationState !== "finished" && (
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center z-0"
-              animate={{
-                y: animationState === "exiting" ? "-100%" : "0%",
-                opacity: animationState === "exiting" ? 0 : 1,
+  const showRocket = animationPhase === "rocket";
+  const isExpanded = animationPhase === "fadeIn" || animationPhase === "complete";
+
+  // Mostrar loading inicial
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black relative overflow-hidden">
+        {/* Vídeo de fundo do loading */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-50"
+          style={{
+            filter: "brightness(0.3)",
+          }}
+        >
+          <source src="/pinterest-video (1).mp4" type="video/mp4" />
+        </video>
+        
+        {/* Overlay escuro */}
+        <div className="absolute inset-0 bg-black/60 z-10" />
+        
+        {/* Conteúdo do loading */}
+        <div className="relative z-20 flex flex-col items-center justify-center gap-8">
+          {/* Texto "Loading" com efeito */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="text-center"
+          >
+            <motion.h1
+              className="text-6xl md:text-8xl font-bold text-white mb-4"
+              style={{
+                textShadow: "0 0 30px rgba(255, 107, 53, 0.8), 0 0 60px rgba(255, 107, 53, 0.5)",
               }}
-              transition={{ duration: 0.5, ease: "easeIn" }}
-              onAnimationComplete={() => {
-                if (animationState === "exiting") {
-                  setAnimationState("finished");
-                }
+              animate={{
+                textShadow: [
+                  "0 0 30px rgba(255, 107, 53, 0.8), 0 0 60px rgba(255, 107, 53, 0.5)",
+                  "0 0 50px rgba(255, 107, 53, 1), 0 0 100px rgba(255, 107, 53, 0.8)",
+                  "0 0 30px rgba(255, 107, 53, 0.8), 0 0 60px rgba(255, 107, 53, 0.5)",
+                ],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              LOADING
+            </motion.h1>
+            
+            {/* Pontos animados */}
+            <div className="flex gap-2 justify-center">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-3 h-3 bg-orange-500 rounded-full"
+                  animate={{
+                    y: [0, -10, 0],
+                    opacity: [0.5, 1, 0.5],
+                  }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center p-4 text-foreground overflow-hidden relative"
+      style={{
+        minHeight: "100vh",
+      }}
+    >
+      {/* Imagem de fundo com desfoque melhorado */}
+      <div
+        className="absolute inset-0 w-full h-full z-0"
+        style={{
+          backgroundImage: 'url("/city-skyline-background.jpg")',
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+        minHeight: "100vh",
+          filter: "blur(2px)",
+          transform: "scale(1.02)",
+      }}
+      />
+      
+      {/* Overlay escuro melhorado para legibilidade */}
+      <div className="absolute inset-0 bg-black/25 z-[1]" />
+      
+      {/* Efeito de glow de fundo durante a animação */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        initial={{ opacity: 0 }}
+        animate={{ 
+          opacity: showRocket ? 1 : 0 
+        }}
+        transition={{ duration: 0.3 }}
+        style={{
+          background: "radial-gradient(circle at center, rgba(249, 115, 22, 0.3) 0%, transparent 50%)",
+        }}
+      />
+
+      {/* Container do card - versão melhorada do visual antigo */}
+      <motion.div
+        className={cn(
+          "relative z-10 flex items-center justify-center border border-orange-900/30 overflow-hidden transition-all duration-300",
+          isExpanded && "shadow-2xl"
+        )}
+        initial={{
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        }}
+        animate={{
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        }}
+        transition={{
+          opacity: { duration: 0, delay: 0 },
+          y: { duration: 0, delay: 0 },
+          scale: { duration: 0, delay: 0 },
+        }}
+        style={{
+          background: "linear-gradient(to bottom, #5C1F0F 0%, #6B2515 20%, #7A2B1B 40%, #8B2E1A 60%, #A63E1F 80%, #C04E24 100%)",
+          position: "relative",
+          width: "min(95vw, 1400px)",
+          borderRadius: "2.5rem",
+          minHeight: "auto",
+        }}
+      >
+        {/* Efeito de textura sutil melhorado */}
+        <div 
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{
+            background: `
+              radial-gradient(circle at 20% 80%, rgba(139, 46, 26, 0.3) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(192, 78, 36, 0.2) 0%, transparent 50%),
+              radial-gradient(circle at 40% 60%, rgba(166, 62, 31, 0.25) 0%, transparent 50%),
+              radial-gradient(circle at 60% 40%, rgba(238, 77, 45, 0.15) 0%, transparent 50%)
+            `,
+            mixBlendMode: "overlay",
+            opacity: 0.5,
+          }}
+        />
+        {/* Foguete dentro do círculo */}
+        <AnimatePresence>
+          {showRocket && (
+            <motion.div
+              className="absolute inset-0 flex items-center justify-center z-20"
+              initial={{ opacity: 1, y: 0 }}
+              exit={{ 
+                opacity: 0, 
+                y: -300,
+                scale: 0.8,
+                transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } 
               }}
             >
               <Lottie
                 animationData={rocketAnimation}
                 loop={false}
-                onComplete={handleLottieComplete}
-                style={{ width: 320, height: 320 }}
+                onComplete={handleRocketComplete}
+                style={{ width: 140, height: 140 }}
               />
             </motion.div>
           )}
+        </AnimatePresence>
 
-          <AnimatePresence>
-            {(animationState === "exiting" || animationState === "finished") && (
-              <motion.div
-                key="form"
-                className="w-full z-10"
-                initial={{ opacity: 0, y: "100%" }}
-                animate={{ opacity: 1, y: "0%" }}
-                transition={{
-                  type: "spring",
-                  stiffness: 50,
-                  damping: 15,
-                  delay: 0.2,
-                }}
-              >
-                <div className="flex flex-col border-b border-slate-800">
-                  <div className="flex items-center gap-4 mb-6">
-                    <img
-                      src="/spx-logo-long.png"
-                      alt="Shopee Xpress"
-                      className="w-72 md:w-96 lg:w-[28rem] xl:w-[32rem]"
-                    />
-                    <div className="flex-1 h-px bg-slate-800" />
+        {/* Conteúdo do formulário - aparece com fade in suave */}
+        <motion.div
+          className="flex flex-col md:flex-row w-full"
+          initial={{ opacity: 1 }}
+          animate={{ 
+            opacity: 1,
+          }}
+          transition={{ duration: 0, delay: 0, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="flex-1 relative p-8 md:p-12 lg:p-16">
+            {/* Conteúdo do formulário */}
+            <div className="w-full z-10">
+                <div className="flex flex-col">
+                  {/* Seção superior do Motorista - aparece apenas na aba driver */}
+                  {activeTab === "driver" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="w-full p-4 md:p-6 rounded-t-[2.5rem] border-b border-orange-900/30 relative z-10 mb-6"
+                      style={{
+                        marginTop: "-2rem",
+                        marginLeft: "-2rem",
+                        marginRight: "-2rem",
+                        backgroundColor: "#000000",
+                        background: "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
+                      }}
+                    >
+                      {/* Data e hora do Brasil no topo */}
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-orange-900/20">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-white">
+                            <Clock size={20} className="text-orange-500" />
+                            <span className="text-xl md:text-2xl font-bold">
+                              {format(currentDateTime, "HH:mm:ss", { locale: ptBR })}
+                            </span>
+                          </div>
+                          <div className="text-sm md:text-base text-gray-300 ml-8">
+                            {format(currentDateTime, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Informações do perfil */}
+                      <div className="flex items-center gap-4">
+                        {/* Foto de perfil */}
+                        <div className="relative flex-shrink-0">
+                          {driverProfile?.avatar ? (
+                            <img
+                              src={driverProfile.avatar}
+                              alt={driverProfile.name}
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = "none";
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector(".driver-avatar-fallback") as HTMLElement;
+                                  if (fallback) fallback.style.display = "flex";
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`driver-avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${driverProfile?.avatar ? "hidden" : ""}`}
+                            style={{ display: driverProfile?.avatar ? "none" : "flex" }}
+                          >
+                            <span className="text-2xl md:text-3xl font-bold text-white">
+                              {driverProfile?.initials || "M"}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Nome e cidade */}
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
+                            {driverProfile?.name || "Motorista"}
+                          </h3>
+                          <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
+                            <MapPin size={16} className="text-orange-500 flex-shrink-0" />
+                            <span className="truncate">{driverProfile?.city || "Não informado"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  
+                  {/* Seção superior do Admin - aparece apenas na aba admin */}
+                  {activeTab === "admin" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="w-full p-4 md:p-6 rounded-t-[2.5rem] border-b border-orange-900/30 relative z-10 mb-6"
+                      style={{
+                        marginTop: "-2rem",
+                        marginLeft: "-2rem",
+                        marginRight: "-2rem",
+                        backgroundColor: "#000000",
+                        background: "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
+                      }}
+                    >
+                      {/* Data e hora do Brasil no topo */}
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-orange-900/20">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-white">
+                            <Clock size={20} className="text-orange-500" />
+                            <span className="text-xl md:text-2xl font-bold">
+                              {format(currentDateTime, "HH:mm:ss", { locale: ptBR })}
+                            </span>
+                          </div>
+                          <div className="text-sm md:text-base text-gray-300 ml-8">
+                            {format(currentDateTime, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Informações do perfil */}
+                      <div className="flex items-center gap-4">
+                        {/* Foto de perfil */}
+                        <div className="relative flex-shrink-0">
+                          {adminProfile?.avatar ? (
+                            <img
+                              src={adminProfile.avatar}
+                              alt={adminProfile.name}
+                              className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = "none";
+                                const parent = target.parentElement;
+                                if (parent) {
+                                  const fallback = parent.querySelector(".admin-avatar-fallback") as HTMLElement;
+                                  if (fallback) fallback.style.display = "flex";
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div 
+                            className={`admin-avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile?.avatar ? "hidden" : ""}`}
+                            style={{ display: adminProfile?.avatar ? "none" : "flex" }}
+                          >
+                            <span className="text-2xl md:text-3xl font-bold text-white">
+                              {adminProfile?.initials || "A"}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Nome e cidade */}
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
+                            {adminProfile?.name || "Admin Shopee"}
+                          </h3>
+                          <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
+                            <MapPin size={16} className="text-orange-500 flex-shrink-0" />
+                            <span className="truncate">{adminProfile?.city || "Não informado"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  
+                <div className="flex flex-col border-b border-border">
+                  <div className="mb-6">
+                    {/* Logo Shopee Xpress em texto - largura total e maior */}
+                    <div className="flex items-baseline justify-center w-full">
+                      <span 
+                        className="text-5xl md:text-6xl lg:text-7xl font-bold italic"
+                        style={{
+                          background: "linear-gradient(135deg, #f97316 0%, #ea580c 50%, #f97316 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          textShadow: "0 0 40px rgba(249, 115, 22, 0.3)",
+                        }}
+                      >
+                        Shopee
+                      </span>
+                      <span 
+                        className="text-5xl md:text-6xl lg:text-7xl font-black tracking-tight"
+                        style={{
+                          background: "linear-gradient(135deg, #fb923c 0%, #f97316 50%, #ea580c 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          textShadow: "0 0 40px rgba(249, 115, 22, 0.3)",
+                        }}
+                      >
+                        X
+                      </span>
+                      <span 
+                        className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-wider"
+                        style={{
+                          background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                        }}
+                      >
+                        PRESS
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex rounded-full border border-slate-800 bg-slate-900/60 overflow-hidden text-sm font-semibold">
+                  </div>
+                  <div className="flex rounded-full border border-border overflow-hidden text-sm font-semibold" style={{ background: "rgba(15, 23, 42, 0.1)" }}>
                     <button
                       onClick={() => {
                         setPreviousTab(activeTab);
                         setActiveTab("driver");
                       }}
-                      className={`flex-1 py-4 md:py-5 text-lg md:text-xl font-semibold text-center transition-colors ${
+                      className={cn(
+                        "flex-1 py-4 md:py-5 text-lg md:text-xl font-semibold text-center transition-all duration-300",
                         activeTab === "driver"
-                          ? "bg-orange-500 text-white"
-                          : "text-slate-300 hover:bg-slate-800"
-                      }`}
+                          ? "bg-primary text-primary-foreground shadow-lg"
+                          : "text-slate-800/70 hover:bg-slate-800/10 hover:text-slate-900"
+                      )}
                     >
-                      <User className="inline-block mr-2 md:mr-3" size={20} /> Motorista
+                      <User className="inline-block mr-2 md:mr-3" size={20} />{" "}
+                      Motorista
                     </button>
                     <button
                       onClick={() => {
                         setPreviousTab(activeTab);
                         setActiveTab("admin");
                       }}
-                      className={`flex-1 py-4 md:py-5 text-lg md:text-xl font-semibold text-center transition-colors ${
+                      className={cn(
+                        "flex-1 py-4 md:py-5 text-lg md:text-xl font-semibold text-center transition-all duration-300",
                         activeTab === "admin"
-                          ? "bg-orange-500 text-white"
-                          : "text-slate-300 hover:bg-slate-800"
-                      }`}
+                          ? "bg-primary text-primary-foreground shadow-lg"
+                          : "text-slate-800/70 hover:bg-slate-800/10 hover:text-slate-900"
+                      )}
                     >
-                      <Briefcase className="inline-block mr-2 md:mr-3" size={20} /> Admin
+                      <Briefcase
+                        className="inline-block mr-2 md:mr-3"
+                        size={20}
+                      />{" "}
+                      Admin
                     </button>
                   </div>
                 </div>
 
                 <div className="pt-8 md:pt-12 space-y-8 md:space-y-10">
-                  <div className="relative h-20 md:h-24 lg:h-28 overflow-hidden">
+                  <div className="relative h-32 md:h-40 lg:h-48 overflow-hidden flex items-center justify-center">
                     <AnimatePresence mode="wait">
                       <motion.h2
                         key={`${activeTab}-${isLoginView}`}
-                        initial={{ 
-                          x: activeTab === "driver" ? -300 : 300, 
-                          opacity: 0 
+                        initial={{
+                          x: activeTab === "driver" ? -300 : 300,
+                          opacity: 0,
                         }}
                         animate={{ x: 0, opacity: 1 }}
-                        exit={{ 
-                          x: previousTab === "driver" ? 300 : -300, 
-                          opacity: 0 
+                        exit={{
+                          x: previousTab === "driver" ? 300 : -300,
+                          opacity: 0,
                         }}
                         transition={{
                           type: "spring",
-                          stiffness: 300,
-                          damping: 30,
-                          duration: 0.5
+                          stiffness: 400,
+                          damping: 25,
+                          duration: 0.3,
                         }}
-                        className="absolute inset-0 text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight"
+                        className="absolute inset-0 flex items-center justify-center text-center text-3xl md:text-5xl lg:text-6xl font-bold leading-tight px-4"
+                        style={{ color: "#FFFFFF" }}
                       >
                         {isLoginView ? "Login de " : "Cadastro de "}
                         {activeTab === "admin" ? "Administrador" : "Motorista"}
@@ -509,21 +1062,27 @@ export const AuthPage = () => {
                     {isLoginView ? (
                       <motion.form
                         key={`login-${activeTab}`}
-                        initial={{ x: activeTab === "driver" ? -100 : 100, opacity: 0 }}
+                        initial={{
+                          x: activeTab === "driver" ? -100 : 100,
+                          opacity: 0,
+                        }}
                         animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: previousTab === "driver" ? 100 : -100, opacity: 0 }}
+                        exit={{
+                          x: previousTab === "driver" ? 100 : -100,
+                          opacity: 0,
+                        }}
                         transition={{
                           type: "spring",
                           stiffness: 300,
                           damping: 30,
-                          duration: 0.4
+                          duration: 0.4,
                         }}
                         onSubmit={handleLogin}
                         className="space-y-6 md:space-y-8"
                       >
                         <div className="relative">
                           <Mail
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                             size={24}
                           />
                           <input
@@ -531,14 +1090,14 @@ export const AuthPage = () => {
                             placeholder="E-mail"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
                             required
                             autoComplete="off"
                           />
                         </div>
                         <div className="relative">
                           <Lock
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                             size={24}
                           />
                           <input
@@ -546,170 +1105,209 @@ export const AuthPage = () => {
                             placeholder="Senha"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-12 pr-12 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full pl-12 pr-12 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
                             required
                             autoComplete="new-password"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                           >
-                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            {showPassword ? (
+                              <EyeOff size={20} />
+                            ) : (
+                              <Eye size={20} />
+                            )}
                           </button>
                         </div>
                         <button
                           type="submit"
                           disabled={loading}
-                          className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-xl text-lg md:text-xl font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-500 transition-all shadow-lg shadow-orange-900/40 disabled:opacity-50"
+                          className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-2xl text-lg md:text-xl font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50"
                         >
-                          <LogIn size={20} /> {loading ? "Entrando..." : "Entrar"}
+                          {loading ? (
+                            <>
+                              <Loading size="sm" variant="spinner" />
+                              <span className="font-semibold tracking-wide" style={{ 
+                                fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+                                letterSpacing: "0.5px"
+                              }}>Entrando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <LogIn size={20} />
+                              <span>Entrar</span>
+                            </>
+                          )}
                         </button>
                       </motion.form>
                     ) : (
                       <motion.form
                         key={`register-${activeTab}`}
-                        initial={{ x: activeTab === "driver" ? -100 : 100, opacity: 0 }}
+                        initial={{
+                          x: activeTab === "driver" ? -100 : 100,
+                          opacity: 0,
+                        }}
                         animate={{ x: 0, opacity: 1 }}
-                        exit={{ x: previousTab === "driver" ? 100 : -100, opacity: 0 }}
+                        exit={{
+                          x: previousTab === "driver" ? 100 : -100,
+                          opacity: 0,
+                        }}
                         transition={{
                           type: "spring",
                           stiffness: 300,
                           damping: 30,
-                          duration: 0.4
+                          duration: 0.4,
                         }}
                         onSubmit={handleRegister}
                         className="space-y-6 md:space-y-8"
                       >
-                      <div className="relative">
-                        <User
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type="text"
-                          placeholder="Nome"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="relative">
-                        <User
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type="text"
-                          placeholder="Sobrenome"
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                          className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Calendar
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type="date"
-                          placeholder="Data de Nascimento"
-                          value={birthDate}
-                          onChange={(e) => setBirthDate(e.target.value)}
-                          className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Phone
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type="tel"
-                          placeholder="Telefone (com DDD)"
-                          value={phone}
-                          onChange={(e) =>
-                            setPhone(formatAndLimitPhone(e.target.value))
-                          }
-                          className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="off"
-                        />
-                      </div>
-                      {activeTab === "driver" && (
                         <div className="relative">
-                          <Hash
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                          <User
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                             size={24}
                           />
                           <input
                             type="text"
-                            placeholder="ID de Motorista (fornecido pelo admin)"
-                            value={driverId}
-                            onChange={(e) => setDriverId(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            placeholder="Nome"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
                             required
                             autoComplete="off"
                           />
                         </div>
-                      )}
-                      <div className="relative">
-                        <Mail
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type="email"
-                          placeholder="E-mail"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="off"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Lock
-                          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-                          size={24}
-                        />
-                        <input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Senha (mínimo 6 caracteres)"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full pl-12 pr-12 py-4 md:py-5 text-lg md:text-xl rounded-xl bg-slate-900/80 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                          required
-                          autoComplete="new-password"
-                        />
+                        <div className="relative">
+                          <User
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                            size={24}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Sobrenome"
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            required
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="relative">
+                          <Calendar
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                            size={24}
+                          />
+                          <input
+                            type="date"
+                            placeholder="Data de Nascimento"
+                            value={birthDate}
+                            onChange={(e) => setBirthDate(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            required
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="relative">
+                          <Phone
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                            size={24}
+                          />
+                          <input
+                            type="tel"
+                            placeholder="Telefone (com DDD)"
+                            value={phone}
+                            onChange={(e) =>
+                              setPhone(formatAndLimitPhone(e.target.value))
+                            }
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            required
+                            autoComplete="off"
+                          />
+                        </div>
+                        {activeTab === "driver" && (
+                          <div className="relative">
+                            <Hash
+                              className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                              size={24}
+                            />
+                            <input
+                              type="text"
+                              placeholder="ID de Motorista (fornecido pelo admin)"
+                              value={driverId}
+                              onChange={(e) => setDriverId(e.target.value)}
+                              className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                              required
+                              autoComplete="off"
+                            />
+                          </div>
+                        )}
+                        <div className="relative">
+                          <Mail
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                            size={24}
+                          />
+                          <input
+                            type="email"
+                            placeholder="E-mail"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            required
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="relative">
+                          <Lock
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                            size={24}
+                          />
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Senha (mínimo 6 caracteres)"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full pl-12 pr-12 py-4 md:py-5 text-lg md:text-xl rounded-2xl bg-background border border-input text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                            required
+                            autoComplete="new-password"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {showPassword ? (
+                              <EyeOff size={20} />
+                            ) : (
+                              <Eye size={20} />
+                            )}
+                          </button>
+                        </div>
                         <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          type="submit"
+                          disabled={loading}
+                          className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-2xl text-lg md:text-xl font-semibold text-primary-foreground bg-primary hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50"
                         >
-                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                          {loading ? (
+                            <>
+                              <Loading size="sm" variant="spinner" />
+                              <span className="font-semibold tracking-wide" style={{ 
+                                fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
+                                letterSpacing: "0.5px"
+                              }}>Cadastrando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus size={20} />
+                              <span>Cadastrar</span>
+                            </>
+                          )}
                         </button>
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-xl text-lg md:text-xl font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-500 transition-all shadow-lg shadow-orange-900/40 disabled:opacity-50"
-                      >
-                        <UserPlus size={20} />{" "}
-                        {loading ? "Cadastrando..." : "Cadastrar"}
-                      </button>
                       </motion.form>
                     )}
                   </AnimatePresence>
 
-                  <div className="pt-4 md:pt-6 text-base md:text-lg text-slate-300">
+                  <div className="pt-4 md:pt-6 text-base md:text-lg" style={{ color: "#FFFFFF" }}>
                     <button
                       onClick={() => {
                         setPreviousTab(activeTab);
@@ -717,7 +1315,7 @@ export const AuthPage = () => {
                         setError("");
                         setSuccessMessage("");
                       }}
-                      className="font-medium text-orange-400 hover:text-orange-300"
+                      className="font-medium text-orange-400 hover:text-orange-300 transition-colors"
                     >
                       {isLoginView
                         ? "Não tem uma conta? Cadastre-se"
@@ -727,10 +1325,10 @@ export const AuthPage = () => {
 
                   <div className="mt-8 md:mt-10 relative">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-800" />
+                      <div className="w-full border-t" style={{ borderColor: "rgba(255, 255, 255, 0.2)" }} />
                     </div>
-                    <div className="relative flex justify-center text-base md:text-lg text-slate-400">
-                      <span className="px-3 bg-slate-900/70">Ou</span>
+                    <div className="relative flex justify-center text-base md:text-lg" style={{ color: "#E2E8F0" }}>
+                      <span className="px-4 rounded-full" style={{ background: "rgba(255, 255, 255, 0.1)", backdropFilter: "blur(8px)" }}>Ou</span>
                     </div>
                   </div>
 
@@ -738,22 +1336,47 @@ export const AuthPage = () => {
                     <button
                       onClick={() => handleGoogleSignIn(activeTab)}
                       disabled={loading}
-                      className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-xl border border-slate-700 bg-slate-900/80 text-base md:text-lg font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                      className="w-full flex justify-center items-center gap-3 py-4 md:py-5 px-4 rounded-2xl border border-border bg-secondary text-secondary-foreground text-base md:text-lg font-medium hover:bg-secondary/80 disabled:opacity-50 transition-all"
                     >
                       <GoogleIcon /> Entrar com o Google
                     </button>
                   </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+            </div>
+          </div>
 
-        <div className="hidden md:block w-[45%] relative">
-          <div className="absolute inset-0 bg-[url('/SP3.jpg')] bg-cover bg-center" />
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-900/30 via-slate-900/20 to-slate-900/60" />
-        </div>
-      </div>
+          {/* Imagem lateral com formato arredondado interno - melhorada */}
+          <motion.div 
+            className="hidden md:block w-[42%] relative m-4 overflow-hidden flex-shrink-0"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ 
+              opacity: isExpanded ? 1 : 0,
+              scale: isExpanded ? 1 : 0.9,
+            }}
+            transition={{ 
+              duration: 0.2,
+              ease: [0.22, 1, 0.36, 1],
+              delay: 0.05,
+            }}
+            style={{
+              borderRadius: "1.5rem",
+              boxShadow: `
+                inset 0 2px 10px rgba(0, 0, 0, 0.5),
+                0 10px 30px rgba(0, 0, 0, 0.4)
+              `,
+            }}
+          >
+            <div 
+              className="absolute inset-0 bg-[url('/SP3.jpg')] bg-cover bg-center"
+              style={{ borderRadius: "1.5rem" }}
+            />
+            <div 
+              className="absolute inset-0 bg-gradient-to-br from-slate-900/20 via-transparent to-slate-900/40"
+              style={{ borderRadius: "1.5rem" }}
+            />
+          </motion.div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 };

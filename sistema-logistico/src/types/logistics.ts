@@ -51,6 +51,7 @@ export interface SupportCall {
   deletedBy?: string;
   packageCount?: number;
   deliveryRegions?: string[];
+  cargoPhotoUrl?: string; // URL da foto da carga
 }
 
 // Interface para o histórico de mensagens do Chatbot

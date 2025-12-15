@@ -7,28 +7,29 @@
 
 @layer base {
   :root {
-    /* Cores Base - Estilo Spotify (tons claros/bege) */
+    /* Cores Base - Gradiente Laranja */
     --background: 0 0% 97%;
     --foreground: 222 15% 15%; /* Texto levemente azulado para leitura melhor */
 
-    /* Sistema de Cards - Estilo Spotify */
-    --card: 0 0% 100%;
+    /* Sistema de Cards - Tom laranja suave */
+    --card: 30 50% 95%;
     --card-foreground: 222 15% 15%;
 
     /* Elementos Interativos */
     --popover: 0 0% 100%;
     --popover-foreground: 222 15% 15%;
 
-    /* Tema SPX (Laranja Shopee) - Paleta da foto */
-    --primary: 11 86% 53%;
+    /* Tema SPX (Laranja Shopee) - Cores oficiais Shopee */
+    --primary: 11 86% 53%; /* #FA4F26 - Laranja principal Shopee */
     --primary-foreground: 0 0% 100%;
 
-    /* Paleta de Laranja da foto: #FFCC33, #FFA832, #FE8330, #FE5F2F, #FD3A2D */
-    --orange-1: 48 100% 60%; /* #FFCC33 */
-    --orange-2: 30 100% 60%; /* #FFA832 */
-    --orange-3: 18 99% 59%; /* #FE8330 */
-    --orange-4: 12 99% 59%; /* #FE5F2F */
-    --orange-5: 6 98% 58%; /* #FD3A2D */
+    /* Paleta de Laranja Shopee: #FFCC33, #FFA832, #FE8330, #FE5F2F, #FD3A2D, #FA4F26 */
+    --orange-1: 48 100% 60%; /* #FFCC33 - Amarelo laranja claro */
+    --orange-2: 30 100% 60%; /* #FFA832 - Laranja médio claro */
+    --orange-3: 18 99% 59%; /* #FE8330 - Laranja médio */
+    --orange-4: 12 99% 59%; /* #FE5F2F - Laranja médio escuro */
+    --orange-5: 6 98% 58%; /* #FD3A2D - Laranja escuro */
+    --orange-6: 11 86% 53%; /* #FA4F26 - Laranja principal Shopee */
 
     /* Variações SPX para uso no Tailwind */
     --spx-orange: 11 86% 53%;
@@ -36,15 +37,15 @@
     --spx-orange-dark: 6 98% 58%;
     --spx-background: 11 86% 53%;
 
-    /* Cores Secundárias e de Apoio - Estilo Spotify */
-    --secondary: 0 0% 95%;
-    --secondary-foreground: 222 47% 11.2%;
+    /* Cores Secundárias e de Apoio - Tons laranja Shopee suaves */
+    --secondary: 30 50% 92%;
+    --secondary-foreground: 11 86% 53%;
 
-    --muted: 0 0% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 30 40% 90%;
+    --muted-foreground: 11 60% 40%;
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 222 47% 11.2%;
+    --accent: 30 55% 94%;
+    --accent-foreground: 11 86% 53%;
 
     /* Cores de Estado e Feedback */
     --destructive: 0 84.2% 60.2%;
@@ -57,10 +58,10 @@
     --status-available: 142 76% 36%;
     --status-unavailable: 0 84% 60%;
 
-    /* Bordas e Inputs - Estilo Spotify */
-    --border: 0 0% 90%;
-    --input: 0 0% 92%;
-    --ring: 11 86% 53%; /* Anel de foco laranja */
+    /* Bordas e Inputs - Tons laranja Shopee */
+    --border: 30 40% 85%;
+    --input: 30 50% 95%;
+    --ring: 11 86% 53%; /* Anel de foco laranja Shopee */
 
     --radius: 0.5rem;
 
@@ -159,12 +160,55 @@
   html,
   body {
     /* CORREÇÃO DAS BORDAS: Impede scroll lateral e "bounces" indesejados */
-    @apply h-full w-full overflow-x-hidden bg-background text-foreground antialiased;
+    @apply h-full w-full overflow-x-hidden text-foreground antialiased;
     overscroll-behavior-y: none;
   }
 
   body {
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Gradiente laranja vertical para modo claro (do suave no topo para escuro no final) */
+  body:not(.dark) {
+    background: linear-gradient(
+      to bottom,
+      hsl(30, 100%, 85%) 0%,
+      hsl(28, 100%, 80%) 10%,
+      hsl(25, 100%, 75%) 20%,
+      hsl(22, 100%, 70%) 30%,
+      hsl(20, 100%, 65%) 40%,
+      hsl(18, 100%, 60%) 50%,
+      hsl(15, 100%, 55%) 60%,
+      hsl(12, 100%, 50%) 70%,
+      hsl(10, 100%, 45%) 80%,
+      hsl(8, 100%, 40%) 90%,
+      hsl(5, 100%, 35%) 100%
+    );
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Background totalmente escuro para modo dark */
+  body.dark {
+    background: hsl(222 47% 8%) !important;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Garantir que html também fique escuro no modo dark */
+  html.dark {
+    background: hsl(222 47% 8%) !important;
+  }
+  
+  /* Forçar background escuro em containers principais no modo dark */
+  body.dark .min-h-dvh,
+  body.dark .min-h-screen {
+    background: hsl(222 47% 8%) !important;
+  }
+  
+  /* Garantir que elementos sem background específico sejam transparentes no dark */
+  body.dark > div:not([class*="bg-"]):not([style*="background"]) {
+    background: transparent !important;
   }
 
   /* Scrollbar Fina e Moderna */
@@ -271,5 +315,79 @@
   }
   75% {
     transform: rotate(-15deg);
+  }
+}
+
+/* Animações de Loading */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  40% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Transições suaves para abas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tab-content-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tab-content-slide {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Animação do gradiente de fundo Shopee */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
   }
 }

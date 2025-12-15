@@ -18,6 +18,10 @@ import {
   ArrowRight,
   ExternalLink,
   Trash2,
+  Building,
+  Package,
+  Truck,
+  Weight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -330,18 +334,220 @@ export default function SupportCallCard({
           )}
         </div>
 
-        {/* Descrição - CORRIGIDA */}
-        {call.description && (
-          <div className="bg-gray-50 rounded-lg p-3 border">
-            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-              <FileText size={12} /> <span>Descrição Gerada</span>
+        {/* Informações Organizadas */}
+        {call.description && (() => {
+          // Parsear a descrição para extrair informações
+          const parseDescription = (desc: string) => {
+            const info: any = {};
+            
+            // Extrair MOTIVO
+            const motivoMatch = desc.match(/MOTIVO:\s*([^.]+)/i);
+            if (motivoMatch) info.motivo = motivoMatch[1].trim();
+            
+            // Extrair DETALHES
+            const detalhesMatch = desc.match(/DETALHES:\s*([^.]+(?:\.[^H]|$))/i);
+            if (detalhesMatch) info.detalhes = detalhesMatch[1].trim();
+            
+            // Extrair Hub
+            const hubMatch = desc.match(/Hub:\s*([^.]+)/i);
+            if (hubMatch) info.hub = hubMatch[1].trim();
+            
+            // Extrair Loc (localização)
+            const locMatch = desc.match(/Loc:\s*([^.]+)/i);
+            if (locMatch) info.loc = locMatch[1].trim();
+            
+            // Extrair Qtd
+            const qtdMatch = desc.match(/Qtd:\s*(\d+)/i);
+            if (qtdMatch) info.qtd = qtdMatch[1].trim();
+            
+            // Extrair Regiões
+            const regioesMatch = desc.match(/Regiões:\s*([^.]+)/i);
+            if (regioesMatch) {
+              info.regioes = regioesMatch[1].split(',').map(r => r.trim()).filter(Boolean);
+            }
+            
+            // Extrair Veículos
+            const veiculosMatch = desc.match(/Veículos:\s*([^.]+)/i);
+            if (veiculosMatch) {
+              info.veiculos = veiculosMatch[1].split(',').map(v => v.trim()).filter(Boolean);
+            }
+            
+            // Verificar se é VOLUMOSO
+            info.volumoso = /VOLUMOSO/i.test(desc);
+            
+            return info;
+          };
+          
+          const parsedInfo = parseDescription(call.description);
+          const hasParsedInfo = Object.keys(parsedInfo).length > 0;
+          
+          return (
+            <div className="space-y-4">
+              {hasParsedInfo ? (
+                <>
+                  {/* Motivo e Detalhes */}
+                  {(parsedInfo.motivo || parsedInfo.detalhes) && (
+                    <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-xl p-4 border-2 border-red-200/50 dark:border-red-800/30">
+                      {parsedInfo.motivo && (
+                        <div className="mb-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <AlertTriangle size={16} className="text-red-600 dark:text-red-400" />
+                            <span className="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+                              Motivo
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white pl-6">
+                            {parsedInfo.motivo}
+                          </p>
+                        </div>
+                      )}
+                      {parsedInfo.detalhes && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <FileText size={16} className="text-orange-600 dark:text-orange-400" />
+                            <span className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                              Detalhes
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 pl-6 leading-relaxed">
+                            {parsedInfo.detalhes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Grid de Informações */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Hub */}
+                    {parsedInfo.hub && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200/50 dark:border-blue-800/30">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Building size={14} className="text-blue-600 dark:text-blue-400" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                            Hub
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white pl-5">
+                          {parsedInfo.hub}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Quantidade de Pacotes */}
+                    {parsedInfo.qtd && (
+                      <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 border border-purple-200/50 dark:border-purple-800/30">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Package size={14} className="text-purple-600 dark:text-purple-400" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                            Quantidade
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white pl-5">
+                          {parsedInfo.qtd} {parsedInfo.qtd === "1" ? "pacote" : "pacotes"}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Regiões */}
+                    {parsedInfo.regioes && parsedInfo.regioes.length > 0 && (
+                      <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200/50 dark:border-green-800/30 md:col-span-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <MapPin size={14} className="text-green-600 dark:text-green-400" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-green-700 dark:text-green-300">
+                            Regiões de Entrega
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pl-5">
+                          {parsedInfo.regioes.map((regiao: string, idx: number) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
+                            >
+                              {regiao}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Veículos */}
+                    {parsedInfo.veiculos && parsedInfo.veiculos.length > 0 && (
+                      <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-200/50 dark:border-indigo-800/30 md:col-span-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Truck size={14} className="text-indigo-600 dark:text-indigo-400" />
+                          <span className="text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                            Veículos Necessários
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pl-5">
+                          {parsedInfo.veiculos.map((veiculo: string, idx: number) => (
+                            <span
+                              key={idx}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-100 dark:bg-indigo-800/40 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-700 capitalize"
+                            >
+                              {veiculo}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Volumoso */}
+                    {parsedInfo.volumoso && (
+                      <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 border-2 border-orange-300 dark:border-orange-700 md:col-span-2">
+                        <div className="flex items-center gap-2">
+                          <Weight size={16} className="text-orange-600 dark:text-orange-400" />
+                          <span className="text-sm font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                            ⚠️ Carga Volumosa
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Localização (se não foi parseada) */}
+                  {parsedInfo.loc && parsedInfo.loc !== call.location && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200/50 dark:border-blue-800/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <MapPin size={14} className="text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                          Localização
+                        </span>
+                      </div>
+                      {isGoogleLink(parsedInfo.loc) ? (
+                        <a
+                          href={parsedInfo.loc}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-semibold text-blue-700 dark:text-blue-300 hover:underline flex items-center gap-2 pl-5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Abrir no Google Maps
+                          <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <p className="text-sm text-gray-800 dark:text-gray-200 pl-5 break-all">
+                          {parsedInfo.loc}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Fallback para descrição não parseada
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    <FileText size={12} /> <span>Descrição</span>
+                  </div>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                    {call.description}
+                  </p>
+                </div>
+              )}
             </div>
-            {/* ADICIONADO whitespace-pre-wrap AQUI */}
-            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-              {call.description}
-            </p>
-          </div>
-        )}
+          );
+        })()}
       </CardContent>
     </Card>
   );

@@ -62,22 +62,55 @@ export const SummaryCard = ({
   icon: React.ReactNode;
   subtext: string;
   colorClass: string;
-}) => (
-  <Card className="shadow-lg bg-card text-card-foreground border border-border">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">
-        {title}
-      </CardTitle>
-      <div style={{ color: colorClass }} className="h-4 w-4">
-        {icon}
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold text-primary">{value}</div>
-      <p className="text-xs text-muted-foreground">{subtext}</p>
-    </CardContent>
-  </Card>
-);
+}) => {
+  const isDark = document.documentElement.classList.contains("dark");
+  
+  return (
+    <Card 
+      className={cn(
+        "relative overflow-hidden backdrop-blur-xl",
+        isDark
+          ? "bg-gradient-to-br from-slate-800/90 via-slate-700/90 to-slate-800/90 border-slate-600/50"
+          : "bg-white/80 border-orange-200/50"
+      )}
+    >
+      <div
+        className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl opacity-20"
+        style={{
+          background: `radial-gradient(circle, ${colorClass} 0%, transparent 70%)`,
+        }}
+      />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+        <CardTitle className={cn(
+          "text-sm font-semibold uppercase tracking-wide",
+          isDark ? "text-slate-300" : "text-slate-700"
+        )}>
+          {title}
+        </CardTitle>
+        <div 
+          style={{ color: colorClass }} 
+          className="h-5 w-5 relative z-10"
+        >
+          {icon}
+        </div>
+      </CardHeader>
+      <CardContent className="relative z-10">
+        <div 
+          className="text-3xl font-bold mb-1"
+          style={{ color: colorClass }}
+        >
+          {value}
+        </div>
+        <p className={cn(
+          "text-xs font-medium",
+          isDark ? "text-slate-400" : "text-slate-600"
+        )}>
+          {subtext}
+        </p>
+      </CardContent>
+    </Card>
+  );
+};
 
 // --- KanbanColumn ---
 export const KanbanColumn = ({
@@ -92,31 +125,65 @@ export const KanbanColumn = ({
   colorClass: string;
   children: React.ReactNode;
   headerControls?: React.ReactNode;
-}) => (
-  <div className="flex flex-col h-full bg-card rounded-lg overflow-hidden border border-border">
-    <div className="p-4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
-      <div className="flex justify-between items-center mb-2">
-        <div className="flex items-center gap-2">
-          <div
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ backgroundColor: colorClass }}
-          />
-          <h3 className="font-semibold text-sm uppercase text-foreground truncate">
-            {title}
-          </h3>
+}) => {
+  const isDark = document.documentElement.classList.contains("dark");
+  
+  return (
+    <div 
+      className={cn(
+        "flex flex-col h-full rounded-xl overflow-hidden backdrop-blur-xl",
+        isDark
+          ? "bg-gradient-to-br from-slate-800/90 via-slate-700/90 to-slate-800/90 border-slate-600/50"
+          : "bg-white/80 border-orange-200/50"
+      )}
+      style={{
+        border: isDark ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid rgba(254, 131, 48, 0.3)",
+        boxShadow: isDark ? "0 8px 32px rgba(0, 0, 0, 0.3)" : "0 4px 20px rgba(0, 0, 0, 0.1)",
+      }}
+    >
+      <div 
+        className={cn(
+          "p-4 sticky top-0 z-10 backdrop-blur-xl",
+          isDark
+            ? "bg-slate-800/95 border-b border-slate-600/50"
+            : "bg-white/90 border-b border-orange-200/50"
+        )}
+      >
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-3 h-3 rounded-full flex-shrink-0 shadow-lg"
+              style={{ 
+                backgroundColor: colorClass,
+                boxShadow: `0 0 12px ${colorClass}80`,
+              }}
+            />
+            <h3 className={cn(
+              "font-bold text-sm uppercase truncate tracking-wide",
+              isDark ? "text-white" : "text-slate-800"
+            )}>
+              {title}
+            </h3>
+          </div>
+          <Badge
+            variant="secondary"
+            className="px-3 py-1 font-bold text-xs"
+            style={{ 
+              borderColor: colorClass, 
+              color: colorClass,
+              background: `${colorClass}15`,
+              border: `1px solid ${colorClass}40`,
+            }}
+          >
+            {count}
+          </Badge>
         </div>
-        <Badge
-          variant="secondary"
-          style={{ borderColor: colorClass, color: colorClass }}
-        >
-          {count}
-        </Badge>
+        {headerControls && <div className="mt-2">{headerControls}</div>}
       </div>
-      {headerControls && <div className="mt-2">{headerControls}</div>}
+      <div className="p-3 space-y-3 overflow-y-auto h-full">{children}</div>
     </div>
-    <div className="p-2 space-y-3 overflow-y-auto h-full">{children}</div>
-  </div>
-);
+  );
+};
 
 // --- DriverInfoModal ---
 export const DriverInfoModal = ({

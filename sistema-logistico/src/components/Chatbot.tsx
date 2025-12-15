@@ -270,11 +270,32 @@ export const Chatbot: React.FC = () => {
     <>
       {/* Janela do Chat */}
       {isOpen && (
-        <Card className="font-sans fixed bottom-20 right-4 z-50 w-[calc(100%-2rem)] max-w-sm h-[70dvh] flex flex-col shadow-2xl rounded-2xl overflow-hidden border-none">
-          {/* --- NOVO CABEÇALHO LARANJA --- */}
-          <CardHeader className="flex flex-row items-center justify-between p-4 bg-primary text-primary-foreground">
+        <Card 
+          className="font-sans fixed bottom-20 right-4 z-50 w-[calc(100%-2rem)] max-w-sm h-[70dvh] flex flex-col shadow-2xl rounded-3xl overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)",
+          }}
+        >
+          {/* --- CABEÇALHO MODERNO --- */}
+          <CardHeader 
+            className="flex flex-row items-center justify-between p-5"
+            style={{
+              background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+              boxShadow: "0 4px 20px rgba(249, 115, 22, 0.3)",
+            }}
+          >
             <div className="flex items-center gap-3">
-              <span className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-white p-1.5 shadow-inner">
+              <span 
+                className="relative flex h-12 w-12 shrink-0 overflow-hidden rounded-full p-1.5"
+                style={{
+                  background: "rgba(255, 255, 255, 0.2)",
+                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                }}
+              >
                 <img
                   src="/shopee-chicken.png"
                   alt="ApoioBot Avatar"
@@ -282,35 +303,63 @@ export const Chatbot: React.FC = () => {
                 />
               </span>
               <div>
-                <CardTitle className="text-base font-semibold">
+                <CardTitle className="text-lg font-bold text-white tracking-wide">
                   ApoioBot
                 </CardTitle>
-                <p className="text-xs text-primary-foreground/80">Online</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div 
+                    className="w-2 h-2 rounded-full animate-pulse"
+                    style={{
+                      background: "#10b981",
+                      boxShadow: "0 0 8px rgba(16, 185, 129, 0.6)",
+                    }}
+                  />
+                  <p className="text-xs text-white/90 font-medium">Online</p>
+                </div>
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleCloseChat}
-              className="rounded-full text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/20"
+              className="rounded-full text-white hover:text-white hover:bg-orange-500/20 transition-all"
             >
-              <X size={18} />
+              <X size={20} />
             </Button>
           </CardHeader>
 
-          {/* --- NOVO FUNDO DE CHAT --- */}
-          <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-background">
+          {/* --- FUNDO DE CHAT MODERNO --- */}
+          <CardContent 
+            className="flex-1 overflow-y-auto p-5 space-y-4"
+            style={{
+              background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)",
+            }}
+          >
             {/* Mensagem de Boas-vindas (Sempre a primeira) */}
             <div className="flex items-start gap-3">
-              <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-800/30 p-1.5">
+              <span 
+                className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1.5"
+                style={{
+                  background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)",
+                  border: "1px solid rgba(249, 115, 22, 0.3)",
+                  boxShadow: "0 4px 15px rgba(249, 115, 22, 0.2)",
+                }}
+              >
                 <img
                   src="/shopee-chicken.png"
                   alt="ApoioBot Avatar"
                   className="h-full w-full object-contain"
                 />
               </span>
-              <div className="p-3 rounded-lg bg-muted text-sm max-w-[80%] rounded-tl-none shadow-sm">
-                <p>
+              <div 
+                className="p-4 rounded-2xl max-w-[80%] rounded-tl-none"
+                style={{
+                  background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                }}
+              >
+                <p className="text-sm font-medium text-white leading-relaxed">
                   {chatStep === "initial"
                     ? "Olá! Sou o ApoioBot. Para te ajudar, selecione o seu papel:"
                     : "Em que mais posso ajudar?"}
@@ -322,25 +371,55 @@ export const Chatbot: React.FC = () => {
 
             {/* 1. Botões de Seleção de Papel */}
             {chatStep === "initial" && !isLoading && (
-              <div className="flex flex-col space-y-2 items-start pl-11">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-auto whitespace-normal text-left rounded-lg shadow-sm hover:border-primary hover:bg-primary/10"
+              <div className="flex flex-col space-y-3 items-start pl-14">
+                <button
                   onClick={() => handleRoleSelect("sender")}
+                  className="group w-full text-left p-4 rounded-xl transition-all"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                    border: "1px solid rgba(249, 115, 22, 0.3)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(249, 115, 22, 0.3)";
+                    e.currentTarget.style.transform = "translateX(4px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.3)";
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.2)";
+                    e.currentTarget.style.transform = "translateX(0)";
+                  }}
                 >
-                  <SendHorizontal className="mr-2 h-4 w-4 text-primary" /> Vou
-                  ENVIAR pacotes
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-auto whitespace-normal text-left rounded-lg shadow-sm hover:border-primary hover:bg-primary/10"
+                  <div className="flex items-center gap-3">
+                    <SendHorizontal className="h-5 w-5 text-orange-400" />
+                    <span className="text-sm font-semibold text-white">Vou ENVIAR pacotes</span>
+                  </div>
+                </button>
+                <button
                   onClick={() => handleRoleSelect("receiver")}
+                  className="group w-full text-left p-4 rounded-xl transition-all"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                    border: "1px solid rgba(249, 115, 22, 0.3)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                    e.currentTarget.style.boxShadow = "0 8px 32px rgba(249, 115, 22, 0.3)";
+                    e.currentTarget.style.transform = "translateX(4px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.3)";
+                    e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.2)";
+                    e.currentTarget.style.transform = "translateX(0)";
+                  }}
                 >
-                  <ArrowLeft className="mr-2 h-4 w-4 text-primary" /> Vou
-                  RECEBER pacotes
-                </Button>
+                  <div className="flex items-center gap-3">
+                    <ArrowLeft className="h-5 w-5 text-orange-400" />
+                    <span className="text-sm font-semibold text-white">Vou RECEBER pacotes</span>
+                  </div>
+                </button>
               </div>
             )}
 
@@ -352,28 +431,57 @@ export const Chatbot: React.FC = () => {
                   chatStep === "sending_topics" ? senderTopics : receiverTopics;
                 return (
                   <div key={msg.id} className="flex items-start gap-3">
-                    <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-800/30 p-1.5">
+                    <span 
+                      className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1.5"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)",
+                        border: "1px solid rgba(249, 115, 22, 0.3)",
+                        boxShadow: "0 4px 15px rgba(249, 115, 22, 0.2)",
+                      }}
+                    >
                       <img
                         src="/shopee-chicken.png"
                         alt="ApoioBot Avatar"
                         className="h-full w-full object-contain"
                       />
                     </span>
-                    <div className="flex flex-col space-y-2 items-start">
-                      <div className="p-3 rounded-lg bg-muted text-sm max-w-[80%] rounded-tl-none shadow-sm">
-                        <p>{msg.parts[0].text}</p>
+                    <div className="flex flex-col space-y-3 items-start">
+                      <div 
+                        className="p-4 rounded-2xl max-w-[80%] rounded-tl-none"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                        }}
+                      >
+                        <p className="text-sm font-medium text-white leading-relaxed">{msg.parts[0].text}</p>
                       </div>
                       {topicsToShow.map((topic) => (
-                        <Button
+                        <button
                           key={topic}
-                          variant="outline"
-                          size="sm"
-                          className="h-auto whitespace-normal text-left rounded-lg shadow-sm hover:border-primary hover:bg-primary/10"
                           onClick={() => handleTopicClick(topic)}
                           disabled={isLoading}
+                          className="w-full text-left p-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                            border: "1px solid rgba(249, 115, 22, 0.3)",
+                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isLoading) {
+                              e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                              e.currentTarget.style.boxShadow = "0 8px 32px rgba(249, 115, 22, 0.3)";
+                              e.currentTarget.style.transform = "translateX(4px)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.3)";
+                            e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.2)";
+                            e.currentTarget.style.transform = "translateX(0)";
+                          }}
                         >
-                          {topic}
-                        </Button>
+                          <span className="text-sm font-semibold text-white">{topic}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -384,33 +492,68 @@ export const Chatbot: React.FC = () => {
               if (msg.type === "follow-up") {
                 return (
                   <div key={msg.id} className="flex items-start gap-3">
-                    <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-800/30 p-1.5">
+                    <span 
+                      className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1.5"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)",
+                        border: "1px solid rgba(249, 115, 22, 0.3)",
+                        boxShadow: "0 4px 15px rgba(249, 115, 22, 0.2)",
+                      }}
+                    >
                       <img
                         src="/shopee-chicken.png"
                         alt="ApoioBot Avatar"
                         className="h-full w-full object-contain"
                       />
                     </span>
-                    <div className="flex flex-col space-y-2 items-start">
-                      <div className="p-3 rounded-lg bg-muted text-sm max-w-[80%] rounded-tl-none shadow-sm">
-                        <p>Posso ajudar em algo mais?</p>
+                    <div className="flex flex-col space-y-3 items-start">
+                      <div 
+                        className="p-4 rounded-2xl max-w-[80%] rounded-tl-none"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                        }}
+                      >
+                        <p className="text-sm font-medium text-white leading-relaxed">Posso ajudar em algo mais?</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-auto whitespace-normal text-left rounded-lg shadow-sm hover:border-primary hover:bg-primary/10"
+                      <button
                         onClick={handleResetChat}
+                        className="w-full text-left p-3 rounded-xl transition-all"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+                          border: "1px solid rgba(249, 115, 22, 0.3)",
+                          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.6)";
+                          e.currentTarget.style.boxShadow = "0 8px 32px rgba(249, 115, 22, 0.3)";
+                          e.currentTarget.style.transform = "translateX(4px)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "rgba(249, 115, 22, 0.3)";
+                          e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.2)";
+                          e.currentTarget.style.transform = "translateX(0)";
+                        }}
                       >
-                        Ver menu principal
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-auto whitespace-normal text-left text-muted-foreground"
+                        <span className="text-sm font-semibold text-white">Ver menu principal</span>
+                      </button>
+                      <button
                         onClick={handleCloseChat}
+                        className="w-full text-left p-3 rounded-xl transition-all"
+                        style={{
+                          background: "rgba(30, 41, 59, 0.4)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "rgba(30, 41, 59, 0.6)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "rgba(30, 41, 59, 0.4)";
+                        }}
                       >
-                        Encerrar conversa
-                      </Button>
+                        <span className="text-sm font-medium text-slate-400">Encerrar conversa</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -428,7 +571,14 @@ export const Chatbot: React.FC = () => {
                   >
                     {/* Avatar do Bot (só para o bot) */}
                     {msg.role === "model" && (
-                      <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-800/30 p-1.5">
+                      <span 
+                        className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1.5"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)",
+                          border: "1px solid rgba(249, 115, 22, 0.3)",
+                          boxShadow: "0 4px 15px rgba(249, 115, 22, 0.2)",
+                        }}
+                      >
                         <img
                           src="/shopee-chicken.png"
                           alt="ApoioBot Avatar"
@@ -440,16 +590,30 @@ export const Chatbot: React.FC = () => {
                     {/* Balão de Mensagem */}
                     <div
                       className={cn(
-                        "p-3 rounded-lg text-sm max-w-[85%] shadow-sm", // Max-width um pouco maior
+                        "p-4 rounded-2xl max-w-[85%] shadow-lg",
                         msg.role === "user"
-                          ? "bg-primary text-primary-foreground rounded-br-none" // Balão laranja do utilizador
-                          : "bg-muted text-foreground rounded-tl-none" // Balão cinza do bot
+                          ? "rounded-br-none" // Balão laranja do utilizador
+                          : "rounded-tl-none" // Balão do bot
                       )}
+                      style={
+                        msg.role === "user"
+                          ? {
+                              background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+                              boxShadow: "0 4px 20px rgba(249, 115, 22, 0.3)",
+                            }
+                          : {
+                              background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                            }
+                      }
                     >
                       {msg.parts[0].text && (
                         <p
                           className={cn(
-                            msg.gifUrls && msg.gifUrls.length > 0 && "mb-2"
+                            "text-sm font-medium leading-relaxed",
+                            msg.role === "user" ? "text-white" : "text-white",
+                            msg.gifUrls && msg.gifUrls.length > 0 && "mb-3"
                           )}
                         >
                           {msg.parts[0].text}
@@ -483,15 +647,29 @@ export const Chatbot: React.FC = () => {
             {/* Indicador de "Digitando..." */}
             {isLoading && (
               <div className="flex items-start gap-3">
-                <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-800/30 p-1.5">
+                <span 
+                  className="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full p-1.5"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.2) 100%)",
+                    border: "1px solid rgba(249, 115, 22, 0.3)",
+                    boxShadow: "0 4px 15px rgba(249, 115, 22, 0.2)",
+                  }}
+                >
                   <img
                     src="/shopee-chicken.png"
                     alt="ApoioBot Avatar"
                     className="h-full w-full object-contain"
                   />
                 </span>
-                <div className="p-3 rounded-lg bg-muted text-sm rounded-tl-none shadow-sm">
-                  <LoaderCircle className="animate-spin h-4 w-4 text-muted-foreground" />
+                <div 
+                  className="p-4 rounded-2xl rounded-tl-none"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+                  }}
+                >
+                  <LoaderCircle className="animate-spin h-5 w-5 text-orange-400" />
                 </div>
               </div>
             )}
@@ -499,10 +677,16 @@ export const Chatbot: React.FC = () => {
           </CardContent>
 
           {/* Footer (Input) */}
-          <CardFooter className="p-4 border-t bg-background">
+          <CardFooter 
+            className="p-4"
+            style={{
+              background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)",
+              borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+            }}
+          >
             <form
               onSubmit={handleSubmit}
-              className="flex w-full items-center space-x-2"
+              className="flex w-full items-center gap-3"
             >
               <Input
                 type="text"
@@ -512,10 +696,30 @@ export const Chatbot: React.FC = () => {
                   setInput(e.target.value)
                 }
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 rounded-xl border-0"
+                style={{
+                  background: "rgba(30, 41, 59, 0.6)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  color: "#fff",
+                  padding: "12px 16px",
+                  fontSize: "14px",
+                }}
               />
-              <Button type="submit" size="icon" disabled={isLoading || !input}>
-                <Send className="h-4 w-4" />
+              <Button 
+                type="submit" 
+                size="icon" 
+                disabled={isLoading || !input}
+                className="rounded-xl w-12 h-12"
+                style={{
+                  background: isLoading || !input 
+                    ? "rgba(249, 115, 22, 0.3)" 
+                    : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+                  boxShadow: isLoading || !input 
+                    ? "none" 
+                    : "0 4px 20px rgba(249, 115, 22, 0.4)",
+                }}
+              >
+                <Send className="h-5 w-5" />
               </Button>
             </form>
           </CardFooter>
@@ -531,17 +735,28 @@ export const Chatbot: React.FC = () => {
             setIsOpen(true);
           }
         }}
-        // --- NOVO ESTILO (LARANJA) ---
-        className="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full shadow-lg bg-primary hover:bg-primary/90"
+        className="fixed bottom-4 right-4 z-50 w-16 h-16 rounded-full transition-all"
         size="icon"
+        style={{
+          background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+          boxShadow: "0 8px 32px rgba(249, 115, 22, 0.5)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = "0 12px 40px rgba(249, 115, 22, 0.6)";
+          e.currentTarget.style.transform = "scale(1.05)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = "0 8px 32px rgba(249, 115, 22, 0.5)";
+          e.currentTarget.style.transform = "scale(1)";
+        }}
       >
         {isOpen ? (
-          <X size={24} />
+          <X size={28} className="text-white" />
         ) : (
           <img
             src="/shopee-chicken.png"
             alt="Abrir Chat"
-            className="h-full w-full p-2.5 object-contain rounded-full" // Um pouco mais de padding
+            className="h-full w-full p-3 object-contain rounded-full"
           />
         )}
       </Button>

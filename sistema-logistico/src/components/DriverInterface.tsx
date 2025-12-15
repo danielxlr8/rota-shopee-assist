@@ -4,28 +4,12 @@ import {
   Clock,
   AlertTriangle,
   X,
-  MapPin,
-  Package,
-  Building,
-  LoaderCircle,
-  Zap,
-  CheckCircle,
-  HelpCircle,
-  Truck,
-  Phone,
-  XCircle,
   User,
   LogOut,
   Eye,
   EyeOff,
-  Search,
-  Camera,
-  Ticket,
   Volume2,
   VolumeX,
-  ExternalLink,
-  CalendarClock,
-  BookOpen,
   Calendar as CalendarIcon,
   Lock,
   Navigation as NavigationIcon,
@@ -35,6 +19,20 @@ import {
   MinusCircle,
   PlusCircle,
   ArrowRightLeft,
+  BookOpen,
+  Zap,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  Truck,
+  Phone,
+  Package,
+  MapPin,
+  ExternalLink,
+  CalendarClock,
+  Image as ImageIcon,
+  Download,
+  X as XIcon,
 } from "lucide-react";
 import { auth, db, storage } from "../firebase";
 import {
@@ -64,9 +62,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { toast as sonnerToast } from "sonner";
 import { Card } from "./ui/card";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -76,256 +72,30 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// Imports organizados
+import { ProfileHeaderCard, StatusSection } from "./driver";
+import { UrgencyBadge } from "./driver/components/UrgencyBadge";
+import { HUBS } from "../constants/hubs";
+import { VEHICLE_TYPES } from "../constants/vehicleTypes";
+import { SUPPORT_REASONS } from "../constants/supportReasons";
+import {
+  TUTORIALS_SOLICITANTE,
+  TUTORIALS_PRESTADOR,
+} from "../constants/tutorials";
+import { formatTimestamp, formatPhoneNumber } from "../utils/formatting";
+import { showNotification } from "../utils/notifications";
+import { toast as sonnerToast } from "sonner";
+import { Loading, LoadingOverlay } from "./ui/loading";
+import { RouteNotificationCard } from "./RouteNotificationCard";
+
 interface DriverInterfaceProps {
   driver: Driver;
 }
 
-const hubs = [
-  "LM Hub_PR_Londrina_Parque ABC II",
-  "LM Hub_PR_Maringa",
-  "LM Hub_PR_Foz do Iguaçu",
-  "LM Hub_PR_Cascavel",
-];
-
-const supportReasons = [
-  "Problemas Mecânicos",
-  "Pneu Furado",
-  "Acidente / Sinistro",
-  "Roubo / Furto",
-  "Problemas de Saúde",
-  "Problemas Familiares",
-  "Excesso de Pacotes",
-  "Erro de Roteirização",
-  "Outros",
-];
-
-const vehicleTypesList = ["moto", "carro passeio", "carro utilitario", "van"];
 const sessionNotifiedCallIds = new Set<string>();
 
-// --- FUNÇÕES AUXILIARES ---
-
-const formatTimestamp = (
-  timestamp: Timestamp | Date | null | undefined
-): string => {
-  if (!timestamp) return "N/A";
-  const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
-  if (!(date instanceof Date) || isNaN(date.getTime())) {
-    return "Data inválida";
-  }
-  return format(date, "dd/MM HH:mm", { locale: ptBR });
-};
-
-const formatPhoneNumber = (value: string) => {
-  if (!value) return "";
-  const digits = value.replace(/\D/g, "");
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
-};
-
-const showNotification = (
-  type: "success" | "error" | "warning" | "info",
-  title: string,
-  message: string
-) => {
-  const styles = {
-    success: {
-      icon: CheckCircle,
-      color: "text-green-300",
-      border: "border-l-4 border-green-500",
-    },
-    error: {
-      icon: AlertTriangle,
-      color: "text-red-300",
-      border: "border-l-4 border-red-500",
-    },
-    warning: {
-      icon: AlertTriangle,
-      color: "text-orange-300",
-      border: "border-l-4 border-orange-500",
-    },
-    info: {
-      icon: CheckCircle,
-      color: "text-blue-300",
-      border: "border-l-4 border-blue-500",
-    },
-  };
-
-  const { icon: Icon, color, border } = styles[type];
-
-  sonnerToast.custom((t) => (
-    <div
-      className={cn(
-        "flex w-full max-w-sm bg-slate-800/95 backdrop-blur-xl shadow-xl shadow-black/30 rounded-2xl overflow-hidden border border-white/20",
-        border
-      )}
-    >
-      <div className="p-4 flex items-start gap-3 w-full">
-        <Icon size={20} className={cn("shrink-0 mt-0.5", color)} />
-        <div className="flex-1">
-          <p className="font-semibold text-sm text-white">{title}</p>
-          <p className="text-xs text-white/70 mt-1">{message}</p>
-        </div>
-        <button
-          onClick={() => sonnerToast.dismiss(t)}
-          className="text-white/50 hover:text-white transition-colors"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    </div>
-  ));
-};
-
-const UrgencyBadge = ({ urgency }: { urgency: UrgencyLevel | undefined }) => {
-  const styles = {
-    BAIXA:
-      "bg-white/60 dark:bg-white/10 text-muted-foreground dark:text-white/70 border-border dark:border-white/20 backdrop-blur-sm",
-    MEDIA:
-      "bg-blue-500/20 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-400/30 backdrop-blur-sm",
-    ALTA: "bg-orange-500/20 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-400/30 backdrop-blur-sm",
-    URGENTE:
-      "bg-red-500/20 dark:bg-red-500/20 text-red-700 dark:text-red-300 border-red-400/30 backdrop-blur-sm",
-  };
-  const style = styles[urgency || "BAIXA"];
-
-  return (
-    <span
-      className={cn(
-        "text-[10px] font-bold px-2 py-0.5 rounded-xl border uppercase tracking-wide shadow-lg shadow-black/5 dark:shadow-black/10",
-        style
-      )}
-    >
-      {urgency || "Normal"}
-    </span>
-  );
-};
-
-// --- SUB-COMPONENTES ---
-
-const ProfileHeaderCard = ({
-  driver,
-  onEditClick,
-  isUploading,
-  activeCall,
-}: any) => {
-  if (!driver) return null;
-
-  const statusConfig = {
-    DISPONIVEL: {
-      label: "Disponível",
-      color: "bg-green-500",
-      text: "text-green-300",
-      bg: "bg-green-500/20",
-    },
-    INDISPONIVEL: {
-      label: "Indisponível",
-      color: "bg-red-500",
-      text: "text-red-300",
-      bg: "bg-red-500/20",
-    },
-    EM_ROTA: {
-      label: "Em Rota",
-      color: "bg-blue-500",
-      text: "text-blue-300",
-      bg: "bg-blue-500/20",
-    },
-    OFFLINE: {
-      label: "Offline",
-      color: "bg-slate-400",
-      text: "text-slate-300",
-      bg: "bg-slate-500/20",
-    },
-  };
-
-  const status =
-    activeCall && activeCall.status === "ABERTO"
-      ? {
-          label: "Aguardando Apoio",
-          color: "bg-orange-500",
-          text: "text-orange-300",
-          bg: "bg-orange-500/20",
-        }
-      : statusConfig[driver.status as keyof typeof statusConfig] ||
-        statusConfig.OFFLINE;
-
-  return (
-    <Card className="border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20 bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl overflow-hidden mb-6">
-      <div className="h-24 bg-gradient-to-r from-[#FFCC33] via-[#FFA832] via-[#FE8330] via-[#FE5F2F] to-[#FD3A2D] relative">
-        <div className="absolute inset-0 opacity-10 bg-[url('/spx-pattern.png')] bg-repeat" />
-      </div>
-      <div className="px-5 pb-5 relative">
-        <div className="flex justify-between items-end -mt-10 mb-3">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-white/90 dark:bg-slate-800/80 backdrop-blur-xl p-1 shadow-xl shadow-black/10 dark:shadow-black/30 border border-border dark:border-white/20">
-              <div className="w-full h-full rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700/60 relative group">
-                {driver.avatar ? (
-                  <img
-                    src={driver.avatar}
-                    alt={driver.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-200 dark:bg-slate-700/60 text-slate-600 dark:text-white/60 font-bold text-xl">
-                    {driver.initials}
-                  </div>
-                )}
-                <button
-                  onClick={onEditClick}
-                  className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm rounded-full"
-                >
-                  <Camera className="text-white w-6 h-6" />
-                </button>
-                {isUploading && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm rounded-full">
-                    <LoaderCircle className="text-white animate-spin w-6 h-6" />
-                  </div>
-                )}
-              </div>
-            </div>
-            <div
-              className={cn(
-                "absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white dark:border-slate-800",
-                status.color
-              )}
-            />
-          </div>
-          <div
-            className={cn(
-              "px-3 py-1 rounded-xl text-xs font-bold border backdrop-blur-sm shadow-lg shadow-black/10 dark:shadow-black/20",
-              status.bg,
-              status.text,
-              "border-border dark:border-white/20"
-            )}
-          >
-            {status.label}
-          </div>
-        </div>
-
-        <div>
-          <h2 className="text-lg font-bold text-foreground dark:text-white leading-tight">
-            {driver.name}
-          </h2>
-          <p className="text-sm text-muted-foreground dark:text-white/70 flex items-center gap-1 mt-1">
-            <Building size={14} />{" "}
-            {driver.hub ? driver.hub.split("_")[2] : "Sem Hub"}
-          </p>
-          <div className="flex gap-4 mt-3 text-xs text-muted-foreground dark:text-white/80 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-white/60 dark:bg-white/10 backdrop-blur-xl px-2 py-1 rounded-xl border border-border dark:border-white/20">
-              <Truck size={14} className="text-[#FA4F26]" />
-              <span className="capitalize">{driver.vehicleType || "N/A"}</span>
-            </div>
-            <div className="flex items-center gap-1.5 bg-white/60 dark:bg-white/10 backdrop-blur-xl px-2 py-1 rounded-xl border border-border dark:border-white/20">
-              <Phone size={14} className="text-[#FA4F26]" />
-              <span>{formatPhoneNumber(driver.phone)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-};
-
+// DriverCallHistoryCard será movido para ./driver/components/DriverCallHistoryCard.tsx
+// Mantendo temporariamente aqui até ser extraído completamente
 const DriverCallHistoryCard = ({
   call,
   userId,
@@ -348,9 +118,23 @@ const DriverCallHistoryCard = ({
     window.open(`https://wa.me/55${otherParty.phone}?text=${msg}`, "_blank");
   };
 
+  const isDark = document.documentElement.classList.contains("dark");
+
   return (
-    <Card className="border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20 hover:shadow-2xl hover:shadow-black/10 dark:hover:shadow-black/30 transition-all bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-border dark:border-white/10">
+    <Card
+      className={cn(
+        "border border-border shadow-xl hover:shadow-2xl transition-all backdrop-blur-xl rounded-2xl overflow-hidden",
+        isDark
+          ? "bg-slate-800/90 border-slate-600/50 shadow-black/20 hover:shadow-black/30"
+          : "bg-white/80 border-orange-200/50 shadow-black/5 hover:shadow-black/10"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center justify-between p-4 border-b",
+          isDark ? "border-slate-600/50" : "border-orange-200/50"
+        )}
+      >
         <div className="flex items-center gap-3">
           <div
             className={cn(
@@ -363,19 +147,34 @@ const DriverCallHistoryCard = ({
             {isRequester ? <Package size={18} /> : <Truck size={18} />}
           </div>
           <div>
-            <h3 className="text-sm font-bold text-foreground dark:text-white">
+            <h3
+              className={cn(
+                "text-sm font-bold",
+                isDark ? "text-white" : "text-slate-800"
+              )}
+            >
               {isRequester
                 ? "Minha Solicitação"
                 : `Apoio para ${call.solicitante.name}`}
             </h3>
-            <p className="text-xs text-muted-foreground dark:text-white/60 flex items-center gap-1">
+            <p
+              className={cn(
+                "text-xs flex items-center gap-1",
+                isDark ? "text-white/60" : "text-slate-600"
+              )}
+            >
               <CalendarClock size={12} /> {formatTimestamp(call.timestamp)}
             </p>
           </div>
         </div>
         <div className="text-right">
           <UrgencyBadge urgency={call.urgency} />
-          <p className="text-[10px] font-medium text-muted-foreground dark:text-white/50 mt-1 uppercase tracking-wide">
+          <p
+            className={cn(
+              "text-[10px] font-medium mt-1 uppercase tracking-wide",
+              isDark ? "text-white/50" : "text-slate-600"
+            )}
+          >
             {call.status.replace("_", " ")}
           </p>
         </div>
@@ -383,40 +182,104 @@ const DriverCallHistoryCard = ({
 
       <div className="p-4 grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-white/50 block mb-0.5">
+          <span
+            className={cn(
+              "text-[10px] uppercase font-bold block mb-0.5",
+              isDark ? "text-white/50" : "text-slate-600"
+            )}
+          >
             Rota ID
           </span>
-          <span className="font-mono font-medium text-foreground dark:text-white bg-white/60 dark:bg-white/10 backdrop-blur-xl px-1.5 py-0.5 rounded-xl text-xs border border-border dark:border-white/20">
+          <span
+            className={cn(
+              "font-mono font-medium backdrop-blur-xl px-1.5 py-0.5 rounded-xl text-xs border",
+              isDark
+                ? "text-white bg-orange-500/20 border-orange-500/30"
+                : "text-slate-800 bg-orange-50/80 border-orange-200/50"
+            )}
+          >
             {call.routeId || "N/A"}
           </span>
         </div>
         <div>
-          <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-white/50 block mb-0.5">
+          <span
+            className={cn(
+              "text-[10px] uppercase font-bold block mb-0.5",
+              isDark ? "text-white/50" : "text-slate-600"
+            )}
+          >
             Pacotes
           </span>
-          <span className="font-medium text-foreground dark:text-white">
+          <span
+            className={cn(
+              "font-medium",
+              isDark ? "text-white" : "text-slate-800"
+            )}
+          >
             {call.packageCount || 0} un.
           </span>
         </div>
         <div className="col-span-2">
-          <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-white/50 block mb-0.5">
+          <span
+            className={cn(
+              "text-[10px] uppercase font-bold block mb-0.5",
+              isDark ? "text-white/50" : "text-slate-600"
+            )}
+          >
             Localização
           </span>
           <a
             href={call.location}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-blue-600 dark:text-blue-300 hover:text-blue-500 dark:hover:text-blue-200 hover:underline text-xs font-medium truncate transition-colors"
+            className={cn(
+              "flex items-center gap-1 hover:underline text-xs font-medium truncate transition-colors",
+              isDark
+                ? "text-blue-300 hover:text-blue-200"
+                : "text-blue-600 hover:text-blue-500"
+            )}
           >
             <MapPin size={12} /> {call.location} <ExternalLink size={10} />
           </a>
         </div>
+        {call.cargoPhotoUrl && (
+          <div className="col-span-2 p-2 rounded-xl bg-orange-500/10 dark:bg-orange-500/10 border border-orange-500/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ImageIcon
+                  size={14}
+                  className="text-orange-600 dark:text-orange-400"
+                />
+                <span className="text-xs font-semibold text-foreground dark:text-white">
+                  Foto da Carga Disponível
+                </span>
+              </div>
+              <a
+                href={call.cargoPhotoUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 transition-all shadow-md"
+              >
+                <Download size={12} />
+                <span>Baixar</span>
+              </a>
+            </div>
+          </div>
+        )}
       </div>
 
       {["EM ANDAMENTO", "ABERTO", "AGUARDANDO_APROVACAO"].includes(
         call.status
       ) && (
-        <div className="p-3 bg-white/40 dark:bg-white/5 backdrop-blur-xl border-t border-border dark:border-white/10 flex justify-end gap-2 flex-wrap">
+        <div
+          className={cn(
+            "p-3 backdrop-blur-xl border-t flex justify-end gap-2 flex-wrap",
+            isDark
+              ? "bg-slate-800/90 border-slate-600/50"
+              : "bg-orange-50/60 border-orange-200/50"
+          )}
+        >
           {otherParty && (
             <Button
               variant="outline"
@@ -432,7 +295,7 @@ const DriverCallHistoryCard = ({
               <Button
                 size="sm"
                 onClick={() => onRequestApproval(call.id)}
-                className="h-8 text-xs bg-[#FA4F26] hover:bg-[#EE4D2D] text-white rounded-xl shadow-lg shadow-orange-500/30"
+                className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-lg shadow-primary/30"
               >
                 <CheckCircle size={14} className="mr-1" /> Finalizar
               </Button>
@@ -462,77 +325,6 @@ const DriverCallHistoryCard = ({
   );
 };
 
-const OpenCallCard = ({ call, acceptingCallId, onAccept }: any) => {
-  const isAccepting = acceptingCallId === call.id;
-
-  return (
-    <Card className="border-l-4 border-l-[#FA4F26] border-y border-r border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20 bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl group hover:shadow-2xl hover:shadow-black/10 dark:hover:shadow-black/30 transition-all">
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/60 dark:bg-white/10 backdrop-blur-xl flex items-center justify-center text-[#FA4F26] font-bold text-sm border border-border dark:border-white/20 shadow-lg shadow-black/10 dark:shadow-black/20">
-              {call.solicitante.initials}
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground dark:text-white text-sm">
-                {call.solicitante.name}
-              </h4>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground dark:text-white/60">
-                <Building size={10} />
-                <span className="truncate max-w-[150px]">
-                  {call.hub?.split("_")[2]}
-                </span>
-              </div>
-            </div>
-          </div>
-          <UrgencyBadge urgency={call.urgency} />
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <div className="flex-1 bg-white/60 dark:bg-white/10 backdrop-blur-xl rounded-xl px-3 py-2 border border-border dark:border-white/20 shadow-lg shadow-black/5 dark:shadow-black/10">
-            <span className="text-[10px] font-bold text-muted-foreground dark:text-white/50 uppercase block">
-              Pacotes
-            </span>
-            <span className="font-bold text-foreground dark:text-white text-lg flex items-center gap-1">
-              <Package size={16} className="text-[#FA4F26]" />{" "}
-              {call.packageCount}
-            </span>
-          </div>
-          <div className="flex-1 bg-white/60 dark:bg-white/10 backdrop-blur-xl rounded-xl px-3 py-2 border border-border dark:border-white/20 shadow-lg shadow-black/5 dark:shadow-black/10">
-            <span className="text-[10px] font-bold text-muted-foreground dark:text-white/50 uppercase block">
-              Veículo
-            </span>
-            <span className="font-bold text-foreground dark:text-white text-sm flex items-center gap-1 capitalize h-7">
-              <Truck size={16} className="text-[#FA4F26]" /> {call.vehicleType}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex-1 flex items-center gap-2 text-xs text-muted-foreground dark:text-white/70 bg-white/60 dark:bg-white/10 backdrop-blur-xl p-2 rounded-xl border border-border dark:border-white/20 truncate shadow-lg shadow-black/5 dark:shadow-black/10 min-w-[200px]">
-            <MapPin
-              size={14}
-              className="text-muted-foreground dark:text-white/50 shrink-0"
-            />
-            <span className="truncate">{call.location}</span>
-          </div>
-          <Button
-            onClick={() => onAccept(call.id)}
-            disabled={!!acceptingCallId}
-            className="bg-[#FA4F26] hover:bg-[#EE4D2D] text-white font-bold text-xs h-9 px-4 rounded-xl shadow-lg shadow-orange-500/30 transition-transform active:scale-95"
-          >
-            {isAccepting ? (
-              <LoaderCircle className="animate-spin" />
-            ) : (
-              "ACEITAR"
-            )}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-};
-
 // --- COMPONENTE PRINCIPAL ---
 
 export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
@@ -557,6 +349,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [neededVehicles, setNeededVehicles] = useState([""]);
   const [hub, setHub] = useState("");
   const [isBulky, setIsBulky] = useState(false);
+  const [cargoPhoto, setCargoPhoto] = useState<File | null>(null);
+  const [cargoPhotoPreview, setCargoPhotoPreview] = useState<string | null>(
+    null
+  );
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Profile States
   const [name, setName] = useState("");
@@ -573,6 +370,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [reauthError, setReauthError] = useState("");
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
 
   // UI States
   const [historyFilter, setHistoryFilter] = useState<
@@ -588,7 +386,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [routeIdSearch, setRouteIdSearch] = useState("");
   // Removed unused state: setGlobalHubFilter
   const globalHubFilter = "Todos os Hubs";
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem("notificationsMuted") === "true";
+  });
+  const [routeNotifications, setRouteNotifications] = useState<SupportCall[]>(
+    []
+  );
+  const notifiedRouteIds = useRef<Set<string>>(new Set());
   const [isProfileWarningVisible, setIsProfileWarningVisible] = useState(true);
   const [acceptingCallId, setAcceptingCallId] = useState<string | null>(null);
 
@@ -615,57 +419,30 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     | "profile";
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  const tutorialsSolicitante = [
-    {
-      id: "sol-1",
-      question: "Como iniciar uma transferência?",
-      answer:
-        "Vá em: Menu > Transferência de Pacotes > Minhas transferências > Iniciar transferência de pacotes, escolha o motivo no qual se encaixa sua ocorrencia'.",
-    },
-    {
-      id: "sol-2",
-      question: "O que é o 'Acionando Socorro'?",
-      answer:
-        "Se você tiver um impedimento para a entrega (ex: sinistro), você deve acionar o socorro no app para que outro entregador possa te apoiar e realizar a entrega.",
-    },
-    {
-      id: "sol-3",
-      question: "Como cancelar uma transferência que não foi recebida?",
-      answer:
-        "Vá em: Minhas Transferências > Transferência em andamento > Cancelar solicitação > Confirmar.",
-    },
-  ];
-  const tutorialsPrestador = [
-    {
-      id: "pres-1",
-      question: "Onde vejo os pacotes que devo receber?",
-      answer:
-        "No menu 'Transferência de Pacotes', vá para a aba 'Meus recebidos' para ver as transferências destinadas a você.",
-    },
-    {
-      id: "pres-2",
-      question: "Como eu recebo os pacotes no meu APP?",
-      answer:
-        "No menu  Meus recebidos > Receber pacotes de Transferências de pacotes > Bipe pacotes > Finalizar Bipes",
-    },
-    {
-      id: "pres-3",
-      question: "Como eu importo minhas rotas transferidas para o APP circuit?",
-      answer: `Clique nos 3 pontinhos dentro do app (...) e após isso clique em 'importar planilha' e faça o upload do arquivo. \nSelecione a opção 'Sequencia' para roteirizar da forma correta, Após isto já estará organizado. :)`,
-    },
-  ];
-
+  // Validação do perfil completo - considera tanto os dados do driver quanto os estados locais
   const isProfileComplete = useMemo(() => {
     if (!driver) return false;
-    return !!(
-      driver.hub &&
-      driver.vehicleType &&
-      driver.phone &&
-      driver.name &&
-      shopeeId &&
-      !shopeeId.includes("Erro")
-    );
-  }, [driver, shopeeId]);
+    
+    // Usar estados locais se estiverem preenchidos, senão usar dados do driver
+    // Priorizar estados locais para refletir mudanças não salvas
+    const currentHub = (hub && hub.trim() !== "") ? hub : (driver.hub || "");
+    const currentVehicleType = (vehicleType && vehicleType.trim() !== "") ? vehicleType : (driver.vehicleType || "");
+    const currentPhone = (phone && phone.trim() !== "") ? phone : (driver.phone || "");
+    const currentName = (name && name.trim() !== "") ? name : (driver.name || "");
+    
+    // Validar telefone - remover formatação e verificar se tem 10 ou 11 dígitos
+    const cleanPhone = currentPhone ? currentPhone.replace(/\D/g, "") : "";
+    const isValidPhone = cleanPhone.length >= 10 && cleanPhone.length <= 11;
+    
+    // Validar se todos os campos obrigatórios estão preenchidos
+    const hasValidHub = currentHub && currentHub.trim() !== "" && HUBS.includes(currentHub as any);
+    const hasValidVehicleType = currentVehicleType && currentVehicleType.trim() !== "";
+    const hasValidPhone = currentPhone && currentPhone.trim() !== "" && isValidPhone;
+    const hasValidName = currentName && currentName.trim() !== "";
+    const hasValidShopeeId = shopeeId && !shopeeId.includes("Erro");
+    
+    return hasValidHub && hasValidVehicleType && hasValidPhone && hasValidName && hasValidShopeeId;
+  }, [driver, shopeeId, hub, vehicleType, phone, name]);
 
   const activeCallForDriver = useMemo(() => {
     return (
@@ -676,8 +453,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   }, [allMyCalls, userId]);
 
   const filteredHubs = useMemo(() => {
-    if (!hubSearch) return hubs;
-    return hubs.filter((h) =>
+    if (!hubSearch) return HUBS;
+    return HUBS.filter((h) =>
       h.toLowerCase().includes(hubSearch.toLowerCase())
     );
   }, [hubSearch]);
@@ -718,17 +495,30 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setTheme(isDark ? "dark" : "light");
   }, []);
 
+  // Atualizar data/hora do Brasil
+  useEffect(() => {
+    const updateDateTime = () => {
+      const brazilTime = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })
+      );
+      setCurrentDateTime(brazilTime);
+    };
+
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const toggleTheme = () => {
     const root = window.document.documentElement;
-    if (theme === "light") {
-      root.classList.add("dark");
-      setTheme("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      root.classList.remove("dark");
-      setTheme("light");
-      localStorage.setItem("theme", "light");
-    }
+    const newTheme = theme === "light" ? "dark" : "light";
+
+    // Aplicar tema imediatamente para animação
+    root.classList.remove("light", "dark");
+    root.classList.add(newTheme);
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
   };
 
   useEffect(() => {
@@ -744,10 +534,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   useEffect(() => {
     if (driver) {
       setName(driver.name || "");
-      setPhone(driver.phone || "");
-      setHub(driver.hub || "");
+      // Formatar o telefone ao carregar do driver
+      const driverPhone = driver.phone || "";
+      setPhone(driverPhone ? formatPhoneNumber(driverPhone) : "");
+      const driverHub = driver.hub || "";
+      setHub(driverHub);
+      setHubSearch(driverHub);
       setVehicleType(driver.vehicleType || "");
-      setHubSearch(driver.hub || "");
     }
   }, [driver]);
 
@@ -788,7 +581,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       audio.play().catch(() => {});
     }
     sonnerToast.custom((t) => (
-      <div className="flex w-full max-w-sm items-center gap-4 rounded-xl bg-slate-800/95 backdrop-blur-xl p-4 shadow-xl border border-white/20 ring-1 ring-black/5">
+      <div className="flex w-full max-w-sm items-center gap-4 rounded-xl bg-slate-800/95 backdrop-blur-xl p-4 shadow-xl border border-orange-500/30 ring-1 ring-black/5">
         <div
           className={cn(
             "p-2 rounded-full",
@@ -820,32 +613,28 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     triggerNotificationRef.current = (newCall: SupportCall) => {
       if (
         driver?.status !== "DISPONIVEL" ||
-        sessionNotifiedCallIds.has(newCall.id)
+        sessionNotifiedCallIds.has(newCall.id) ||
+        notifiedRouteIds.current.has(newCall.id)
       )
         return;
+
+      // Adicionar à lista de notificações
+      setRouteNotifications((prev) => [...prev, newCall]);
+      notifiedRouteIds.current.add(newCall.id);
+      sessionNotifiedCallIds.add(newCall.id);
+
+      // Tocar som de alerta se não estiver mutado
       if (!isMuted) {
         const audio = new Audio("/shopee-ringtone.mp3");
+        audio.volume = 0.5;
         audio.play().catch(() => {});
       }
-      sonnerToast.custom((t) => (
-        <div className="flex w-full bg-slate-800/95 backdrop-blur-xl border-l-4 border-[#FA4F26] p-4 rounded-xl shadow-xl shadow-black/30 border border-white/20">
-          <div className="flex-1">
-            <p className="font-bold text-white">Novo Apoio Solicitado</p>
-            <p className="text-sm text-white/70">
-              {newCall.solicitante.name} precisa de ajuda.
-            </p>
-          </div>
-          <button
-            onClick={() => sonnerToast.dismiss(t)}
-            className="text-white/50 hover:text-white"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      ));
-      sessionNotifiedCallIds.add(newCall.id);
     };
   }, [driver?.status, isMuted]);
+
+  const handleCloseNotification = (callId: string) => {
+    setRouteNotifications((prev) => prev.filter((call) => call.id !== callId));
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -919,8 +708,43 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     driverId: string,
     updates: Partial<Omit<Driver, "uid">>
   ) => {
-    if (!driverId) return;
-    await updateDoc(doc(db, "motoristas_pre_aprovados", driverId), updates);
+    if (!driverId) {
+      throw new Error("ID do motorista não fornecido");
+    }
+    
+    // Verificar se o ID é válido (não pode ser string de status)
+    if (driverId === "Carregando..." || driverId === "Não encontrado" || driverId.includes("Erro")) {
+      throw new Error(`ID do motorista inválido: ${driverId}`);
+    }
+    
+    try {
+      console.log("Tentando atualizar driver com ID:", driverId);
+      console.log("Updates:", updates);
+      
+      const driverDocRef = doc(db, "motoristas_pre_aprovados", driverId);
+      await updateDoc(driverDocRef, updates);
+      
+      console.log("Driver atualizado com sucesso no Firebase!");
+      
+      // Retornar sucesso explícito
+      return true;
+    } catch (error: any) {
+      console.error("Erro ao atualizar motorista:", error);
+      console.error("Detalhes do erro:", {
+        code: error.code,
+        message: error.message,
+        driverId: driverId
+      });
+      
+      // Melhorar mensagem de erro
+      if (error.code === "not-found") {
+        throw new Error(`Motorista não encontrado no banco de dados. ID: ${driverId}`);
+      } else if (error.code === "permission-denied") {
+        throw new Error("Você não tem permissão para atualizar este perfil.");
+      } else {
+        throw new Error(error.message || "Erro ao salvar no banco de dados.");
+      }
+    }
   };
 
   const updateCall = async (
@@ -964,16 +788,25 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     });
   };
 
-  const handleAvailabilityChange = (isAvailable: boolean) => {
+  const handleAvailabilityChange = async (isAvailable: boolean) => {
     if (!isProfileComplete || !shopeeId)
       return showNotification(
         "error",
         "Perfil Incompleto",
         "Verifique seus dados."
       );
-    updateDriver(shopeeId, {
-      status: isAvailable ? "DISPONIVEL" : "INDISPONIVEL",
-    });
+    try {
+      await updateDriver(shopeeId, {
+        status: isAvailable ? "DISPONIVEL" : "INDISPONIVEL",
+      });
+      showNotification(
+        "success",
+        "Status Atualizado",
+        `Você está agora ${isAvailable ? "Disponível" : "Indisponível"}.`
+      );
+    } catch (error: any) {
+      showNotification("error", "Erro", "Não foi possível atualizar o status.");
+    }
   };
 
   const handleAcceptCall = async (callId: string) => {
@@ -985,6 +818,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
       await updateDriver(shopeeId, { status: "EM_ROTA" });
+      showNotification("success", "Chamado Aceito", "Você está agora em rota.");
     } catch {
       showNotification("error", "Erro", "Falha ao aceitar.");
     } finally {
@@ -1002,12 +836,20 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleCancelSupport = async (id: string) => {
     if (!userId || !shopeeId) return;
-    await updateCall(id, {
-      assignedTo: deleteField(),
-      status: "ABERTO",
-    } as any);
-    await updateDriver(shopeeId, { status: "DISPONIVEL" });
-    showNotification("success", "Cancelado", "Apoio cancelado.");
+    try {
+      await updateCall(id, {
+        assignedTo: deleteField(),
+        status: "ABERTO",
+      } as any);
+      await updateDriver(shopeeId, { status: "DISPONIVEL" });
+      showNotification(
+        "success",
+        "Apoio Cancelado",
+        "Você está agora disponível novamente."
+      );
+    } catch (error: any) {
+      showNotification("error", "Erro", "Não foi possível cancelar o apoio.");
+    }
   };
 
   const onDeleteSupportRequest = async (id: string) => {
@@ -1018,16 +860,82 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     showNotification("success", "Excluído", "Solicitação removida.");
   };
 
-  const handleUpdateProfile = () => {
-    if (!shopeeId) return;
+  const handleUpdateProfile = async () => {
+    // Verificar se shopeeId é válido (não pode ser null, "Carregando...", "Não encontrado" ou conter "Erro")
+    if (!shopeeId || 
+        shopeeId === "Carregando..." || 
+        shopeeId === "Não encontrado" || 
+        shopeeId.includes("Erro")) {
+      showNotification("error", "Erro", "ID do motorista não encontrado. Aguarde o carregamento ou recarregue a página.");
+      return;
+    }
+
+    // Validar telefone
     const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length !== 11)
-      return showNotification("error", "Telefone", "Use DDD + 9 dígitos.");
-    if (!hubs.includes(hub))
-      return showNotification("error", "Hub", "Selecione um Hub válido.");
-    updateDriver(shopeeId, { name, phone: cleanPhone, hub, vehicleType });
-    showNotification("success", "Salvo", "Perfil atualizado.");
-    setIsProfileWarningVisible(false);
+    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+      showNotification("error", "Telefone", "Use DDD + 8 ou 9 dígitos (ex: (41) 99999-9999).");
+      return;
+    }
+
+    // Validar hub
+    if (!hub || !hub.trim() || !HUBS.includes(hub as any)) {
+      showNotification("error", "Hub", "Selecione um Hub válido.");
+      return;
+    }
+
+    // Validar nome
+    if (!name || !name.trim()) {
+      showNotification("error", "Nome", "O nome é obrigatório.");
+      return;
+    }
+
+    // Validar veículo
+    if (!vehicleType || !vehicleType.trim()) {
+      showNotification("error", "Veículo", "Selecione um tipo de veículo.");
+      return;
+    }
+
+    try {
+      console.log("Salvando perfil com shopeeId:", shopeeId);
+      console.log("Dados a salvar:", {
+        name: name.trim(),
+        phone: cleanPhone,
+        hub: hub,
+        vehicleType: vehicleType,
+      });
+
+      // Atualizar usando a função updateDriver
+      await updateDriver(shopeeId, {
+        name: name.trim(),
+        phone: cleanPhone,
+        hub: hub,
+        vehicleType: vehicleType,
+      });
+
+      console.log("Perfil salvo com sucesso!");
+
+      // Aguardar um pouco para garantir que o Firebase processou a atualização
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Mostrar confirmação de sucesso APENAS se chegou até aqui sem erro
+      showNotification(
+        "success",
+        "Perfil Atualizado",
+        "Suas alterações foram salvas com sucesso!"
+      );
+      setIsProfileWarningVisible(false);
+
+      // O onSnapshot no App.tsx vai atualizar automaticamente os dados
+    } catch (error: any) {
+      console.error("Erro ao atualizar perfil:", error);
+      // Mostrar erro apenas se realmente houver erro
+      showNotification(
+        "error",
+        "Erro ao Salvar",
+        error.message ||
+          "Não foi possível salvar as alterações. Tente novamente."
+      );
+    }
   };
 
   const handleChangePassword = () => {
@@ -1102,7 +1010,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocation(
-          `http://googleusercontent.com/maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`
+          `http://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`
         );
         setIsLocating(false);
       },
@@ -1111,6 +1019,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         setIsLocating(false);
       }
     );
+  };
+
+  const handleCargoPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setModalError("A imagem deve ter no máximo 5MB.");
+        return;
+      }
+      setCargoPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCargoPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSupportSubmit = async (e: React.FormEvent) => {
@@ -1132,9 +1056,16 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setIsSubmitting(false);
       return;
     }
+    // Usar o hub do perfil do driver automaticamente
+    const driverHub = driver?.hub;
+    if (!driverHub) {
+      setModalError("Complete seu perfil com o Hub antes de solicitar apoio.");
+      setIsSubmitting(false);
+      return;
+    }
+
     if (
       !location ||
-      !hub ||
       !reason ||
       !description ||
       regions.length === 0 ||
@@ -1145,7 +1076,27 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    const informalDesc = `MOTIVO: ${reason}. DETALHES: ${description}. Hub: ${hub}. Loc: ${location}. Qtd: ${pkg}. Regiões: ${regions.join(
+    let cargoPhotoUrl = null;
+    if (cargoPhoto) {
+      try {
+        setIsUploadingPhoto(true);
+        const photoRef = ref(
+          storage,
+          `cargo-photos/${user.uid}/${Date.now()}_${cargoPhoto.name}`
+        );
+        await uploadBytesResumable(photoRef, cargoPhoto);
+        cargoPhotoUrl = await getDownloadURL(photoRef);
+      } catch (err: any) {
+        setModalError("Erro ao fazer upload da foto: " + err.message);
+        setIsSubmitting(false);
+        setIsUploadingPhoto(false);
+        return;
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }
+
+    const informalDesc = `MOTIVO: ${reason}. DETALHES: ${description}. Hub: ${driverHub}. Loc: ${location}. Qtd: ${pkg}. Regiões: ${regions.join(
       ", "
     )}. Veículos: ${vehicles.join(", ")}. ${isBulky ? "VOLUMOSO" : ""}`;
 
@@ -1165,14 +1116,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         status: "ABERTO",
         vehicleType: vehicles.join(", "),
         isBulky,
-        hub,
+        hub: driverHub,
         packageCount: pkg,
         deliveryRegions: regions,
+        cargoPhotoUrl,
         solicitante: {
           id: driver.uid,
           name: driver.name,
-          avatar: driver.avatar || null, // Garante que não seja undefined
-          // CORREÇÃO: Valor padrão caso initials seja undefined
+          avatar: driver.avatar || null,
           initials:
             driver.initials || driver.name?.charAt(0).toUpperCase() || "M",
           phone: driver.phone,
@@ -1187,6 +1138,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setReason("");
       setDescription("");
       setPackageCount("");
+      setCargoPhoto(null);
+      setCargoPhotoPreview(null);
     } catch (err: any) {
       setModalError(err.message);
     } finally {
@@ -1196,900 +1149,1496 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   // --- RENDER ---
   return (
-    <div className="light-bg-gradient dark:dark-bg-gradient min-h-dvh font-sans text-foreground pb-20 transition-colors duration-300">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-white/80 dark:bg-white/5 backdrop-blur-md border-b border-border dark:border-white/10 px-4 sm:px-6 py-3 flex justify-between items-center shadow-lg shadow-black/5 dark:shadow-black/20">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[#EE4D2D] rounded-xl flex items-center justify-center text-white shadow-lg shadow-[#EE4D2D]/30">
-            <ArrowRightLeft
-              size={18}
-              strokeWidth={3}
-              className="sm:w-5 sm:h-5"
-            />
-          </div>
-          <h1 className="font-bold text-foreground dark:text-white text-sm sm:text-base tracking-tight border-l border-border dark:border-white/20 pl-3 ml-1">
-            Sistema Logístico
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Alternar tema"
-          >
-            {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-          <button
-            onClick={() => auth.signOut()}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground dark:text-zinc-400 dark:hover:text-white transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Sair"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </header>
+    <>
+      <LoadingOverlay
+        isLoading={isSubmitting || isReauthenticating}
+        text="Processando..."
+      />
 
-      {!isProfileComplete && isProfileWarningVisible && (
-        <div className="m-4 bg-[#EE4D2D]/10 dark:bg-[#EE4D2D]/20 backdrop-blur-md border-l-4 border-[#EE4D2D] p-4 rounded-2xl shadow-xl shadow-black/5 dark:shadow-black/20 flex justify-between items-center border border-border dark:border-white/10">
-          <div>
-            <p className="font-bold text-[#EE4D2D] text-sm">Atenção</p>
-            <p className="text-xs text-muted-foreground dark:text-zinc-400">
-              Complete seu perfil para operar.
-            </p>
-          </div>
-          <X
-            size={16}
-            className="text-muted-foreground dark:text-zinc-400 hover:text-foreground dark:hover:text-white cursor-pointer transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-            onClick={() => setIsProfileWarningVisible(false)}
-          />
-        </div>
-      )}
-
-      <main className="p-4 sm:p-6 max-w-lg lg:max-w-4xl xl:max-w-6xl mx-auto space-y-6">
-        <ProfileHeaderCard
-          driver={driver}
-          isUploading={isUploading}
-          onEditClick={() => fileInputRef.current?.click()}
-          activeCall={activeCallForDriver}
+      {/* Cards de Notificação de Rotas */}
+      {routeNotifications.map((call, index) => (
+        <RouteNotificationCard
+          key={call.id}
+          call={call}
+          onClose={() => handleCloseNotification(call.id)}
+          theme={theme}
+          index={index}
         />
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleAvatarUpload}
-          className="hidden"
-          accept="image/*"
-        />
+      ))}
 
-        {/* TABS NAVIGATION */}
-        <div className="bg-white/80 dark:bg-white/10 backdrop-blur-xl p-1 rounded-2xl border border-border dark:border-white/20 flex justify-between shadow-xl shadow-black/5 dark:shadow-black/20 overflow-x-auto scrollbar-hide">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as TabId)}
+      {/* Cards de Notificação de Rotas */}
+      {routeNotifications.map((call, index) => (
+        <RouteNotificationCard
+          key={call.id}
+          call={call}
+          onClose={() => handleCloseNotification(call.id)}
+          theme={theme}
+          index={index}
+        />
+      ))}
+
+      <div
+        className={cn(
+          "min-h-dvh font-sans pb-24 transition-colors duration-300",
+          theme === "dark" ? "" : ""
+        )}
+        style={
+          theme === "dark"
+            ? {
+                background:
+                  "linear-gradient(135deg, #1a1a1a 0%, #2d1b1b 25%, #1a1a1a 50%, #2d1b1b 75%, #1a1a1a 100%)",
+                backgroundSize: "400% 400%",
+                animation: "gradientShift 15s ease infinite",
+                minHeight: "100vh",
+              }
+            : {
+                background:
+                  "linear-gradient(to bottom, #fff5f0 0%, #ffe8d6 5%, #ffd4b8 10%, #ffb88c 15%, #ffa366 20%, #ff8c42 25%, #ff7733 30%, #ff6622 35%, #ff5511 40%, #ff4400 45%, #ee3d00 50%, #dd3300 55%, #cc2a00 60%, #bb2200 65%, #aa1a00 70%, #991100 75%, #880900 80%, #770600 85%, #660400 90%, #550300 95%, #440200 100%)",
+                backgroundAttachment: "fixed",
+                minHeight: "100vh",
+              }
+        }
+      >
+        {/* HEADER MODERNO */}
+        <header
+          className={cn(
+            "sticky top-0 z-30 px-4 sm:px-6 py-4 flex justify-between items-center backdrop-blur-xl border-b border-border transition-all duration-300",
+            theme === "light"
+              ? "bg-gradient-to-r from-orange-50/90 via-orange-100/80 to-orange-50/90"
+              : "bg-background/95"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-primary-foreground bg-primary shadow-lg">
+              <ArrowRightLeft size={20} strokeWidth={2.5} />
+            </div>
+            <h1
               className={cn(
-                "flex-1 flex flex-col items-center py-2 px-1 sm:px-2 rounded-xl text-[10px] sm:text-xs uppercase font-bold tracking-wide min-w-[60px] sm:min-w-[80px] transition-all duration-300 ease-in-out",
-                activeTab === tab.id
-                  ? "bg-[#FA4F26] text-white shadow-lg shadow-orange-500/30 transform scale-105"
-                  : "text-muted-foreground dark:text-white/60 hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground dark:hover:text-white hover:scale-102"
+                "font-bold text-base tracking-tight",
+                theme === "light" ? "text-slate-800" : "text-foreground"
               )}
             >
-              <div className="transition-transform duration-300 ease-in-out">
-                {React.cloneElement(tab.icon, {
-                  size: 18,
-                  className: cn(
-                    "mb-1 sm:w-5 sm:h-5 transition-all duration-300",
-                    activeTab === tab.id && "scale-110"
-                  ),
-                })}
-              </div>
-              <span className="hidden sm:inline transition-opacity duration-300">
-                {tab.label}
-              </span>
-              <span className="sm:hidden transition-opacity duration-300">
-                {tab.label.split(" ")[0]}
-              </span>
+              Sistema Logístico
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={toggleTheme}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+              aria-label="Alternar tema"
+            >
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
             </button>
-          ))}
-        </div>
+            <button
+              onClick={() => auth.signOut()}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+              aria-label="Sair"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+        </header>
 
-        {/* TAB CONTENT AREAS */}
-        <div className="min-h-[400px]">
-          {activeTab === "availability" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-xl shadow-black/5 dark:shadow-black/20 border border-border dark:border-white/20 text-center">
-                <h3 className="font-bold text-foreground dark:text-white mb-4">
-                  Seu Status Atual
-                </h3>
-                <div className="flex gap-4 mb-4">
-                  <button
-                    onClick={() => handleAvailabilityChange(true)}
-                    className={cn(
-                      "flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all flex flex-col items-center gap-2 backdrop-blur-sm shadow-lg shadow-black/10 dark:shadow-black/20",
-                      driver.status === "DISPONIVEL"
-                        ? "border-green-500 bg-green-500/20 dark:bg-green-500/20 text-green-700 dark:text-green-300 shadow-green-500/30"
-                        : "border-border dark:border-white/20 bg-white/40 dark:bg-white/5 text-muted-foreground dark:text-white/40"
-                    )}
-                  >
-                    <CheckCircle size={24} /> DISPONÍVEL
-                  </button>
-                  <button
-                    onClick={() => handleAvailabilityChange(false)}
-                    className={cn(
-                      "flex-1 py-4 rounded-xl border-2 font-bold text-sm transition-all flex flex-col items-center gap-2 backdrop-blur-sm shadow-lg shadow-black/10 dark:shadow-black/20",
-                      driver.status !== "DISPONIVEL"
-                        ? "border-red-500 bg-red-500/20 dark:bg-red-500/20 text-red-700 dark:text-red-300 shadow-red-500/30"
-                        : "border-border dark:border-white/20 bg-white/40 dark:bg-white/5 text-muted-foreground dark:text-white/40"
-                    )}
-                  >
-                    <XCircle size={24} /> INDISPONÍVEL
-                  </button>
-                </div>
-
-                {/* Mensagem de Status */}
-                <div
+        {/* Warning Banner */}
+        {!isProfileComplete && isProfileWarningVisible && (
+          <div
+            className={cn(
+              "mx-4 mt-4 p-4 rounded-2xl flex justify-between items-center border shadow-lg",
+              theme === "dark"
+                ? "bg-orange-500/10 border-orange-500/30"
+                : "bg-orange-50/80 border-orange-200/50"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle
+                size={20}
+                className={cn(
+                  theme === "dark" ? "text-orange-400" : "text-orange-600"
+                )}
+              />
+              <div>
+                <p
                   className={cn(
-                    "mt-4 p-3 rounded-xl backdrop-blur-sm border transition-all duration-300",
-                    driver.status === "DISPONIVEL"
-                      ? "bg-green-500/20 dark:bg-green-500/20 border-green-400/30 shadow-lg shadow-green-500/20"
-                      : "bg-red-500/20 dark:bg-red-500/20 border-red-400/30 shadow-lg shadow-red-500/20"
+                    "font-bold text-sm",
+                    theme === "dark" ? "text-orange-400" : "text-orange-600"
                   )}
                 >
-                  <p
-                    className={cn(
-                      "text-sm font-semibold transition-colors duration-300",
-                      driver.status === "DISPONIVEL"
-                        ? "text-green-700 dark:text-green-300"
-                        : "text-red-700 dark:text-red-300"
-                    )}
-                  >
-                    {driver.status === "DISPONIVEL"
-                      ? "✓ Você está disponível para receber chamados"
-                      : "✗ Você está indisponível no momento"}
-                  </p>
-                </div>
-              </div>
-
-              {driver.status === "DISPONIVEL" && (
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-bold text-foreground dark:text-white">
-                      Chamados na Região
-                    </h3>
-                    <Badge
-                      variant="outline"
-                      className="bg-orange-500/20 text-orange-300 border-orange-400/30 backdrop-blur-sm rounded-xl shadow-lg shadow-black/10"
-                    >
-                      {filteredOpenCalls.length} ativos
-                    </Badge>
-                  </div>
-
-                  <div className="relative mb-4">
-                    <Search
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50"
-                      size={16}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Filtrar rota..."
-                      value={routeIdSearch}
-                      onChange={(e) => setRouteIdSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-border dark:border-white/20 bg-white/80 dark:bg-white/10 backdrop-blur-xl text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 text-sm focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    {filteredOpenCalls.length > 0 ? (
-                      filteredOpenCalls.map((call) => (
-                        <OpenCallCard
-                          key={call.id}
-                          call={call}
-                          acceptingCallId={acceptingCallId}
-                          onAccept={handleAcceptCall}
-                        />
-                      ))
-                    ) : (
-                      <div className="text-center py-12 bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl border border-dashed border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20">
-                        <Ticket
-                          size={32}
-                          className="mx-auto text-muted-foreground dark:text-white/30 mb-2"
-                        />
-                        <p className="text-sm text-muted-foreground dark:text-white/60">
-                          Nenhum chamado disponível no momento.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "support" && (
-            <div className="flex flex-col items-center justify-center py-8 space-y-6 animate-in fade-in">
-              <div className="w-20 h-20 bg-orange-500/20 dark:bg-orange-500/20 backdrop-blur-xl rounded-full flex items-center justify-center text-[#FA4F26] mb-2 border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20">
-                <AlertTriangle size={40} />
-              </div>
-              <div className="text-center space-y-2 max-w-xs">
-                <h2 className="text-2xl font-bold text-foreground dark:text-white">
-                  Precisa de Apoio?
-                </h2>
-                <p className="text-sm text-muted-foreground dark:text-white/70">
-                  Solicite ajuda para transferir pacotes em caso de imprevistos.
-                  Mínimo de 20 pacotes.
+                  Atenção
+                </p>
+                <p
+                  className={cn(
+                    "text-xs",
+                    theme === "dark" ? "text-slate-300" : "text-slate-600"
+                  )}
+                >
+                  Complete seu perfil para operar.
                 </p>
               </div>
-              <Button
-                onClick={() => {
-                  setModalError("");
-                  setIsSupportModalOpen(true);
-                }}
-                className="w-full max-w-sm h-14 text-lg bg-[#FA4F26] hover:bg-[#EE4D2D] font-bold shadow-xl shadow-orange-500/30 rounded-xl"
-              >
-                SOLICITAR SOCORRO
-              </Button>
+            </div>
+            <button
+              onClick={() => setIsProfileWarningVisible(false)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        <main
+          className={cn(
+            "p-4 sm:p-6 max-w-lg lg:max-w-4xl xl:max-w-6xl mx-auto space-y-6",
+            theme === "dark" ? "bg-transparent" : ""
+          )}
+        >
+          {isUploading && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <Loading size="lg" variant="spinner" text="Enviando imagem..." />
             </div>
           )}
+          <ProfileHeaderCard
+            driver={driver}
+            isUploading={isUploading}
+            onEditClick={() => fileInputRef.current?.click()}
+            activeCall={activeCallForDriver}
+            theme={theme}
+            currentDateTime={currentDateTime}
+          />
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleAvatarUpload}
+            className="hidden"
+            accept="image/*"
+          />
 
-          {activeTab === "activeCalls" && (
-            <div className="space-y-4 animate-in fade-in">
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {["all", "inProgress", "requester", "provider"].map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setHistoryFilter(f as any)}
-                    className={cn(
-                      "px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap backdrop-blur-xl shadow-lg shadow-black/5 dark:shadow-black/10 transition-all duration-300 ease-in-out",
-                      historyFilter === f
-                        ? "bg-white/60 dark:bg-white/20 text-foreground dark:text-white border-border dark:border-white/30 shadow-xl transform scale-105"
-                        : "bg-white/40 dark:bg-white/10 text-muted-foreground dark:text-white/70 border-border dark:border-white/20 hover:bg-white/60 dark:hover:bg-white/15 hover:text-foreground dark:hover:text-white hover:scale-102"
-                    )}
-                  >
-                    {f === "all"
-                      ? "Todos"
-                      : f === "inProgress"
-                      ? "Em Andamento"
-                      : f === "requester"
-                      ? "Meus Pedidos"
-                      : "Meus Apoios"}
-                  </button>
-                ))}
-              </div>
+          {/* TABS NAVIGATION MODERNAS */}
+          <div
+            className={cn(
+              "p-1.5 rounded-2xl flex justify-between overflow-x-auto scrollbar-hide border shadow-lg transition-all duration-300 backdrop-blur-xl",
+              theme === "light"
+                ? "bg-white/80 border-orange-200/50"
+                : "bg-slate-800/90 border-orange-500/30"
+            )}
+          >
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabId)}
+                className={cn(
+                  "flex-1 flex flex-col items-center py-3 px-2 rounded-xl text-[10px] sm:text-xs uppercase font-bold tracking-wide min-w-[60px] sm:min-w-[80px] transition-all duration-300 ease-in-out",
+                  activeTab === tab.id
+                    ? "text-white bg-primary shadow-lg scale-105"
+                    : theme === "light"
+                    ? "text-slate-700 hover:text-slate-900 hover:bg-white/80"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                )}
+              >
+                <div className="transition-transform duration-300">
+                  {React.cloneElement(tab.icon, {
+                    size: 20,
+                    className: cn(
+                      "mb-1 transition-all duration-300",
+                      activeTab === tab.id && "scale-110"
+                    ),
+                  })}
+                </div>
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+              </button>
+            ))}
+          </div>
 
-              <div className="flex gap-2 mb-2 flex-wrap items-center">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
+          {/* TAB CONTENT AREAS */}
+          <div className="min-h-[400px]">
+            {activeTab === "availability" && (
+              <div className="tab-content-enter">
+                {!isProfileComplete ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <div
                       className={cn(
-                        "h-8 text-xs font-normal justify-start text-left w-[130px] bg-white/80 dark:bg-white/10 border-border dark:border-white/20 text-foreground dark:text-white/80 hover:bg-white dark:hover:bg-white/15 backdrop-blur-xl rounded-xl shadow-lg shadow-black/5 dark:shadow-black/10 transition-all duration-300 ease-in-out hover:scale-105",
-                        !startDate && "text-muted-foreground dark:text-white/50"
+                        "w-16 h-16 backdrop-blur-xl rounded-full flex items-center justify-center text-orange-500 mb-2 border shadow-xl",
+                        theme === "dark"
+                          ? "bg-orange-500/20 border-orange-500/30 shadow-black/20"
+                          : "bg-orange-50 border-orange-200/50 shadow-black/5"
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-3 w-3 transition-transform duration-300 group-hover:rotate-12" />
-                      {startDate ? (
-                        format(startDate, "dd/MM/yy", { locale: ptBR })
-                      ) : (
-                        <span>Início</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-auto p-0 bg-white dark:bg-slate-800/95 backdrop-blur-xl border-border dark:border-white/20 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/30"
-                    align="start"
-                  >
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger asChild>
+                      <AlertTriangle size={32} />
+                    </div>
+                    <div className="text-center space-y-2 max-w-xs">
+                      <h3
+                        className={cn(
+                          "text-xl font-bold",
+                          theme === "dark" ? "text-white" : "text-slate-800"
+                        )}
+                      >
+                        Perfil Incompleto
+                      </h3>
+                      <p
+                        className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-white/70" : "text-slate-600"
+                        )}
+                      >
+                        Complete seu perfil na aba "Perfil" para aceitar chamados.
+                      </p>
+                    </div>
                     <Button
-                      variant="outline"
-                      className={cn(
-                        "h-8 text-xs font-normal justify-start text-left w-[130px] bg-white/80 dark:bg-white/10 border-border dark:border-white/20 text-foreground dark:text-white/80 hover:bg-white dark:hover:bg-white/15 backdrop-blur-xl rounded-xl shadow-lg shadow-black/5 dark:shadow-black/10 transition-all duration-300 ease-in-out hover:scale-105",
-                        !endDate && "text-muted-foreground dark:text-white/50"
-                      )}
+                      onClick={() => setActiveTab("profile")}
+                      className="mt-4 bg-primary hover:bg-primary/90 font-bold shadow-xl shadow-primary/30 rounded-xl text-primary-foreground"
                     >
-                      <CalendarIcon className="mr-2 h-3 w-3 transition-transform duration-300 group-hover:rotate-12" />
-                      {endDate ? (
-                        format(endDate, "dd/MM/yy", { locale: ptBR })
-                      ) : (
-                        <span>Fim</span>
-                      )}
+                      IR PARA PERFIL
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-auto p-0 bg-white dark:bg-slate-800/95 backdrop-blur-xl border-border dark:border-white/20 rounded-2xl shadow-xl shadow-black/10 dark:shadow-black/30"
-                    align="start"
-                  >
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-3">
-                {filteredCalls.length > 0 ? (
-                  filteredCalls.map((call) => (
-                    <DriverCallHistoryCard
-                      key={call.id}
-                      call={call}
-                      userId={userId}
-                      allDrivers={allDrivers}
-                      driver={driver}
-                      onRequestApproval={handleRequestApproval}
-                      onCancelSupport={handleCancelSupport}
-                      onDeleteSupportRequest={onDeleteSupportRequest}
-                    />
-                  ))
-                ) : (
-                  <div className="text-center py-12 opacity-50 bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl border border-dashed border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20">
-                    <HistoryIcon
-                      size={48}
-                      className="mx-auto text-muted-foreground dark:text-white/30 mb-2"
-                    />
-                    <p className="text-sm text-muted-foreground dark:text-white/60">
-                      Sem histórico.
-                    </p>
                   </div>
+                ) : (
+                  <StatusSection
+                    driver={driver}
+                    onAvailabilityChange={handleAvailabilityChange}
+                    filteredOpenCalls={filteredOpenCalls}
+                    routeIdSearch={routeIdSearch}
+                    onRouteIdSearchChange={setRouteIdSearch}
+                    acceptingCallId={acceptingCallId}
+                    onAcceptCall={handleAcceptCall}
+                    theme={theme}
+                  />
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "tutorial" && (
-            <div className="space-y-6 animate-in fade-in pb-10">
-              <Tabs defaultValue="solicitante" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-white/80 dark:bg-white/10 backdrop-blur-xl p-1 rounded-xl h-10 mb-4 border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20">
-                  <TabsTrigger
-                    value="solicitante"
-                    className="text-xs text-muted-foreground dark:text-white/70 data-[state=active]:text-foreground dark:data-[state=active]:text-white data-[state=active]:bg-white dark:data-[state=active]:bg-white/20 rounded-lg"
-                  >
-                    Solicitante
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="prestador"
-                    className="text-xs text-muted-foreground dark:text-white/70 data-[state=active]:text-foreground dark:data-[state=active]:text-white data-[state=active]:bg-white dark:data-[state=active]:bg-white/20 rounded-lg"
-                  >
-                    Prestador
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="solicitante" className="space-y-3">
-                  {tutorialsSolicitante.map((t) => (
-                    <div
-                      key={t.id}
-                      className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl p-4 border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20"
-                    >
-                      <h4 className="font-bold text-sm mb-2 flex gap-2 items-center text-foreground dark:text-white">
-                        <HelpCircle size={16} className="text-[#EE4D2D]" />{" "}
-                        {t.question}
-                      </h4>
-                      <p className="text-xs text-muted-foreground dark:text-white/70">
-                        {t.answer}
-                      </p>
-                    </div>
-                  ))}
-                </TabsContent>
-                <TabsContent value="prestador" className="space-y-3">
-                  {tutorialsPrestador.map((t) => (
-                    <div
-                      key={t.id}
-                      className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl p-4 border border-border dark:border-white/20 shadow-xl shadow-black/5 dark:shadow-black/20"
-                    >
-                      <h4 className="font-bold text-sm mb-2 flex gap-2 items-center text-foreground dark:text-white">
-                        <HelpCircle size={16} className="text-[#EE4D2D]" />{" "}
-                        {t.question}
-                      </h4>
-                      <p className="text-xs text-muted-foreground dark:text-white/70">
-                        {t.answer}
-                      </p>
-                    </div>
-                  ))}
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
-
-          {activeTab === "profile" && (
-            <div className="space-y-6 animate-in fade-in pb-10">
-              <section className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl border border-border dark:border-white/20 p-5 shadow-xl shadow-black/5 dark:shadow-black/20">
-                <h4 className="text-xs font-bold text-muted-foreground dark:text-white/50 uppercase mb-4 tracking-wide">
-                  Configurações
-                </h4>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
+            {activeTab === "support" && (
+              <div className="tab-content-enter flex flex-col items-center justify-center py-8 space-y-6">
+                {!isProfileComplete ? (
+                  <>
                     <div
                       className={cn(
-                        "p-2 rounded-xl backdrop-blur-sm shadow-lg shadow-black/10 border border-border dark:border-white/20",
-                        isMuted
-                          ? "bg-white/40 dark:bg-white/10 text-muted-foreground dark:text-white/40"
-                          : "bg-green-500/20 dark:bg-green-500/20 text-green-700 dark:text-green-300"
+                        "w-20 h-20 backdrop-blur-xl rounded-full flex items-center justify-center text-orange-500 mb-2 border shadow-xl",
+                        theme === "dark"
+                          ? "bg-orange-500/20 border-orange-500/30 shadow-black/20"
+                          : "bg-orange-50 border-orange-200/50 shadow-black/5"
                       )}
                     >
-                      {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                      <AlertTriangle size={40} />
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-foreground dark:text-white">
-                        Sons de Alerta
-                      </p>
-                      <p className="text-xs text-muted-foreground dark:text-white/60">
-                        {isMuted ? "Silenciado" : "Ativado"}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={toggleMute}
-                    className="text-muted-foreground dark:text-white/70 hover:text-foreground dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-xl"
-                  >
-                    Alterar
-                  </Button>
-                </div>
-              </section>
-
-              <section className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl border border-border dark:border-white/20 p-5 shadow-xl shadow-black/5 dark:shadow-black/20 space-y-4">
-                <h4 className="text-xs font-bold text-muted-foreground dark:text-white/50 uppercase mb-2 tracking-wide">
-                  Meus Dados
-                </h4>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-muted-foreground dark:text-white/70">
-                    ID Motorista
-                  </label>
-                  <div className="p-3 bg-white/60 dark:bg-white/10 backdrop-blur-xl rounded-xl text-sm font-mono text-foreground dark:text-white/80 flex justify-between border border-border dark:border-white/20">
-                    {shopeeId}{" "}
-                    <Lock
-                      size={14}
-                      className="text-muted-foreground dark:text-white/50"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-muted-foreground dark:text-white/70">
-                    Hub
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={hubSearch}
-                      onChange={(e) => {
-                        setHubSearch(e.target.value);
-                        setIsHubDropdownOpen(true);
-                      }}
-                      onFocus={() => setIsHubDropdownOpen(true)}
-                      className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm font-medium text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                      placeholder="Pesquisar Hub..."
-                    />
-                    {isHubDropdownOpen && filteredHubs.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800/95 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl shadow-xl shadow-black/10 dark:shadow-black/30 max-h-48 overflow-y-auto">
-                        {filteredHubs.map((h) => (
-                          <div
-                            key={h}
-                            className="p-2 hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer text-xs text-foreground dark:text-white/80 hover:text-foreground dark:hover:text-white transition-colors"
-                            onClick={() => {
-                              setHub(h);
-                              setHubSearch(h);
-                              setIsHubDropdownOpen(false);
-                            }}
-                          >
-                            {h}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-muted-foreground dark:text-white/70">
-                    Veículo
-                  </label>
-                  <select
-                    value={vehicleType}
-                    onChange={(e) => setVehicleType(e.target.value)}
-                    className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm font-medium capitalize text-foreground dark:text-white focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                  >
-                    {vehicleTypesList.map((v) => (
-                      <option
-                        key={v}
-                        value={v}
-                        className="bg-white dark:bg-slate-800"
+                    <div className="text-center space-y-2 max-w-xs">
+                      <h2
+                        className={cn(
+                          "text-2xl font-bold",
+                          theme === "dark" ? "text-white" : "text-slate-800"
+                        )}
                       >
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-muted-foreground dark:text-white/70">
-                    Nome
-                  </label>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-muted-foreground dark:text-white/70">
-                    Telefone
-                  </label>
-                  <input
-                    value={formatPhoneNumber(phone)}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleUpdateProfile}
-                  className="w-full bg-[#FA4F26] hover:bg-[#EE4D2D] text-white h-12 mt-2 rounded-xl shadow-xl shadow-orange-500/30 font-bold"
-                >
-                  Salvar Alterações
-                </Button>
-              </section>
-
-              <section className="bg-white/80 dark:bg-white/10 backdrop-blur-xl rounded-2xl border border-border dark:border-white/20 p-5 shadow-xl shadow-black/5 dark:shadow-black/20 space-y-4">
-                <h4 className="text-xs font-bold text-muted-foreground dark:text-white/50 uppercase mb-2 tracking-wide">
-                  Segurança
-                </h4>
-
-                <div className="space-y-3">
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Nova Senha"
-                      className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3 text-muted-foreground dark:text-white/50 hover:text-foreground dark:hover:text-white transition-colors"
-                    >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirmar Nova Senha"
-                    className="w-full p-3 bg-white/80 dark:bg-white/10 backdrop-blur-xl border border-border dark:border-white/20 rounded-xl text-sm text-foreground dark:text-white placeholder:text-muted-foreground dark:placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] focus:border-[#FA4F26]/50 outline-none shadow-lg shadow-black/5 dark:shadow-black/10"
-                  />
-                  <Button
-                    onClick={handleChangePassword}
-                    variant="outline"
-                    className="w-full border-border dark:border-white/20 text-foreground dark:text-white/80 hover:bg-black/5 dark:hover:bg-white/10 hover:text-foreground dark:hover:text-white backdrop-blur-xl rounded-xl"
-                  >
-                    Atualizar Senha
-                  </Button>
-                </div>
-              </section>
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* SUPPORT MODAL */}
-      {isSupportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
-            onClick={() => setIsSupportModalOpen(false)}
-          />
-          <div className="relative w-full max-w-lg bg-slate-800/95 backdrop-blur-2xl h-[90vh] sm:h-auto rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/40 border border-white/20 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-xl">
-              <h2 className="font-bold text-white">Nova Solicitação</h2>
-              <button
-                onClick={() => setIsSupportModalOpen(false)}
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-              >
-                <X size={18} className="text-white" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              <form
-                id="supportForm"
-                onSubmit={handleSupportSubmit}
-                className="space-y-4"
-              >
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
-                    Hub
-                  </label>
-                  <select
-                    value={hub}
-                    onChange={(e) => setHub(e.target.value)}
-                    className="w-full p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm text-white focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                    required
-                  >
-                    <option value="" className="bg-slate-800">
-                      Selecione...
-                    </option>
-                    {hubs.map((h) => (
-                      <option key={h} value={h} className="bg-slate-800">
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
-                    Motivo
-                  </label>
-                  <select
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="w-full p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm text-white focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                    required
-                  >
-                    <option value="" className="bg-slate-800">
-                      Selecione...
-                    </option>
-                    {supportReasons.map((r) => (
-                      <option key={r} value={r} className="bg-slate-800">
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
-                    Detalhes
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    maxLength={100}
-                    className="w-full p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm h-24 resize-none text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                    placeholder="Descreva brevemente..."
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
-                      Pacotes
-                    </label>
-                    <input
-                      type="number"
-                      min="20"
-                      value={packageCount}
-                      onChange={(e) => setPackageCount(e.target.value)}
-                      className="w-full p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm font-bold text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                      placeholder="Mín 20"
-                      required
-                    />
-                  </div>
-                  <div className="flex items-center justify-center bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg shadow-black/10">
-                    <label className="flex items-center gap-2 cursor-pointer p-3 w-full justify-center">
-                      <span className="text-sm font-bold text-white/80">
-                        Volumoso?
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={isBulky}
-                        onChange={(e) => setIsBulky(e.target.checked)}
-                        className="accent-[#FA4F26] w-5 h-5"
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 flex justify-between">
-                    Regiões
-                    <button
-                      type="button"
-                      onClick={() => handleAddField(setDeliveryRegions)}
-                      className="text-[#FA4F26] hover:text-[#EE4D2D] transition-colors"
-                    >
-                      <PlusCircle size={14} />
-                    </button>
-                  </label>
-                  {deliveryRegions.map((reg, idx) => (
-                    <div key={idx} className="flex gap-2 mb-2">
-                      <input
-                        value={reg}
-                        onChange={(e) =>
-                          handleFieldChange(
-                            idx,
-                            e.target.value,
-                            setDeliveryRegions
-                          )
-                        }
-                        className="flex-1 p-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                        placeholder="Ex: Zona Norte"
-                      />
-                      {idx > 0 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleRemoveField(idx, setDeliveryRegions)
-                          }
-                          className="text-red-300 hover:text-red-200 transition-colors"
-                        >
-                          <MinusCircle size={18} />
-                        </button>
-                      )}
+                        Perfil Incompleto
+                      </h2>
+                      <p
+                        className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-white/70" : "text-slate-600"
+                        )}
+                      >
+                        Complete seu perfil na aba "Perfil" antes de solicitar apoio.
+                      </p>
                     </div>
+                    <Button
+                      onClick={() => setActiveTab("profile")}
+                      className="w-full max-w-sm h-14 text-lg bg-primary hover:bg-primary/90 font-bold shadow-xl shadow-primary/30 rounded-xl text-primary-foreground"
+                    >
+                      IR PARA PERFIL
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className={cn(
+                        "w-20 h-20 backdrop-blur-xl rounded-full flex items-center justify-center text-primary mb-2 border shadow-xl",
+                        theme === "dark"
+                          ? "bg-primary/20 border-orange-500/30 shadow-black/20"
+                          : "bg-primary/20 border-orange-200/50 shadow-black/5"
+                      )}
+                    >
+                      <AlertTriangle size={40} />
+                    </div>
+                    <div className="text-center space-y-2 max-w-xs">
+                      <h2
+                        className={cn(
+                          "text-2xl font-bold",
+                          theme === "dark" ? "text-white" : "text-slate-800"
+                        )}
+                      >
+                        Precisa de Apoio?
+                      </h2>
+                      <p
+                        className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-white/70" : "text-slate-600"
+                        )}
+                      >
+                        Solicite ajuda para transferir pacotes em caso de
+                        imprevistos. Mínimo de 20 pacotes.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setModalError("");
+                        setIsSupportModalOpen(true);
+                      }}
+                      className="w-full max-w-sm h-14 text-lg bg-primary hover:bg-primary/90 font-bold shadow-xl shadow-primary/30 rounded-xl text-primary-foreground"
+                    >
+                      SOLICITAR SOCORRO
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === "activeCalls" && (
+              <div className="tab-content-enter space-y-4">
+                {!isProfileComplete && (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4 mb-6">
+                    <div
+                      className={cn(
+                        "w-16 h-16 backdrop-blur-xl rounded-full flex items-center justify-center text-orange-500 mb-2 border shadow-xl",
+                        theme === "dark"
+                          ? "bg-orange-500/20 border-orange-500/30 shadow-black/20"
+                          : "bg-orange-50 border-orange-200/50 shadow-black/5"
+                      )}
+                    >
+                      <AlertTriangle size={32} />
+                    </div>
+                    <div className="text-center space-y-2 max-w-xs">
+                      <h3
+                        className={cn(
+                          "text-xl font-bold",
+                          theme === "dark" ? "text-white" : "text-slate-800"
+                        )}
+                      >
+                        Perfil Incompleto
+                      </h3>
+                      <p
+                        className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-white/70" : "text-slate-600"
+                        )}
+                      >
+                        Complete seu perfil na aba "Perfil" para visualizar chamados.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setActiveTab("profile")}
+                      className="mt-4 bg-primary hover:bg-primary/90 font-bold shadow-xl shadow-primary/30 rounded-xl text-primary-foreground"
+                    >
+                      IR PARA PERFIL
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {["all", "inProgress", "requester", "provider"].map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setHistoryFilter(f as any)}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap backdrop-blur-xl shadow-lg transition-all duration-300 ease-in-out",
+                        historyFilter === f
+                          ? theme === "dark"
+                            ? "bg-slate-700/90 text-white border-orange-500/30 shadow-xl transform scale-105"
+                            : "bg-white/80 text-slate-800 border-orange-200/50 shadow-xl transform scale-105"
+                          : theme === "dark"
+                          ? "bg-slate-800/90 text-slate-300 border-orange-500/30 hover:bg-slate-700/90 hover:text-white hover:scale-102"
+                          : "bg-white/60 text-slate-600 border-orange-200/50 hover:bg-white/80 hover:text-slate-800 hover:scale-102"
+                      )}
+                    >
+                      {f === "all"
+                        ? "Todos"
+                        : f === "inProgress"
+                        ? "Em Andamento"
+                        : f === "requester"
+                        ? "Meus Pedidos"
+                        : "Meus Apoios"}
+                    </button>
                   ))}
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 flex justify-between">
-                    Veículos Necessários
-                    <button
-                      type="button"
-                      onClick={() => handleAddField(setNeededVehicles)}
-                      className="text-[#FA4F26] hover:text-[#EE4D2D] transition-colors"
+
+                <div className="flex gap-2 mb-2 flex-wrap items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "h-8 text-xs font-normal justify-start text-left w-[130px] backdrop-blur-xl rounded-xl shadow-lg transition-all duration-300 ease-in-out hover:scale-105",
+                          theme === "dark"
+                            ? "bg-orange-500/20 border-orange-500/30 text-white hover:bg-orange-500/30 shadow-black/10"
+                            : "bg-white/80 border-orange-200/50 text-slate-800 hover:bg-white shadow-black/5",
+                          !startDate &&
+                            (theme === "dark"
+                              ? "text-white/50"
+                              : "text-slate-500")
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-3 w-3 transition-transform duration-300 group-hover:rotate-12" />
+                        {startDate ? (
+                          format(startDate, "dd/MM/yy", { locale: ptBR })
+                        ) : (
+                          <span>Início</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className={cn(
+                        "w-auto p-0 backdrop-blur-xl rounded-2xl shadow-xl",
+                        theme === "dark"
+                          ? "bg-slate-800/95 border-orange-500/30 shadow-black/30"
+                          : "bg-white border-orange-200/50 shadow-black/10"
+                      )}
+                      align="start"
                     >
-                      <PlusCircle size={14} />
-                    </button>
-                  </label>
-                  {neededVehicles.map((veh, idx) => (
-                    <div key={idx} className="flex gap-2 mb-2">
-                      <select
-                        value={veh}
-                        onChange={(e) =>
-                          handleFieldChange(
-                            idx,
-                            e.target.value,
-                            setNeededVehicles
-                          )
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={setStartDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "h-8 text-xs font-normal justify-start text-left w-[130px] backdrop-blur-xl rounded-xl shadow-lg transition-all duration-300 ease-in-out hover:scale-105",
+                          theme === "dark"
+                            ? "bg-orange-500/20 border-orange-500/30 text-white hover:bg-orange-500/30 shadow-black/10"
+                            : "bg-white/80 border-orange-200/50 text-slate-800 hover:bg-white shadow-black/5",
+                          !endDate &&
+                            (theme === "dark"
+                              ? "text-white/50"
+                              : "text-slate-500")
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-3 w-3 transition-transform duration-300 group-hover:rotate-12" />
+                        {endDate ? (
+                          format(endDate, "dd/MM/yy", { locale: ptBR })
+                        ) : (
+                          <span>Fim</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className={cn(
+                        "w-auto p-0 backdrop-blur-xl rounded-2xl shadow-xl",
+                        theme === "dark"
+                          ? "bg-slate-800/95 border-orange-500/30 shadow-black/30"
+                          : "bg-white border-orange-200/50 shadow-black/10"
+                      )}
+                      align="start"
+                    >
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-3">
+                  {filteredCalls.length > 0 ? (
+                    filteredCalls.map((call) => (
+                      <DriverCallHistoryCard
+                        key={call.id}
+                        call={call}
+                        userId={userId}
+                        allDrivers={allDrivers}
+                        driver={driver}
+                        onRequestApproval={handleRequestApproval}
+                        onCancelSupport={handleCancelSupport}
+                        onDeleteSupportRequest={onDeleteSupportRequest}
+                      />
+                    ))
+                  ) : (
+                    <div
+                      className={cn(
+                        "text-center py-12 opacity-50 backdrop-blur-xl rounded-2xl border border-dashed shadow-xl",
+                        theme === "dark"
+                          ? "bg-slate-800/90 border-orange-500/30 shadow-black/20"
+                          : "bg-white/80 border-orange-200/50 shadow-black/5"
+                      )}
+                    >
+                      <HistoryIcon
+                        size={48}
+                        className={cn(
+                          "mx-auto mb-2",
+                          theme === "dark" ? "text-white/30" : "text-slate-400"
+                        )}
+                      />
+                      <p
+                        className={cn(
+                          "text-sm",
+                          theme === "dark" ? "text-white/60" : "text-slate-600"
+                        )}
+                      >
+                        Sem histórico.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "tutorial" && (
+              <div className="tab-content-enter space-y-6 pb-10">
+                <Tabs defaultValue="solicitante" className="w-full">
+                  <TabsList
+                    className={cn(
+                      "grid w-full grid-cols-2 backdrop-blur-xl p-1 rounded-xl h-10 mb-4 border shadow-xl",
+                      theme === "dark"
+                        ? "bg-slate-800/90 border-orange-500/30 shadow-black/20"
+                        : "bg-white/80 border-orange-200/50 shadow-black/5"
+                    )}
+                  >
+                    <TabsTrigger
+                      value="solicitante"
+                      className={cn(
+                        "text-xs rounded-lg",
+                        theme === "dark"
+                          ? "text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-700/90"
+                          : "text-slate-600 data-[state=active]:text-slate-800 data-[state=active]:bg-white"
+                      )}
+                    >
+                      Solicitante
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="prestador"
+                      className={cn(
+                        "text-xs rounded-lg",
+                        theme === "dark"
+                          ? "text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-700/90"
+                          : "text-slate-600 data-[state=active]:text-slate-800 data-[state=active]:bg-white"
+                      )}
+                    >
+                      Prestador
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="solicitante" className="space-y-3">
+                    {TUTORIALS_SOLICITANTE.map((t) => (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "backdrop-blur-xl rounded-2xl p-4 border shadow-xl",
+                          theme === "dark"
+                            ? "bg-slate-800/90 border-orange-500/30 shadow-black/20"
+                            : "bg-white/80 border-orange-200/50 shadow-black/5"
+                        )}
+                      >
+                        <h4
+                          className={cn(
+                            "font-bold text-sm mb-2 flex gap-2 items-center",
+                            theme === "dark" ? "text-white" : "text-slate-800"
+                          )}
+                        >
+                          <HelpCircle size={16} className="text-primary" />{" "}
+                          {t.question}
+                        </h4>
+                        <p
+                          className={cn(
+                            "text-xs",
+                            theme === "dark"
+                              ? "text-white/70"
+                              : "text-slate-600"
+                          )}
+                        >
+                          {t.answer}
+                        </p>
+                      </div>
+                    ))}
+                  </TabsContent>
+                  <TabsContent value="prestador" className="space-y-3">
+                    {TUTORIALS_PRESTADOR.map((t) => (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "backdrop-blur-xl rounded-2xl p-4 border shadow-xl",
+                          theme === "dark"
+                            ? "bg-slate-800/90 border-orange-500/30 shadow-black/20"
+                            : "bg-white/80 border-orange-200/50 shadow-black/5"
+                        )}
+                      >
+                        <h4
+                          className={cn(
+                            "font-bold text-sm mb-2 flex gap-2 items-center",
+                            theme === "dark" ? "text-white" : "text-slate-800"
+                          )}
+                        >
+                          <HelpCircle size={16} className="text-primary" />{" "}
+                          {t.question}
+                        </h4>
+                        <p
+                          className={cn(
+                            "text-xs",
+                            theme === "dark"
+                              ? "text-white/70"
+                              : "text-slate-600"
+                          )}
+                        >
+                          {t.answer}
+                        </p>
+                      </div>
+                    ))}
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
+
+            {activeTab === "profile" && (
+              <div className="tab-content-enter space-y-6 pb-10">
+                {/* Configurações */}
+                <section
+                  className={cn(
+                    "rounded-[1.5rem] p-6 border-2 backdrop-blur-xl",
+                    theme === "dark"
+                      ? "bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 border-orange-500/40"
+                      : "bg-white/95 border-orange-300/60"
+                  )}
+                  style={
+                    theme === "dark"
+                      ? {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.3), 0 0 0 1px rgba(238, 77, 45, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
                         }
-                        className="flex-1 p-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm capitalize text-white focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                      : {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.15), 0 0 0 1px rgba(238, 77, 45, 0.1)",
+                        }
+                  }
+                >
+                  <h4
+                    className={cn(
+                      "text-sm font-bold uppercase mb-5 tracking-wider flex items-center gap-2",
+                      theme === "dark" ? "text-orange-400" : "text-orange-600"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-1 h-5 rounded-full",
+                        theme === "dark" ? "bg-orange-500" : "bg-orange-500"
+                      )}
+                    />
+                    Configurações
+                  </h4>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cn(
+                          "p-4 rounded-xl border-2 transition-all",
+                          isMuted
+                            ? theme === "dark"
+                              ? "text-slate-400 bg-slate-800/60 border-slate-700/50"
+                              : "text-slate-500 bg-slate-100 border-slate-300"
+                            : theme === "dark"
+                            ? "text-orange-400 bg-orange-500/20 border-orange-500/50 shadow-lg shadow-orange-500/20"
+                            : "text-orange-600 bg-orange-50 border-orange-300 shadow-lg shadow-orange-200/50"
+                        )}
+                      >
+                        {isMuted ? (
+                          <VolumeX size={24} />
+                        ) : (
+                          <Volume2 size={24} />
+                        )}
+                      </div>
+                      <div>
+                        <p
+                          className={cn(
+                            "font-bold text-base",
+                            theme === "dark" ? "text-white" : "text-slate-900"
+                          )}
+                        >
+                          Sons de Alerta
+                        </p>
+                        <p
+                          className={cn(
+                            "text-sm font-medium",
+                            theme === "dark"
+                              ? "text-slate-400"
+                              : "text-slate-600"
+                          )}
+                        >
+                          {isMuted ? "Silenciado" : "Ativado"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={toggleMute}
+                      className={cn(
+                        "px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg hover:scale-105",
+                        theme === "dark"
+                          ? "text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 border border-orange-400/30"
+                          : "text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                      )}
+                      style={{
+                        boxShadow:
+                          theme === "dark"
+                            ? "0 4px 15px rgba(238, 77, 45, 0.4)"
+                            : "0 4px 15px rgba(238, 77, 45, 0.3)",
+                      }}
+                    >
+                      Alterar
+                    </button>
+                  </div>
+                </section>
+
+                {/* Meus Dados */}
+                <section
+                  className={cn(
+                    "rounded-[1.5rem] p-6 space-y-5 border-2 backdrop-blur-xl",
+                    theme === "dark"
+                      ? "bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 border-orange-500/40"
+                      : "bg-white/95 border-orange-300/60"
+                  )}
+                  style={
+                    theme === "dark"
+                      ? {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.3), 0 0 0 1px rgba(238, 77, 45, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
+                        }
+                      : {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.15), 0 0 0 1px rgba(238, 77, 45, 0.1)",
+                        }
+                  }
+                >
+                  <h4
+                    className={cn(
+                      "text-sm font-bold uppercase mb-5 tracking-wider flex items-center gap-2",
+                      theme === "dark" ? "text-orange-400" : "text-orange-600"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-1 h-5 rounded-full",
+                        theme === "dark" ? "bg-orange-500" : "bg-orange-500"
+                      )}
+                    />
+                    Meus Dados
+                  </h4>
+
+                  <div className="space-y-1">
+                    <label
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wide",
+                        theme === "dark" ? "text-orange-300" : "text-orange-700"
+                      )}
+                    >
+                      ID Motorista
+                    </label>
+                    <div
+                      className={cn(
+                        "p-4 rounded-xl text-sm font-mono flex justify-between items-center border-2 transition-all",
+                        theme === "dark"
+                          ? "bg-slate-800/60 border-orange-500/40 text-orange-300 shadow-lg shadow-orange-500/10"
+                          : "bg-orange-50/80 border-orange-300/60 text-orange-900 shadow-md"
+                      )}
+                    >
+                      <span className="font-bold">{shopeeId}</span>
+                      <Lock
+                        size={16}
+                        className={
+                          theme === "dark"
+                            ? "text-orange-400"
+                            : "text-orange-600"
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wide",
+                        theme === "dark" ? "text-orange-300" : "text-orange-700"
+                      )}
+                    >
+                      Hub
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={hubSearch || ""}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          
+                          // Se o usuário começar a digitar e houver hub selecionado, limpar tudo
+                          if (hub && newValue.length > 0 && newValue !== hub) {
+                            setHub("");
+                            setHubSearch(newValue);
+                          } else {
+                            setHubSearch(newValue);
+                          }
+                          
+                          setIsHubDropdownOpen(true);
+                        }}
+                        onFocus={(e) => {
+                          setIsHubDropdownOpen(true);
+                          // Quando focar no campo, se houver hub selecionado, limpar o campo para permitir nova pesquisa
+                          if (hub) {
+                            setHub("");
+                            setHubSearch("");
+                            // Limpar o campo visualmente usando setTimeout para garantir que funcione
+                            setTimeout(() => {
+                              e.currentTarget.value = "";
+                            }, 0);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          // Se o usuário começar a digitar qualquer caractere (não teclas especiais), limpar o campo
+                          if (hub && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                            setHub("");
+                            setHubSearch("");
+                            e.currentTarget.value = "";
+                          }
+                        }}
+                        onClick={() => {
+                          setIsHubDropdownOpen(true);
+                        }}
+                        onBlur={(e) => {
+                          // Delay para permitir clique no dropdown
+                          setTimeout(() => {
+                            if (!e.relatedTarget || !e.relatedTarget.closest('.hub-dropdown')) {
+                              setIsHubDropdownOpen(false);
+                              // Se não houver hub selecionado e houver busca, limpar a busca
+                              if (!hub && hubSearch) {
+                                setHubSearch("");
+                              } else if (hub && hubSearch !== hub) {
+                                // Se houver hub selecionado, restaurar o valor do hub na busca
+                                setHubSearch(hub);
+                              }
+                            }
+                          }, 200);
+                        }}
+                        className={cn(
+                          "w-full p-4 rounded-xl text-sm font-medium border-2 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                          theme === "dark"
+                            ? "bg-slate-800/60 border-orange-500/40 text-white placeholder:text-slate-500 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/20"
+                            : "bg-white border-orange-300/60 text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-200/50"
+                        )}
+                        placeholder="Selecione ou pesquise um Hub..."
+                      />
+                      {isHubDropdownOpen && (
+                        <div
+                          className="hub-dropdown absolute z-50 w-full mt-2 rounded-xl max-h-60 overflow-y-auto backdrop-blur-xl"
+                          style={{
+                            background: theme === "dark" 
+                              ? "rgba(30, 41, 59, 0.98)" 
+                              : "rgba(255, 255, 255, 0.98)",
+                            border: theme === "dark"
+                              ? "1px solid rgba(71, 85, 105, 0.4)"
+                              : "1px solid rgba(254, 131, 48, 0.3)",
+                            boxShadow: theme === "dark"
+                              ? "0 20px 40px -10px rgba(0, 0, 0, 0.5)"
+                              : "0 20px 40px -10px rgba(0, 0, 0, 0.2)",
+                          }}
+                        >
+                          {filteredHubs.length > 0 ? (
+                            filteredHubs.map((h) => (
+                              <div
+                                key={h}
+                                className={cn(
+                                  "p-3 cursor-pointer text-sm transition-colors first:rounded-t-xl last:rounded-b-xl",
+                                  theme === "dark"
+                                    ? "text-slate-300 hover:bg-slate-700/90 hover:text-white"
+                                    : "text-slate-700 hover:bg-orange-50 hover:text-orange-700",
+                                  hub === h && (theme === "dark" ? "bg-orange-500/20 text-orange-300" : "bg-orange-100 text-orange-700")
+                                )}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setHub(h);
+                                  setHubSearch(h);
+                                  setIsHubDropdownOpen(false);
+                                }}
+                              >
+                                {h}
+                              </div>
+                            ))
+                          ) : (
+                            <div className={cn(
+                              "p-3 text-sm text-center",
+                              theme === "dark" ? "text-slate-400" : "text-slate-500"
+                            )}>
+                              Nenhum hub encontrado
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wide",
+                        theme === "dark" ? "text-orange-300" : "text-orange-700"
+                      )}
+                    >
+                      Veículo
+                    </label>
+                    <select
+                      value={vehicleType}
+                      onChange={(e) => setVehicleType(e.target.value)}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm font-medium capitalize focus:ring-2 focus:ring-orange-500/50 outline-none transition-all appearance-none cursor-pointer border-2",
+                        theme === "dark"
+                          ? "bg-slate-800/60 border-orange-500/40 text-white focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/20"
+                          : "bg-white border-orange-300/60 text-slate-900 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-200/50"
+                      )}
+                    >
+                      {VEHICLE_TYPES.map((v) => (
+                        <option
+                          key={v}
+                          value={v}
+                          className={
+                            theme === "dark" ? "bg-slate-800" : "bg-white"
+                          }
+                        >
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wide",
+                        theme === "dark" ? "text-orange-300" : "text-orange-700"
+                      )}
+                    >
+                      Nome
+                    </label>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                        theme === "dark"
+                          ? "bg-orange-500/20 border-orange-500/30 text-white placeholder:text-slate-400"
+                          : "bg-white border-orange-200/50 text-slate-800 placeholder:text-slate-500"
+                      )}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wide",
+                        theme === "dark" ? "text-orange-300" : "text-orange-700"
+                      )}
+                    >
+                      Telefone
+                    </label>
+                    <input
+                      value={formatPhoneNumber(phone)}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                        theme === "dark"
+                          ? "bg-orange-500/20 border-orange-500/30 text-white placeholder:text-slate-400"
+                          : "bg-white border-orange-200/50 text-slate-800 placeholder:text-slate-500"
+                      )}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleUpdateProfile}
+                    className="w-full py-4 mt-4 rounded-xl text-white font-bold text-base transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #EE4D2D 0%, #FF6B35 50%, #EE4D2D 100%)",
+                      backgroundSize: "200% 200%",
+                      boxShadow:
+                        theme === "dark"
+                          ? "0 8px 25px rgba(238, 77, 45, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)"
+                          : "0 8px 25px rgba(238, 77, 45, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundPosition = "100% 0";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundPosition = "0% 0";
+                    }}
+                  >
+                    Salvar Alterações
+                  </button>
+                </section>
+
+                {/* Segurança */}
+                <section
+                  className={cn(
+                    "rounded-[1.5rem] p-6 space-y-5 border-2 backdrop-blur-xl",
+                    theme === "dark"
+                      ? "bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 border-orange-500/40"
+                      : "bg-white/95 border-orange-300/60"
+                  )}
+                  style={
+                    theme === "dark"
+                      ? {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.3), 0 0 0 1px rgba(238, 77, 45, 0.1), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
+                        }
+                      : {
+                          boxShadow:
+                            "0 20px 40px -10px rgba(238, 77, 45, 0.15), 0 0 0 1px rgba(238, 77, 45, 0.1)",
+                        }
+                  }
+                >
+                  <h4
+                    className={cn(
+                      "text-sm font-bold uppercase mb-5 tracking-wider flex items-center gap-2",
+                      theme === "dark" ? "text-orange-400" : "text-orange-600"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "w-1 h-5 rounded-full",
+                        theme === "dark" ? "bg-orange-500" : "bg-orange-500"
+                      )}
+                    />
+                    Segurança
+                  </h4>
+
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Nova Senha"
+                        className={cn(
+                          "w-full p-4 rounded-xl text-sm border-2 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                          theme === "dark"
+                            ? "bg-slate-800/60 border-orange-500/40 text-white placeholder:text-slate-500 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/20"
+                            : "bg-white border-orange-300/60 text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-200/50"
+                        )}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className={cn(
+                          "absolute right-4 top-4 transition-colors p-1 rounded-lg hover:bg-orange-500/10",
+                          theme === "dark"
+                            ? "text-orange-400 hover:text-orange-300"
+                            : "text-orange-600 hover:text-orange-700"
+                        )}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirmar Nova Senha"
+                        className={cn(
+                          "w-full p-4 rounded-xl text-sm border-2 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                          theme === "dark"
+                            ? "bg-slate-800/60 border-orange-500/40 text-white placeholder:text-slate-500 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-500/20"
+                            : "bg-white border-orange-300/60 text-slate-900 placeholder:text-slate-400 focus:border-orange-500 focus:shadow-lg focus:shadow-orange-200/50"
+                        )}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className={cn(
+                          "absolute right-4 top-4 transition-colors p-1 rounded-lg hover:bg-orange-500/10",
+                          theme === "dark"
+                            ? "text-orange-400 hover:text-orange-300"
+                            : "text-orange-600 hover:text-orange-700"
+                        )}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+                    <button
+                      onClick={handleChangePassword}
+                      className={cn(
+                        "w-full py-4 rounded-xl text-base font-bold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg border-2",
+                        theme === "dark"
+                          ? "bg-gradient-to-r from-slate-800 to-slate-700 border-orange-500/40 text-white hover:from-slate-700 hover:to-slate-600"
+                          : "bg-gradient-to-r from-orange-50 to-orange-100 border-orange-300/60 text-orange-900 hover:from-orange-100 hover:to-orange-200"
+                      )}
+                      style={{
+                        boxShadow:
+                          theme === "dark"
+                            ? "0 4px 15px rgba(238, 77, 45, 0.3)"
+                            : "0 4px 15px rgba(238, 77, 45, 0.2)",
+                      }}
+                    >
+                      Atualizar Senha
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
+
+          {/* SUPPORT MODAL */}
+          {isSupportModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+              <div
+                className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
+                onClick={() => setIsSupportModalOpen(false)}
+              />
+              <div className="relative w-full max-w-lg bg-slate-800/95 backdrop-blur-2xl h-[90vh] sm:h-auto rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/40 border border-orange-500/30 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10">
+                <div className="p-4 border-b border-orange-500/30 flex justify-between items-center bg-slate-800/90 backdrop-blur-xl">
+                  <h2 className="font-bold text-white">Nova Solicitação</h2>
+                  <button
+                    onClick={() => setIsSupportModalOpen(false)}
+                    className="p-2 bg-slate-700/90 hover:bg-slate-600/90 rounded-full transition-colors"
+                  >
+                    <X size={18} className="text-white" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                  <form
+                    id="supportForm"
+                    onSubmit={handleSupportSubmit}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
+                        Motivo
+                      </label>
+                      <select
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        className="w-full p-3 bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl text-sm text-white focus:ring-2 focus:ring-primary outline-none shadow-lg shadow-black/10"
+                        required
                       >
                         <option value="" className="bg-slate-800">
                           Selecione...
                         </option>
-                        {vehicleTypesList.map((v) => (
-                          <option key={v} value={v} className="bg-slate-800">
-                            {v}
+                        {SUPPORT_REASONS.map((r) => (
+                          <option key={r} value={r} className="bg-slate-800">
+                            {r}
                           </option>
                         ))}
                       </select>
-                      {idx > 0 && (
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
+                        Detalhes
+                      </label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={100}
+                        className="w-full p-3 bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl text-sm h-24 resize-none text-white placeholder:text-white/50 focus:ring-2 focus:ring-primary outline-none shadow-lg shadow-black/10"
+                        placeholder="Descreva brevemente..."
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
+                          Pacotes
+                        </label>
+                        <input
+                          type="number"
+                          min="20"
+                          value={packageCount}
+                          onChange={(e) => setPackageCount(e.target.value)}
+                          className="w-full p-3 bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl text-sm font-bold text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                          placeholder="Mín 20"
+                          required
+                        />
+                      </div>
+                      <div className="flex items-center justify-center bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl shadow-lg shadow-black/10">
+                        <label className="flex items-center gap-2 cursor-pointer p-3 w-full justify-center">
+                          <span className="text-sm font-bold text-white/80">
+                            Volumoso?
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={isBulky}
+                            onChange={(e) => setIsBulky(e.target.checked)}
+                            className="accent-[#FA4F26] w-5 h-5"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-1 flex justify-between">
+                        Regiões
                         <button
                           type="button"
-                          onClick={() =>
-                            handleRemoveField(idx, setNeededVehicles)
-                          }
-                          className="text-red-300 hover:text-red-200 transition-colors"
+                          onClick={() => handleAddField(setDeliveryRegions)}
+                          className="text-primary hover:text-primary/80 transition-colors"
                         >
-                          <MinusCircle size={18} />
+                          <PlusCircle size={14} />
                         </button>
-                      )}
+                      </label>
+                      {deliveryRegions.map((reg, idx) => (
+                        <div key={idx} className="flex gap-2 mb-2">
+                          <input
+                            value={reg}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                idx,
+                                e.target.value,
+                                setDeliveryRegions
+                              )
+                            }
+                            className="flex-1 p-2 bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl text-sm text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                            placeholder="Ex: Zona Norte"
+                          />
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleRemoveField(idx, setDeliveryRegions)
+                              }
+                              className="text-red-300 hover:text-red-200 transition-colors"
+                            >
+                              <MinusCircle size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-1 flex justify-between">
+                        Veículos Necessários
+                        <button
+                          type="button"
+                          onClick={() => handleAddField(setNeededVehicles)}
+                          className="text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <PlusCircle size={14} />
+                        </button>
+                      </label>
+                      {neededVehicles.map((veh, idx) => (
+                        <div key={idx} className="flex gap-2 mb-2">
+                          <select
+                            value={veh}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                idx,
+                                e.target.value,
+                                setNeededVehicles
+                              )
+                            }
+                            className="flex-1 p-2 bg-orange-500/20 backdrop-blur-xl border border-orange-500/30 rounded-xl text-sm capitalize text-white focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                          >
+                            <option value="" className="bg-slate-800">
+                              Selecione...
+                            </option>
+                            {VEHICLE_TYPES.map((v) => (
+                              <option
+                                key={v}
+                                value={v}
+                                className="bg-slate-800"
+                              >
+                                {v}
+                              </option>
+                            ))}
+                          </select>
+                          {idx > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleRemoveField(idx, setNeededVehicles)
+                              }
+                              className="text-red-300 hover:text-red-200 transition-colors"
+                            >
+                              <MinusCircle size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
+                        Localização
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          value={location}
+                          onChange={(e) => setLocation(e.target.value)}
+                          className="flex-1 p-3 bg-orange-500/20 backdrop-blur-xl border border-orange-500/30 rounded-xl text-sm text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                          placeholder="Link do Maps ou endereço"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGetLocation}
+                          className="p-3 bg-blue-500/20 text-blue-300 rounded-xl border border-blue-400/30 hover:bg-blue-500/30 transition-colors shadow-lg shadow-black/10"
+                        >
+                          {isLocating ? (
+                            <Loading size="sm" variant="spinner" />
+                          ) : (
+                            <NavigationIcon size={20} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Upload de Foto da Carga */}
+                    <div>
+                      <label className="text-xs font-bold text-white/70 uppercase mb-2 block flex items-center gap-2">
+                        <ImageIcon size={16} className="text-primary" />
+                        Foto da Carga
+                        <span className="text-[10px] text-white/50 normal-case font-normal">
+                          (Opcional - Máx. 5MB)
+                        </span>
+                      </label>
+                      <div className="space-y-2">
+                        {cargoPhotoPreview ? (
+                          <div className="relative">
+                            <img
+                              src={cargoPhotoPreview}
+                              alt="Preview da carga"
+                              className="w-full h-48 object-cover rounded-xl border-2 border-primary/50 shadow-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCargoPhoto(null);
+                                setCargoPhotoPreview(null);
+                              }}
+                              className="absolute top-2 right-2 p-2 bg-red-500/90 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors"
+                            >
+                              <XIcon size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-primary/50 rounded-xl cursor-pointer bg-primary/10 hover:bg-primary/20 transition-colors group">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                              <ImageIcon
+                                size={32}
+                                className="text-primary mb-2 group-hover:scale-110 transition-transform"
+                              />
+                              <p className="text-sm font-semibold text-white mb-1">
+                                Clique para adicionar foto
+                              </p>
+                              <p className="text-xs text-white/70">
+                                JPG, PNG ou GIF (máx. 5MB)
+                              </p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCargoPhotoChange}
+                              className="hidden"
+                              disabled={isUploadingPhoto}
+                            />
+                          </label>
+                        )}
+                        {isUploadingPhoto && (
+                          <div className="flex items-center justify-center gap-2 text-white/70 text-sm">
+                            <Loading size="sm" variant="spinner" />
+                            <span>Enviando foto...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {modalError && (
+                      <p className="text-red-300 text-xs font-bold text-center bg-red-500/20 backdrop-blur-xl p-2 rounded-xl border border-red-400/30">
+                        {modalError}
+                      </p>
+                    )}
+                  </form>
                 </div>
-
-                <div>
-                  <label className="text-xs font-bold text-white/70 uppercase mb-1 block">
-                    Localização
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      className="flex-1 p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl text-sm text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-                      placeholder="Link do Maps ou endereço"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={handleGetLocation}
-                      className="p-3 bg-blue-500/20 text-blue-300 rounded-xl border border-blue-400/30 hover:bg-blue-500/30 transition-colors shadow-lg shadow-black/10"
-                    >
-                      {isLocating ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <NavigationIcon size={20} />
-                      )}
-                    </button>
-                  </div>
+                <div className="p-4 border-t border-slate-600/50 bg-slate-800/90 backdrop-blur-xl">
+                  <Button
+                    form="supportForm"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-lg shadow-xl shadow-primary/30 rounded-xl"
+                  >
+                    {isSubmitting ? (
+                      <Loading size="sm" variant="spinner" />
+                    ) : (
+                      "ENVIAR SOLICITAÇÃO"
+                    )}
+                  </Button>
                 </div>
-                {modalError && (
-                  <p className="text-red-300 text-xs font-bold text-center bg-red-500/20 backdrop-blur-xl p-2 rounded-xl border border-red-400/30">
-                    {modalError}
-                  </p>
-                )}
-              </form>
+              </div>
             </div>
-            <div className="p-4 border-t border-white/10 bg-white/5 backdrop-blur-xl">
-              <Button
-                form="supportForm"
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full h-12 bg-[#FA4F26] hover:bg-[#EE4D2D] text-white font-bold text-lg shadow-xl shadow-orange-500/30 rounded-xl"
-              >
-                {isSubmitting ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  "ENVIAR SOLICITAÇÃO"
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* REAUTH MODAL */}
-      {isReauthModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-800/95 backdrop-blur-2xl rounded-3xl p-6 w-full max-w-sm shadow-2xl shadow-black/40 border border-white/20">
-            <h3 className="font-bold text-lg mb-4 text-white">
-              Confirme sua senha atual
-            </h3>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full p-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl mb-2 text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
-              placeholder="Senha atual"
-            />
-            {reauthError && (
-              <p className="text-red-300 text-xs mb-2">{reauthError}</p>
-            )}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsReauthModalOpen(false)}
-                className="flex-1 border-white/20 text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-xl rounded-xl"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleReauthenticateAndChange}
-                disabled={isReauthenticating}
-                className="flex-1 bg-[#FA4F26] hover:bg-[#EE4D2D] text-white rounded-xl shadow-lg shadow-orange-500/30"
-              >
-                {isReauthenticating ? (
-                  <LoaderCircle className="animate-spin" />
-                ) : (
-                  "Confirmar"
+          {/* REAUTH MODAL */}
+          {isReauthModalOpen && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-slate-800/95 backdrop-blur-2xl rounded-3xl p-6 w-full max-w-sm shadow-2xl shadow-black/40 border border-orange-500/30">
+                <h3 className="font-bold text-lg mb-4 text-white">
+                  Confirme sua senha atual
+                </h3>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full p-3 bg-slate-700/90 backdrop-blur-xl border border-slate-600/50 rounded-xl mb-2 text-white placeholder:text-white/50 focus:ring-2 focus:ring-[#FA4F26] outline-none shadow-lg shadow-black/10"
+                  placeholder="Senha atual"
+                />
+                {reauthError && (
+                  <p className="text-red-300 text-xs mb-2">{reauthError}</p>
                 )}
-              </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsReauthModalOpen(false)}
+                    className="flex-1 border-slate-600/50 text-white hover:bg-slate-700/90 hover:text-white backdrop-blur-xl rounded-xl"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleReauthenticateAndChange}
+                    disabled={isReauthenticating}
+                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl shadow-lg shadow-primary/30"
+                  >
+                    {isReauthenticating ? (
+                      <Loading size="sm" variant="spinner" />
+                    ) : (
+                      "Confirmar"
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* SUCCESS MODAL */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-800/95 backdrop-blur-2xl rounded-3xl p-8 text-center max-w-sm w-full shadow-2xl shadow-black/40 border border-white/20">
-            <div className="w-20 h-20 bg-green-500/20 text-green-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-400/30 shadow-xl shadow-black/20">
-              <CheckCircle size={40} />
+          {/* SUCCESS MODAL */}
+          {showSuccessModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-slate-800/95 backdrop-blur-2xl rounded-3xl p-8 text-center max-w-sm w-full shadow-2xl shadow-black/40 border border-orange-500/30">
+                <div className="w-20 h-20 bg-green-500/20 text-green-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-400/30 shadow-xl shadow-black/20">
+                  <CheckCircle size={40} />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Recebido!
+                </h2>
+                <p className="text-white/70 mb-6">
+                  Sua solicitação está visível no painel. Aguarde um monitor
+                  aceitar.
+                </p>
+                <Button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full bg-[#FA4F26] hover:bg-[#EE4D2D] text-white h-12 font-bold rounded-xl shadow-xl shadow-orange-500/30"
+                >
+                  Entendido
+                </Button>
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Recebido!</h2>
-            <p className="text-white/70 mb-6">
-              Sua solicitação está visível no painel. Aguarde um monitor
-              aceitar.
-            </p>
-            <Button
-              onClick={() => setShowSuccessModal(false)}
-              className="w-full bg-[#FA4F26] hover:bg-[#EE4D2D] text-white h-12 font-bold rounded-xl shadow-xl shadow-orange-500/30"
-            >
-              Entendido
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <Chatbot />
-    </div>
+          )}
+        </main>
+        <Chatbot />
+      </div>
+    </>
   );
 };

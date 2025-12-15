@@ -20,6 +20,7 @@ import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
+import { Toaster } from "sonner";
 import type {
   SupportCall as OriginalSupportCall,
   Driver,
@@ -266,6 +267,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      <Toaster position="top-right" richColors />
       {user && userData && !isAdminUnverified && (
         <header className="bg-white shadow-md p-4 flex justify-between items-center">
           <div className="text-lg font-semibold text-gray-700">
