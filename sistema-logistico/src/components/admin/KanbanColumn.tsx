@@ -126,10 +126,16 @@ export default function KanbanColumn({
       <CardContent className="space-y-4">
         {calls.map((call) => {
           const requester = drivers.find(
-            (driver) => driver.uid === call.solicitante.id
+            (driver) => driver.uid === call.solicitante.id || 
+            driver.googleUid === call.solicitante.id || 
+            driver.shopeeId === call.solicitante.id
           );
           const assignedDriver = call.assignedTo
-            ? drivers.find((driver) => driver.uid === call.assignedTo)
+            ? drivers.find((driver) => 
+                driver.uid === call.assignedTo || 
+                driver.googleUid === call.assignedTo || 
+                driver.shopeeId === call.assignedTo
+              )
             : undefined;
 
           return (

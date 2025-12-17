@@ -77,6 +77,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Switch } from "./ui/switch";
 import { RouteNotificationCard } from "./RouteNotificationCard";
 import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { resetAllDrivers } from "../utils/resetDrivers";
 
 // --- DND KIT IMPORTS ---
 import {
@@ -697,11 +698,24 @@ const CallCard = ({
   call,
   onDelete,
   onClick,
+  drivers = [],
 }: {
   call: SupportCall;
   onDelete: (call: SupportCall) => void;
   onClick: (call: SupportCall) => void;
+  drivers?: Driver[];
 }) => {
+  // assignedTo contém o uid do Firebase Auth, então buscamos por uid, googleUid ou shopeeId
+  const assignedDriver = call.assignedTo ? drivers.find((d) => 
+    d.uid === call.assignedTo || 
+    d.googleUid === call.assignedTo || 
+    d.shopeeId === call.assignedTo
+  ) : null;
+  const requesterDriver = drivers.find((d) => 
+    d.uid === call.solicitante.id || 
+    d.googleUid === call.solicitante.id || 
+    d.shopeeId === call.solicitante.id
+  );
   const formatTime = (timestamp: any): string => {
     if (!timestamp) return "--:--";
     let date;
@@ -766,7 +780,7 @@ const CallCard = ({
   return (
     <div
       className={cn(
-        "bg-card p-4 rounded-xl shadow-lg border-2 border-border hover:shadow-xl transition-all cursor-pointer group relative",
+        "bg-card p-4 rounded-xl shadow-lg border-2 border-border hover:shadow-xl transition-all cursor-pointer group relative overflow-hidden",
         "border-l-4",
         urgencyColor
       )}
@@ -785,8 +799,8 @@ const CallCard = ({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary/60"></div>
-            <span className="text-base font-bold text-foreground truncate">
+            <div className="w-2 h-2 rounded-full bg-primary/60 flex-shrink-0"></div>
+            <span className="text-base font-bold text-foreground break-words overflow-wrap-anywhere min-w-0">
               {call.solicitante.name}
             </span>
           </div>
@@ -806,7 +820,7 @@ const CallCard = ({
               Motivo
             </span>
           </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-white pl-5">
+          <p className="text-sm font-semibold text-gray-900 dark:text-white pl-5 break-words overflow-wrap-anywhere">
             {parsedInfo.motivo}
           </p>
         </div>
@@ -821,7 +835,7 @@ const CallCard = ({
               Detalhes
             </span>
           </div>
-          <p className="text-xs text-gray-800 dark:text-gray-200 pl-5 leading-relaxed">
+          <p className="text-xs text-gray-800 dark:text-gray-200 pl-5 leading-relaxed break-words overflow-wrap-anywhere">
             {parsedInfo.detalhes}
           </p>
         </div>
@@ -837,7 +851,7 @@ const CallCard = ({
               Hub
             </span>
           </div>
-          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-3.5 truncate" title={parsedInfo?.hub || call.hub}>
+          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-3.5 break-words overflow-wrap-anywhere" title={parsedInfo?.hub || call.hub}>
             {parsedInfo?.hub || call.hub?.split("_")[2] || call.hub || "N/A"}
           </p>
         </div>
@@ -907,6 +921,67 @@ const CallCard = ({
           </div>
         </div>
       )}
+
+      {/* Motoristas - Substituição */}
+      <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+        <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
+          Motoristas
+        </div>
+        <div className="flex items-center gap-2 overflow-hidden">
+          {/* Solicitante */}
+          <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200/50 dark:border-orange-800/30">
+            <div className="w-8 h-8 flex-shrink-0 rounded-full bg-orange-500/20 flex items-center justify-center text-xs font-bold text-orange-700 dark:text-orange-300">
+              {requesterDriver?.initials || call.solicitante.initials || call.solicitante.name?.charAt(0) || "?"}
+            </div>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                {requesterDriver?.name || call.solicitante.name}
+              </p>
+              <p className="text-[10px] text-muted-foreground truncate">Solicitante</p>
+            </div>
+          </div>
+          {/* Seta de substituição */}
+          {call.assignedTo && (
+            <ArrowRight size={14} className="text-muted-foreground flex-shrink-0" />
+          )}
+          {/* Prestador */}
+          {call.assignedTo ? (
+            assignedDriver ? (
+              <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/30">
+                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300">
+                  {assignedDriver.initials || assignedDriver.name?.charAt(0) || "?"}
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                    {assignedDriver.name}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">Prestador</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/30">
+                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300">
+                  ?
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                    Motorista não encontrado
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    Prestador (ID: {call.assignedTo.substring(0, 12)}...)
+                  </p>
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/20 border border-gray-200/50 dark:border-gray-700/30">
+              <div className="flex-1 text-center">
+                <p className="text-xs text-muted-foreground truncate">Aguardando prestador</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Footer com ações */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
@@ -987,7 +1062,11 @@ const ApprovalCard = ({
   onDelete: (call: SupportCall) => void;
   drivers: Driver[];
 }) => {
-  const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
+  const assignedDriver = call.assignedTo ? drivers.find((d) => 
+    d.uid === call.assignedTo || 
+    d.googleUid === call.assignedTo || 
+    d.shopeeId === call.assignedTo
+  ) : null;
   const cleanDescription = (desc: string) => {
     if (desc.includes("Aqui está a descrição")) {
       const parts = desc.split('"');
@@ -1169,6 +1248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isResettingDrivers, setIsResettingDrivers] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -1938,12 +2018,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [drivers]
   );
   const allHubsForFilter = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
-      ].sort(),
-    [calls]
+    () => {
+      const allHubsFromCalls = new Set(calls.map((c) => c.hub).filter((h): h is string => !!h));
+      const allHubsFromDrivers = new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h));
+      const allUniqueHubs = new Set([...allHubsFromCalls, ...allHubsFromDrivers]);
+      return ["Todos os Hubs", ...Array.from(allUniqueHubs)].sort();
+    },
+    [calls, drivers]
   );
   const vehicleTypes = useMemo(
     () =>
@@ -2095,6 +2176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             key={call.id}
             call={call}
             onDelete={handleDeleteClick}
+            drivers={drivers}
             onClick={setSelectedCall}
           />
         ))}
@@ -2503,13 +2585,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       return (
                         <Card
                           key={call.id}
-                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 overflow-hidden"
                         >
-                          <div className="flex-grow">
-                            <p className="font-semibold text-foreground">
+                          <div className="flex-grow min-w-0">
+                            <p className="font-semibold text-foreground break-words overflow-wrap-anywhere">
                               {call.solicitante.name}
                             </p>
-                            <p className="text-sm text-muted-foreground truncate">
+                            <p className="text-sm text-muted-foreground break-words overflow-wrap-anywhere line-clamp-2">
                               {call.description}
                             </p>
                             {call.deletedAt && (
@@ -2652,9 +2734,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </thead>
                       <tbody>
                         {filteredHistoryCalls.map((call) => {
-                          const assignedDriver = drivers.find(
-                            (d) => d.uid === call.assignedTo
-                          );
+                          const assignedDriver = call.assignedTo ? drivers.find(
+                            (d) => d.uid === call.assignedTo || 
+                            d.googleUid === call.assignedTo || 
+                            d.shopeeId === call.assignedTo
+                          ) : null;
                           const formattedDate = call.timestamp
                             ? format(
                                 call.timestamp instanceof Timestamp
@@ -3216,7 +3300,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </>
                           )}
                         </CardContent>
-                        <CardFooter className="flex justify-end gap-3 pt-6 border-t border-border">
+                        <CardFooter className="flex justify-between gap-3 pt-6 border-t border-border">
+                          <Button
+                            onClick={async () => {
+                              if (!confirm("Tem certeza que deseja resetar TODOS os cadastros de motoristas? Esta ação irá remover as vinculações (uid, googleUid, email) mas manterá os dados dos motoristas.")) {
+                                return;
+                              }
+                              setIsResettingDrivers(true);
+                              try {
+                                const result = await resetAllDrivers();
+                                if (result.success) {
+                                  sonnerToast.success(`Reset Concluído: ${result.message}`);
+                                } else {
+                                  sonnerToast.error(`Erro no Reset: ${result.message}`);
+                                }
+                              } catch (error: any) {
+                                sonnerToast.error(`Erro ao resetar: ${error.message}`);
+                              } finally {
+                                setIsResettingDrivers(false);
+                              }
+                            }}
+                            disabled={isResettingDrivers}
+                            variant="destructive"
+                            className="shadow-md px-6"
+                            size="lg"
+                          >
+                            {isResettingDrivers ? (
+                              <>
+                                <Loading size="sm" variant="spinner" className="mr-2" />
+                                Resetando...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw size={18} className="mr-2" />
+                                Resetar Cadastros
+                              </>
+                            )}
+                          </Button>
                           <Button
                             onClick={handleSaveProfile}
                             disabled={isSavingProfile || isLoadingProfile}

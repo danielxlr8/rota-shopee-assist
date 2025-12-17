@@ -35,6 +35,7 @@ import {
   EyeOff,
   Clock,
   MapPin,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Loading } from "./ui/loading";
@@ -505,96 +506,199 @@ export const AuthPage = () => {
   if (isLinkingGoogleAccount) {
     return (
       <div
-        className="min-h-screen w-full flex items-center justify-center p-4 relative"
+        className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden"
         style={{ minHeight: "100vh", minWidth: "100vw" }}
       >
+        {/* Background com gradiente Shopee */}
         <div
           className="absolute inset-0 w-full h-full"
           style={{
-            backgroundImage: 'url("/warehouse-background.jpg")',
-            backgroundSize: "cover",
-            backgroundPosition: "center center",
-            backgroundRepeat: "no-repeat",
+            background: "linear-gradient(135deg, #fff5f0 0%, #ffe8d6 5%, #ffd4b8 10%, #ffb88c 15%, #ffa366 20%, #ff8c42 25%, #ff7733 30%, #ff6622 35%, #ff5511 40%, #ff4400 45%, #ee3d00 50%, #dd3300 55%, #cc2a00 60%, #bb2200 65%, #aa1a00 70%, #991100 75%, #880900 80%, #770600 85%, #660400 90%, #550300 95%, #440200 100%)",
             backgroundAttachment: "fixed",
-            minHeight: "100vh",
-            imageRendering: "auto",
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#FFA832] via-[#FE8330] to-[#FE5F2F] -z-10 min-h-screen" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/40" />
+        
+        {/* Overlay com padrão sutil */}
+        <div className="absolute inset-0 bg-[url('/pattern.svg')] opacity-5" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
 
-        <div
-          className="w-full max-w-md p-8 relative z-10 rounded-3xl border-2"
-          style={{
-            background: "transparent",
-            borderImage: "linear-gradient(120deg, #ffb347, #ff7a1a, #ffb347) 1",
-            boxShadow:
-              "0 25px 60px -20px rgba(0,0,0,0.5), 0 0 25px rgba(255,122,26,0.4), inset 0 0 12px rgba(255,155,71,0.3)",
-            transform: "translateZ(0)",
-          }}
+        {/* Card principal */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="w-full max-w-lg p-8 md:p-10 relative z-10"
         >
-          <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
-            Vincular Conta Google
-          </h2>
-          <p className="text-center text-gray-600 mb-6">
-            Para usar o login com Google, vincule seu ID de motorista.
-          </p>
-          <form onSubmit={handleLinkAccount} className="space-y-4">
-            <div>
-              <label
-                htmlFor="driverIdLink"
-                className="block text-sm font-medium text-gray-700"
+          <div
+            className="w-full rounded-3xl p-8 md:p-10 backdrop-blur-xl border-2 shadow-2xl"
+            style={{
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 248, 240, 0.98) 100%)",
+              borderColor: "rgba(238, 77, 45, 0.3)",
+              boxShadow: "0 25px 60px -20px rgba(238, 77, 45, 0.4), 0 0 40px rgba(255, 122, 26, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+            }}
+          >
+            {/* Logo/Ícone Shopee */}
+            <div className="flex justify-center mb-6">
+              <div
+                className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, #EE4D2D 0%, #FF6B35 100%)",
+                  boxShadow: "0 10px 30px rgba(238, 77, 45, 0.4)",
+                }}
               >
-                ID de Motorista
-              </label>
-              <input
-                id="driverIdLink"
-                type="text"
-                value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
-                className="mt-1 block w-full input-style text-gray-900"
-                placeholder="Seu ID único"
-                required
-                autoComplete="off"
-              />{" "}
+                <Hash size={40} className="text-white" />
+              </div>
             </div>
-            {linkingError && (
-              <p className="text-sm text-red-600 text-center">{linkingError}</p>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loading size="sm" variant="spinner" />
-                  <span className="font-semibold tracking-wide" style={{ 
-                    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif",
-                    letterSpacing: "0.5px"
-                  }}>Verificando...</span>
-                </>
-              ) : (
-                "Vincular Conta"
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                if (auth.currentUser) {
-                  await signOut(auth);
-                }
-                setIsLinkingGoogleAccount(false);
-                setGoogleUser(null);
-                setLinkingError("");
-                setDriverId("");
+
+            {/* Título */}
+            <motion.h2
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="text-3xl md:text-4xl font-bold text-center mb-2"
+              style={{
+                background: "linear-gradient(135deg, #EE4D2D 0%, #FF6B35 50%, #EE4D2D 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
               }}
-              className="w-full text-center text-sm text-gray-600 hover:text-gray-800 mt-2"
             >
-              Cancelar
-            </button>
-          </form>
-        </div>
+              Validação de Acesso
+            </motion.h2>
+            
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-center text-slate-600 mb-8 text-sm md:text-base"
+            >
+              Digite seu ID de motorista para validar seu acesso ao sistema
+            </motion.p>
+
+            {/* Formulário */}
+            <form onSubmit={handleLinkAccount} className="space-y-6">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <label
+                  htmlFor="driverIdLink"
+                  className="block text-sm font-bold uppercase tracking-wide mb-2"
+                  style={{ color: "#EE4D2D" }}
+                >
+                  ID do Motorista
+                </label>
+                <div className="relative">
+                  <input
+                    id="driverIdLink"
+                    type="text"
+                    value={driverId}
+                    onChange={(e) => setDriverId(e.target.value)}
+                    className="w-full p-4 rounded-xl text-base font-medium border-2 transition-all focus:ring-4 focus:ring-orange-500/30 outline-none"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.9)",
+                      borderColor: linkingError ? "#ef4444" : "rgba(238, 77, 45, 0.3)",
+                      color: "#1e293b",
+                      boxShadow: linkingError 
+                        ? "0 0 0 3px rgba(239, 68, 68, 0.1)" 
+                        : "0 4px 15px rgba(238, 77, 45, 0.1)",
+                    }}
+                    placeholder="Digite seu ID único"
+                    required
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <div
+                    className="absolute right-4 top-1/2 -translate-y-1/2"
+                    style={{ color: "#EE4D2D" }}
+                  >
+                    <Hash size={20} />
+                  </div>
+                </div>
+                {linkingError && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-sm text-red-600 mt-2 flex items-center gap-2 font-medium"
+                  >
+                    <AlertTriangle size={16} />
+                    {linkingError}
+                  </motion.p>
+                )}
+              </motion.div>
+
+              {/* Botão de ação */}
+              <motion.button
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                type="submit"
+                disabled={loading || !driverId.trim()}
+                className="w-full py-4 rounded-xl font-bold text-lg text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98] shadow-xl"
+                style={{
+                  background: loading || !driverId.trim()
+                    ? "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)"
+                    : "linear-gradient(135deg, #EE4D2D 0%, #FF6B35 50%, #EE4D2D 100%)",
+                  backgroundSize: "200% 200%",
+                  boxShadow: loading || !driverId.trim()
+                    ? "0 4px 15px rgba(0, 0, 0, 0.1)"
+                    : "0 10px 30px rgba(238, 77, 45, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+                }}
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <Loading size="sm" variant="spinner" />
+                    <span className="font-semibold tracking-wide">Verificando...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <LogIn size={20} />
+                    <span>Validar e Continuar</span>
+                  </div>
+                )}
+              </motion.button>
+
+              {/* Botão cancelar */}
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                type="button"
+                onClick={async () => {
+                  if (auth.currentUser) {
+                    await signOut(auth);
+                  }
+                  setIsLinkingGoogleAccount(false);
+                  setGoogleUser(null);
+                  setLinkingError("");
+                  setDriverId("");
+                }}
+                className="w-full text-center text-sm text-slate-600 hover:text-slate-800 font-medium transition-colors py-2"
+              >
+                Cancelar
+              </motion.button>
+            </form>
+
+            {/* Informações adicionais */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="mt-8 pt-6 border-t border-orange-200/50"
+            >
+              <div className="flex items-start gap-3 text-xs text-slate-500">
+                <div className="p-2 rounded-lg bg-orange-50" style={{ color: "#EE4D2D" }}>
+                  <Briefcase size={16} />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-700 mb-1">Não tem seu ID?</p>
+                  <p>Entre em contato com o administrador do sistema para obter seu ID de motorista.</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
       </div>
     );
   }

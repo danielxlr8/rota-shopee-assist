@@ -29,7 +29,11 @@ export const ApprovalCard = ({
   onContact,
   drivers,
 }: ApprovalCardProps) => {
-  const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
+  const assignedDriver = call.assignedTo ? drivers.find((d) => 
+    d.uid === call.assignedTo || 
+    d.googleUid === call.assignedTo || 
+    d.shopeeId === call.assignedTo
+  ) : null;
 
   const cleanDescription = (desc: string) => {
     if (desc.includes("Aqui está a descrição")) {

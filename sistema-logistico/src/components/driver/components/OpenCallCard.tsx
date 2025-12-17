@@ -1,5 +1,5 @@
 import React from "react";
-import { Building, Package, Truck, MapPin, Download, Image as ImageIcon } from "lucide-react";
+import { Building, Package, Truck, MapPin, Download, Image as ImageIcon, Weight, AlertTriangle, FileText } from "lucide-react";
 import { UrgencyBadge } from "./UrgencyBadge";
 import { Loading } from "../../ui/loading";
 import { cn } from "../../../lib/utils";
@@ -17,6 +17,29 @@ export const OpenCallCard: React.FC<OpenCallCardProps> = ({
   onAccept,
 }) => {
   const isAccepting = acceptingCallId === call.id;
+
+  // Parsear descrição para extrair informações
+  const parseDescription = (desc: string) => {
+    if (!desc) return null;
+    const info: any = {};
+    
+    const motivoMatch = desc.match(/MOTIVO:\s*([^.]+)/i);
+    if (motivoMatch) info.motivo = motivoMatch[1].trim();
+    
+    const detalhesMatch = desc.match(/DETALHES:\s*([^.]+(?:\.[^H]|$))/i);
+    if (detalhesMatch) info.detalhes = detalhesMatch[1].trim();
+    
+    const regioesMatch = desc.match(/Regiões:\s*([^.]+)/i);
+    if (regioesMatch) {
+      info.regioes = regioesMatch[1].split(',').map((r: string) => r.trim()).filter(Boolean);
+    }
+    
+    info.volumoso = /VOLUMOSO/i.test(desc);
+    
+    return Object.keys(info).length > 0 ? info : null;
+  };
+
+  const parsedInfo = call.description ? parseDescription(call.description) : null;
 
   return (
     <div className={cn(
@@ -50,6 +73,44 @@ export const OpenCallCard: React.FC<OpenCallCardProps> = ({
         <UrgencyBadge urgency={call.urgency} />
       </div>
 
+      {/* Motivo */}
+      {parsedInfo?.motivo && (
+        <div className={cn(
+          "mb-3 p-2.5 rounded-lg border",
+          "dark:bg-red-900/20 dark:border-red-800/30",
+          "bg-red-50 border-red-200/50"
+        )}>
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle size={12} className="text-red-600 dark:text-red-400" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
+              Motivo
+            </span>
+          </div>
+          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-4 break-words overflow-wrap-anywhere">
+            {parsedInfo.motivo}
+          </p>
+        </div>
+      )}
+
+      {/* Detalhes */}
+      {parsedInfo?.detalhes && (
+        <div className={cn(
+          "mb-3 p-2.5 rounded-lg border",
+          "dark:bg-orange-900/20 dark:border-orange-800/30",
+          "bg-orange-50 border-orange-200/50"
+        )}>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText size={12} className="text-orange-600 dark:text-orange-400" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+              Detalhes
+            </span>
+          </div>
+          <p className="text-xs text-gray-800 dark:text-gray-200 pl-4 leading-relaxed break-words overflow-wrap-anywhere">
+            {parsedInfo.detalhes}
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-4">
         <div className="flex-1 rounded-xl px-3 py-2 bg-muted/50 border border-border">
           <span className="text-[10px] font-bold text-muted-foreground uppercase block">
@@ -81,6 +142,61 @@ export const OpenCallCard: React.FC<OpenCallCardProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Volumoso */}
+      {(parsedInfo?.volumoso || call.isBulky) && (
+        <div className={cn(
+          "mb-3 p-2.5 rounded-lg border-2",
+          "dark:bg-orange-900/20 dark:border-orange-700",
+          "bg-orange-50 border-orange-300"
+        )}>
+          <div className="flex items-center gap-2">
+            <Weight size={14} className="text-orange-600 dark:text-orange-400" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+              Volumoso
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Regiões de Entrega */}
+      {(parsedInfo?.regioes && parsedInfo.regioes.length > 0) || (call.deliveryRegions && call.deliveryRegions.length > 0) ? (
+        <div className={cn(
+          "mb-3 p-2.5 rounded-lg border",
+          "dark:bg-green-900/20 dark:border-green-800/30",
+          "bg-green-50 border-green-200/50"
+        )}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <MapPin size={12} className="text-green-600 dark:text-green-400" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 dark:text-green-300">
+              Regiões de Entrega
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 pl-4">
+            {(parsedInfo?.regioes || call.deliveryRegions || []).slice(0, 3).map((regiao: string, idx: number) => (
+              <span
+                key={idx}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold border",
+                  "dark:bg-green-800/40 dark:text-green-300 dark:border-green-700",
+                  "bg-green-100 text-green-700 border-green-300"
+                )}
+              >
+                {regiao}
+              </span>
+            ))}
+            {((parsedInfo?.regioes || call.deliveryRegions || []).length > 3) && (
+              <span className={cn(
+                "px-2 py-0.5 rounded text-[10px] font-semibold",
+                "dark:bg-gray-800 text-gray-400",
+                "bg-gray-100 text-gray-600"
+              )}>
+                +{((parsedInfo?.regioes || call.deliveryRegions || []).length - 3)}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* Foto da Carga */}
       {call.cargoPhotoUrl && (

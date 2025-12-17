@@ -19,6 +19,7 @@ import {
   MinusCircle,
   PlusCircle,
   ArrowRightLeft,
+  ArrowRight,
   BookOpen,
   Zap,
   CheckCircle,
@@ -108,6 +109,17 @@ const DriverCallHistoryCard = ({
   const isRequester = call.solicitante.id === userId;
   const otherPartyId = isRequester ? call.assignedTo : call.solicitante.id;
   const otherParty = allDrivers.find((d: Driver) => d.uid === otherPartyId);
+  // assignedTo contém o uid do Firebase Auth, então buscamos por uid, googleUid ou shopeeId
+  const requesterDriver = allDrivers.find((d: Driver) => 
+    d.uid === call.solicitante.id || 
+    d.googleUid === call.solicitante.id || 
+    d.shopeeId === call.solicitante.id
+  );
+  const assignedDriver = call.assignedTo ? allDrivers.find((d: Driver) => 
+    d.uid === call.assignedTo || 
+    d.googleUid === call.assignedTo || 
+    d.shopeeId === call.assignedTo
+  ) : null;
 
   const handleWhatsAppClick = () => {
     if (!otherParty?.phone)
@@ -267,6 +279,138 @@ const DriverCallHistoryCard = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Motoristas - Substituição */}
+      <div className={cn(
+        "p-4 border-t",
+        isDark ? "border-slate-600/50" : "border-orange-200/50"
+      )}>
+        <div className={cn(
+          "text-[10px] uppercase font-bold mb-2",
+          isDark ? "text-white/50" : "text-slate-600"
+        )}>
+          Motoristas
+        </div>
+        <div className="flex items-center gap-2 overflow-hidden">
+          {/* Solicitante */}
+          <div className={cn(
+            "flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg border",
+            isDark
+              ? "bg-orange-500/10 border-orange-500/30"
+              : "bg-orange-50/80 border-orange-200/50"
+          )}>
+            <div className={cn(
+              "w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold",
+              isDark
+                ? "bg-orange-500/20 text-orange-300"
+                : "bg-orange-500/20 text-orange-700"
+            )}>
+              {requesterDriver?.initials || call.solicitante.initials || call.solicitante.name?.charAt(0) || "?"}
+            </div>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className={cn(
+                "text-xs font-semibold truncate",
+                isDark ? "text-white" : "text-slate-800"
+              )}>
+                {requesterDriver?.name || call.solicitante.name}
+              </p>
+              <p className={cn(
+                "text-[10px] truncate",
+                isDark ? "text-white/60" : "text-slate-600"
+              )}>
+                Solicitante
+              </p>
+            </div>
+          </div>
+          {/* Seta de substituição */}
+          {call.assignedTo && (
+            <ArrowRight size={14} className={cn(
+              "flex-shrink-0",
+              isDark ? "text-white/40" : "text-slate-400"
+            )} />
+          )}
+          {/* Prestador */}
+          {call.assignedTo ? (
+            assignedDriver ? (
+              <div className={cn(
+                "flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg border",
+                isDark
+                  ? "bg-blue-500/10 border-blue-500/30"
+                  : "bg-blue-50/80 border-blue-200/50"
+              )}>
+                <div className={cn(
+                  "w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold",
+                  isDark
+                    ? "bg-blue-500/20 text-blue-300"
+                    : "bg-blue-500/20 text-blue-700"
+                )}>
+                  {assignedDriver.initials || assignedDriver.name?.charAt(0) || "?"}
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className={cn(
+                    "text-xs font-semibold truncate",
+                    isDark ? "text-white" : "text-slate-800"
+                  )}>
+                    {assignedDriver.name}
+                  </p>
+                  <p className={cn(
+                    "text-[10px] truncate",
+                    isDark ? "text-white/60" : "text-slate-600"
+                  )}>
+                    Prestador
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className={cn(
+                "flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg border",
+                isDark
+                  ? "bg-blue-500/10 border-blue-500/30"
+                  : "bg-blue-50/80 border-blue-200/50"
+              )}>
+                <div className={cn(
+                  "w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center text-xs font-bold",
+                  isDark
+                    ? "bg-blue-500/20 text-blue-300"
+                    : "bg-blue-500/20 text-blue-700"
+                )}>
+                  ?
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className={cn(
+                    "text-xs font-semibold truncate",
+                    isDark ? "text-white" : "text-slate-800"
+                  )}>
+                    Motorista não encontrado
+                  </p>
+                  <p className={cn(
+                    "text-[10px] truncate",
+                    isDark ? "text-white/60" : "text-slate-600"
+                  )}>
+                    Prestador (ID: {call.assignedTo.substring(0, 12)}...)
+                  </p>
+                </div>
+              </div>
+            )
+          ) : (
+            <div className={cn(
+              "flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg border",
+              isDark
+                ? "bg-slate-700/50 border-slate-600/50"
+                : "bg-gray-100 border-gray-200/50"
+            )}>
+              <div className="flex-1 text-center">
+                <p className={cn(
+                  "text-xs truncate",
+                  isDark ? "text-white/60" : "text-slate-600"
+                )}>
+                  Aguardando prestador
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {["EM ANDAMENTO", "ABERTO", "AGUARDANDO_APROVACAO"].includes(
@@ -430,14 +574,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const currentPhone = (phone && phone.trim() !== "") ? phone : (driver.phone || "");
     const currentName = (name && name.trim() !== "") ? name : (driver.name || "");
     
-    // Validar telefone - remover formatação e verificar se tem 10 ou 11 dígitos
+    // Validar telefone - remover formatação (caso driver.phone esteja formatado) e verificar se tem 10 ou 11 dígitos
     const cleanPhone = currentPhone ? currentPhone.replace(/\D/g, "") : "";
-    const isValidPhone = cleanPhone.length >= 10 && cleanPhone.length <= 11;
     
     // Validar se todos os campos obrigatórios estão preenchidos
     const hasValidHub = currentHub && currentHub.trim() !== "" && HUBS.includes(currentHub as any);
     const hasValidVehicleType = currentVehicleType && currentVehicleType.trim() !== "";
-    const hasValidPhone = currentPhone && currentPhone.trim() !== "" && isValidPhone;
+    const hasValidPhone = cleanPhone && cleanPhone.length >= 10 && cleanPhone.length <= 11;
     const hasValidName = currentName && currentName.trim() !== "";
     const hasValidShopeeId = shopeeId && !shopeeId.includes("Erro");
     
@@ -534,9 +677,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   useEffect(() => {
     if (driver) {
       setName(driver.name || "");
-      // Formatar o telefone ao carregar do driver
+      // Armazenar apenas os dígitos do telefone no estado
       const driverPhone = driver.phone || "";
-      setPhone(driverPhone ? formatPhoneNumber(driverPhone) : "");
+      const phoneDigits = driverPhone.replace(/\D/g, "");
+      setPhone(phoneDigits);
       const driverHub = driver.hub || "";
       setHub(driverHub);
       setHubSearch(driverHub);
@@ -546,6 +690,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   useEffect(() => {
     const fetchShopeeId = async () => {
+      // Se o driver já tem shopeeId, usar diretamente
+      if (driver?.shopeeId) {
+        setShopeeId(driver.shopeeId);
+        return;
+      }
+      
+      // Caso contrário, buscar pelo uid
       if (driver?.uid) {
         setShopeeId("Carregando...");
         const driversRef = collection(db, "motoristas_pre_aprovados");
@@ -569,7 +720,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       }
     };
     fetchShopeeId();
-  }, [driver?.uid]);
+  }, [driver?.uid, driver?.shopeeId]);
 
   const toggleMute = () => {
     const newMutedState = !isMuted;
@@ -641,7 +792,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     const allDriversQuery = query(collection(db, "motoristas_pre_aprovados"));
     const unsubscribeAllDrivers = onSnapshot(allDriversQuery, (snapshot) => {
       const driversData = snapshot.docs.map(
-        (doc) => ({ ...doc.data(), uid: doc.id } as Driver)
+        (doc) => ({ 
+          shopeeId: doc.id, 
+          ...doc.data(),
+          uid: doc.data().uid || doc.data().googleUid || doc.id
+        } as Driver)
       );
       setAllDrivers(driversData);
     });
@@ -671,17 +826,27 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setAllMyCalls(callsData);
     });
 
-    const openCallsQuery = query(
-      collection(db, "supportCalls"),
-      where("status", "==", "ABERTO")
-    );
+    // Filtrar apenas chamados abertos do mesmo hub do motorista
+    const driverHub = driver?.hub;
+    const openCallsQuery = driverHub
+      ? query(
+          collection(db, "supportCalls"),
+          where("status", "==", "ABERTO"),
+          where("hub", "==", driverHub)
+        )
+      : query(
+          collection(db, "supportCalls"),
+          where("status", "==", "ABERTO")
+        );
     const unsubscribeOpenCalls = onSnapshot(openCallsQuery, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         const callData = {
           id: change.doc.id,
           ...change.doc.data(),
         } as SupportCall;
-        if (callData.solicitante.id !== userId) {
+        // Filtrar também por hub se houver
+        const hubMatch = !driverHub || callData.hub === driverHub;
+        if (callData.solicitante.id !== userId && hubMatch) {
           if (change.type === "added" && !isInitialOpenCallsLoad.current)
             triggerNotificationRef.current(callData);
           if (change.type === "removed")
@@ -693,7 +858,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
       );
       setOpenSupportCalls(
-        openCallsData.filter((call) => call.solicitante.id !== userId)
+        openCallsData.filter((call) => {
+          const hubMatch = !driverHub || call.hub === driverHub;
+          return call.solicitante.id !== userId && hubMatch;
+        })
       );
     });
 
@@ -702,7 +870,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       unsubscribeOpenCalls();
       unsubscribeAllDrivers();
     };
-  }, [userId, startDate, endDate]);
+  }, [userId, startDate, endDate, driver?.hub]);
 
   const updateDriver = async (
     driverId: string,
@@ -870,9 +1038,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       return;
     }
 
-    // Validar telefone
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+    // Validar telefone (phone já contém apenas dígitos)
+    if (!phone || phone.length < 10 || phone.length > 11) {
       showNotification("error", "Telefone", "Use DDD + 8 ou 9 dígitos (ex: (41) 99999-9999).");
       return;
     }
@@ -899,7 +1066,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       console.log("Salvando perfil com shopeeId:", shopeeId);
       console.log("Dados a salvar:", {
         name: name.trim(),
-        phone: cleanPhone,
+        phone: phone,
         hub: hub,
         vehicleType: vehicleType,
       });
@@ -907,7 +1074,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       // Atualizar usando a função updateDriver
       await updateDriver(shopeeId, {
         name: name.trim(),
-        phone: cleanPhone,
+        phone: phone,
         hub: hub,
         vehicleType: vehicleType,
       });
@@ -1108,6 +1275,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       else if (pkg >= 90) urgency = "ALTA";
       else if (pkg >= 60) urgency = "MEDIA";
 
+      // Garantir que temos um ID válido para o solicitante
+      const solicitanteId = user.uid || userId || driver.uid;
+      if (!solicitanteId) {
+        setModalError("Erro: ID do usuário não encontrado.");
+        setIsSubmitting(false);
+        return;
+      }
+
       const newCall = {
         routeId: `SPX-${Date.now().toString().slice(-6)}`,
         description: professionalDesc,
@@ -1121,12 +1296,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         deliveryRegions: regions,
         cargoPhotoUrl,
         solicitante: {
-          id: driver.uid,
-          name: driver.name,
+          id: solicitanteId,
+          name: driver.name || "Motorista",
           avatar: driver.avatar || null,
           initials:
             driver.initials || driver.name?.charAt(0).toUpperCase() || "M",
-          phone: driver.phone,
+          phone: driver.phone || "",
+          shopeeId: driver.shopeeId,
         },
       };
 
@@ -2133,7 +2309,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     </label>
                     <input
                       value={formatPhoneNumber(phone)}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => {
+                        // Extrair apenas dígitos e limitar a 11 caracteres
+                        const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
+                        setPhone(digits);
+                      }}
                       className={cn(
                         "w-full p-4 rounded-xl text-sm border focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
                         theme === "dark"
