@@ -135,18 +135,18 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
   return (
     <div
       className={cn(
-        "p-3 md:p-4 rounded-xl border transition-all shadow-lg flex flex-col h-full",
+        "p-2 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border transition-all shadow-lg flex flex-col h-full",
         isDark
           ? "bg-slate-800/90 border-orange-500/30"
           : "bg-white/80 border-orange-200/50"
       )}
     >
       {/* Header compacto */}
-      <div className="flex items-start justify-between mb-3 flex-shrink-0">
+      <div className="flex items-start justify-between mb-2 sm:mb-3 flex-shrink-0">
         <div className="flex-1 min-w-0">
           <h3
             className={cn(
-              "text-sm md:text-base font-bold truncate",
+              "text-xs sm:text-sm md:text-base font-bold truncate",
               isDark ? "text-white" : "text-slate-800"
             )}
           >
@@ -155,12 +155,12 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
               month: "long",
             })}
           </h3>
-          <div className="flex items-center gap-2 md:gap-3 mt-1.5">
-            <div className="text-2xl md:text-3xl flex-shrink-0">{dayDetails.icon}</div>
+          <div className="flex items-center gap-2 sm:gap-2 md:gap-3 mt-1 sm:mt-1.5">
+            <div className="text-xl sm:text-2xl md:text-3xl flex-shrink-0">{dayDetails.icon}</div>
             <div className="min-w-0">
               <div
                 className={cn(
-                  "text-lg md:text-xl font-bold",
+                  "text-sm sm:text-lg md:text-xl font-bold",
                   isDark ? "text-white" : "text-slate-800"
                 )}
               >
@@ -168,7 +168,7 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
               </div>
               <div
                 className={cn(
-                  "text-xs truncate",
+                  "text-[10px] sm:text-xs truncate",
                   isDark ? "text-gray-300" : "text-gray-600"
                 )}
               >
@@ -186,7 +186,7 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
               : "text-gray-600 hover:bg-gray-100"
           )}
         >
-          <X size={16} />
+          <X size={14} className="sm:w-4 sm:h-4" />
         </button>
       </div>
 
@@ -194,7 +194,7 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
       <div className="flex-1 min-h-0 flex flex-col">
         <h4
           className={cn(
-            "text-xs font-semibold mb-2 flex-shrink-0",
+            "text-[10px] sm:text-xs font-semibold mb-1.5 sm:mb-2 flex-shrink-0",
             isDark ? "text-white" : "text-slate-800"
           )}
         >
@@ -209,7 +209,7 @@ export const WeatherDayDetails: React.FC<WeatherDayDetailsProps> = ({
             items={orderedHours.map((hour) => hour.time)}
             strategy={rectSortingStrategy}
           >
-            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-1.5 flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-1 sm:gap-1.5 flex-1 overflow-y-auto pr-1">
               {orderedHours.map((hour) => (
                 <SortableHourCard
                   key={hour.time}

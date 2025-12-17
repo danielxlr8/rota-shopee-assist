@@ -1379,26 +1379,26 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         {/* HEADER MODERNO */}
         <header
           className={cn(
-            "sticky top-0 z-30 px-4 sm:px-6 py-4 flex justify-between items-center backdrop-blur-xl border-b border-border transition-all duration-300",
+            "sticky top-0 z-30 px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 backdrop-blur-xl border-b border-border transition-all duration-300",
             theme === "light"
               ? "bg-gradient-to-r from-orange-50/90 via-orange-100/80 to-orange-50/90"
               : "bg-background/95"
           )}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-primary-foreground bg-primary shadow-lg">
-              <ArrowRightLeft size={20} strokeWidth={2.5} />
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-primary-foreground bg-primary shadow-lg flex-shrink-0">
+              <ArrowRightLeft size={18} className="sm:w-5 sm:h-5" strokeWidth={2.5} />
             </div>
             <h1
               className={cn(
-                "font-bold text-base tracking-tight",
+                "font-bold text-sm sm:text-base tracking-tight truncate",
                 theme === "light" ? "text-slate-800" : "text-foreground"
               )}
             >
               Sistema Logístico
             </h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={toggleTheme}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"

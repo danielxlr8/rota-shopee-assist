@@ -2787,10 +2787,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </Popover>
               <button
                 onClick={toggleTheme}
-                className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
                 aria-label="Alternar tema"
               >
-                {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
+                {theme === "light" ? <Moon size={18} className="sm:w-5 sm:h-5" /> : <Sun size={18} className="sm:w-5 sm:h-5" />}
               </button>
             </div>
           </header>
@@ -2843,22 +2843,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     ) : null}
                     <div 
-                      className={`avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
+                      className={`avatar-fallback w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
                       style={{ display: adminProfile.avatar ? "none" : "flex" }}
                     >
-                      <span className="text-2xl md:text-3xl font-bold text-white">
+                      <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
                         {adminProfile.initials || "A"}
                       </span>
                     </div>
                   </div>
                   
                   {/* Nome e cidade */}
-                  <div className="flex flex-col flex-shrink-0">
-                    <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
+                  <div className="flex flex-col flex-shrink-0 min-w-0 flex-1 sm:flex-none">
+                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-1 truncate">
                       {adminProfile.name || "Admin Shopee"}
                     </h3>
-                    <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
-                      <MapPin size={16} className="text-orange-500 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5 text-xs sm:text-sm md:text-base text-gray-300">
+                      <MapPin size={14} className="sm:w-4 sm:h-4 text-orange-500 flex-shrink-0" />
                       <span className="truncate">{adminProfile.city || "Não informado"}</span>
                     </div>
                   </div>

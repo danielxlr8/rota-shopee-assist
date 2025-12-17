@@ -178,20 +178,20 @@ export const WeatherForecast: React.FC<WeatherForecastProps> = ({
 
   return (
     <div className={cn("w-full", className)}>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
         <h3
           className={cn(
-            "text-base md:text-lg font-semibold flex items-center gap-2",
+            "text-sm sm:text-base md:text-lg font-semibold flex items-center gap-2",
             isDark ? "text-white" : "text-slate-800"
           )}
         >
-          <CloudSun size={24} className={isDark ? "text-orange-400" : "text-orange-600"} />
+          <CloudSun size={18} className="sm:w-6 sm:h-6 flex-shrink-0" style={{ color: isDark ? "#fb923c" : "#ea580c" }} />
           Previsão do Tempo
         </h3>
         {weatherData && (
           <span
             className={cn(
-              "text-sm md:text-base",
+              "text-xs sm:text-sm md:text-base",
               isDark ? "text-gray-300" : "text-gray-600"
             )}
           >
