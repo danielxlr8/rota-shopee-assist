@@ -88,6 +88,7 @@ import { showNotification } from "../utils/notifications";
 import { toast as sonnerToast } from "sonner";
 import { Loading, LoadingOverlay } from "./ui/loading";
 import { RouteNotificationCard } from "./RouteNotificationCard";
+import { WeatherForecast } from "./WeatherForecast";
 
 interface DriverInterfaceProps {
   driver: Driver;
@@ -1486,6 +1487,13 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             className="hidden"
             accept="image/*"
           />
+
+          {/* Previsão do Tempo */}
+          {driver?.hub && (
+            <div className="px-4 sm:px-6">
+              <WeatherForecast hub={driver.hub} />
+            </div>
+          )}
 
           {/* TABS NAVIGATION MODERNAS */}
           <div

@@ -40,13 +40,16 @@ import {
   AlertOctagon,
   Sun,
   Moon,
+  Palette,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { doc, updateDoc, deleteField, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { db, auth, storage } from "../firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { Camera, Save, Mail, Linkedin, MessageCircle, Briefcase, FileText, Home, Hash } from "lucide-react";
+import { Camera, Save, Mail, Linkedin, MessageCircle, Briefcase, Home, Hash } from "lucide-react";
 import { Loading } from "./ui/loading";
 import {
   AvatarComponent,
@@ -75,9 +78,18 @@ import { cn } from "../lib/utils";
 import { TooltipProvider } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Switch } from "./ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { RouteNotificationCard } from "./RouteNotificationCard";
 import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 import { resetAllDrivers } from "../utils/resetDrivers";
+import { WeatherForecast } from "./WeatherForecast";
+import { HUBS } from "../constants/hubs";
 
 // --- DND KIT IMPORTS ---
 import {
@@ -1251,6 +1263,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isResettingDrivers, setIsResettingDrivers] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [cardBackgroundColor, setCardBackgroundColor] = useState<string>(() => {
+    return localStorage.getItem("adminCardBackgroundColor") || "#000000";
+  });
+  const [cardGradientColor, setCardGradientColor] = useState<string>(() => {
+    return localStorage.getItem("adminCardGradientColor") || "#1a1a1a";
+  });
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
@@ -1633,6 +1652,303 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     value: string
   ) => {
     setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
+  };
+
+  // Funções de exportação de relatórios
+  const exportToCSV = (calls: SupportCall[]) => {
+    const headers = [
+      "ID",
+      "Solicitante",
+      "Apoio",
+      "Hub",
+      "Status",
+      "Data",
+      "Aprovado Por",
+      "Urgência",
+      "Motivo",
+    ];
+
+    const rows = calls.map((call) => {
+      const assignedDriver = call.assignedTo
+        ? drivers.find(
+            (d) =>
+              d.uid === call.assignedTo ||
+              d.googleUid === call.assignedTo ||
+              d.shopeeId === call.assignedTo
+          )
+        : null;
+      const formattedDate = call.timestamp
+        ? format(
+            call.timestamp instanceof Timestamp
+              ? call.timestamp.toDate()
+              : new Date((call.timestamp as any).seconds * 1000),
+            "dd/MM/yyyy HH:mm",
+            { locale: ptBR }
+          )
+        : "N/A";
+
+      return [
+        call.id || "",
+        call.solicitante?.name || "",
+        assignedDriver?.name || "N/A",
+        call.hub || "N/A",
+        call.status?.replace("_", " ") || "N/A",
+        formattedDate,
+        call.approvedBy || "N/A",
+        call.urgency || "N/A",
+        call.reason || "",
+      ];
+    });
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.csv`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification("success", "Exportado", "Relatório CSV exportado com sucesso!");
+  };
+
+  const exportToJSON = (calls: SupportCall[]) => {
+    const data = calls.map((call) => {
+      const assignedDriver = call.assignedTo
+        ? drivers.find(
+            (d) =>
+              d.uid === call.assignedTo ||
+              d.googleUid === call.assignedTo ||
+              d.shopeeId === call.assignedTo
+          )
+        : null;
+      const formattedDate = call.timestamp
+        ? format(
+            call.timestamp instanceof Timestamp
+              ? call.timestamp.toDate()
+              : new Date((call.timestamp as any).seconds * 1000),
+            "dd/MM/yyyy HH:mm",
+            { locale: ptBR }
+          )
+        : "N/A";
+
+      return {
+        id: call.id,
+        solicitante: call.solicitante?.name || "",
+        apoio: assignedDriver?.name || "N/A",
+        hub: call.hub || "N/A",
+        status: call.status?.replace("_", " ") || "N/A",
+        data: formattedDate,
+        aprovadoPor: call.approvedBy || "N/A",
+        urgencia: call.urgency || "N/A",
+        motivo: call.reason || "",
+      };
+    });
+
+    const jsonContent = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonContent], { type: "application/json" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.json`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification("success", "Exportado", "Relatório JSON exportado com sucesso!");
+  };
+
+  const exportToPDF = (calls: SupportCall[]) => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Relatório de Histórico</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+            }
+            h1 {
+              color: #f97316;
+              text-align: center;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+            }
+            th {
+              background-color: #f97316;
+              color: white;
+            }
+            tr:nth-child(even) {
+              background-color: #f9f9f9;
+            }
+            .header-info {
+              margin-bottom: 20px;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-info">
+            <h1>Relatório de Histórico de Solicitações</h1>
+            <p>Data de Exportação: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+            <p>Total de Registros: ${calls.length}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Solicitante</th>
+                <th>Apoio</th>
+                <th>Hub</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Aprovado Por</th>
+                <th>Urgência</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${calls
+                .map((call) => {
+                  const assignedDriver = call.assignedTo
+                    ? drivers.find(
+                        (d) =>
+                          d.uid === call.assignedTo ||
+                          d.googleUid === call.assignedTo ||
+                          d.shopeeId === call.assignedTo
+                      )
+                    : null;
+                  const formattedDate = call.timestamp
+                    ? format(
+                        call.timestamp instanceof Timestamp
+                          ? call.timestamp.toDate()
+                          : new Date((call.timestamp as any).seconds * 1000),
+                        "dd/MM/yyyy HH:mm",
+                        { locale: ptBR }
+                      )
+                    : "N/A";
+
+                  return `
+                    <tr>
+                      <td>${call.id || ""}</td>
+                      <td>${call.solicitante?.name || ""}</td>
+                      <td>${assignedDriver?.name || "N/A"}</td>
+                      <td>${call.hub || "N/A"}</td>
+                      <td>${call.status?.replace("_", " ") || "N/A"}</td>
+                      <td>${formattedDate}</td>
+                      <td>${call.approvedBy || "N/A"}</td>
+                      <td>${call.urgency || "N/A"}</td>
+                    </tr>
+                  `;
+                })
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showNotification("success", "Exportado", "Relatório HTML exportado! Abra o arquivo e use 'Imprimir como PDF' no navegador.");
+  };
+
+  const exportToExcel = (calls: SupportCall[]) => {
+    const headers = [
+      "ID",
+      "Solicitante",
+      "Apoio",
+      "Hub",
+      "Status",
+      "Data",
+      "Aprovado Por",
+      "Urgência",
+      "Motivo",
+    ];
+
+    const rows = calls.map((call) => {
+      const assignedDriver = call.assignedTo
+        ? drivers.find(
+            (d) =>
+              d.uid === call.assignedTo ||
+              d.googleUid === call.assignedTo ||
+              d.shopeeId === call.assignedTo
+          )
+        : null;
+      const formattedDate = call.timestamp
+        ? format(
+            call.timestamp instanceof Timestamp
+              ? call.timestamp.toDate()
+              : new Date((call.timestamp as any).seconds * 1000),
+            "dd/MM/yyyy HH:mm",
+            { locale: ptBR }
+          )
+        : "N/A";
+
+      return [
+        call.id || "",
+        call.solicitante?.name || "",
+        assignedDriver?.name || "N/A",
+        call.hub || "N/A",
+        call.status?.replace("_", " ") || "N/A",
+        formattedDate,
+        call.approvedBy || "N/A",
+        call.urgency || "N/A",
+        call.reason || "",
+      ];
+    });
+
+    const tsvContent = [
+      headers.join("\t"),
+      ...rows.map((row) => row.join("\t")),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + tsvContent], {
+      type: "application/vnd.ms-excel",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.xls`
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification("success", "Exportado", "Relatório Excel exportado com sucesso!");
   };
 
   // Detectar novas rotas
@@ -2019,10 +2335,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
   const allHubsForFilter = useMemo(
     () => {
+      // Incluir todos os hubs definidos no sistema (converter readonly array para array de strings)
+      const hubsArray: string[] = [...HUBS];
+      const allDefinedHubs = new Set(hubsArray);
+      // Também incluir hubs que possam existir nos dados mas não estejam na lista oficial
       const allHubsFromCalls = new Set(calls.map((c) => c.hub).filter((h): h is string => !!h));
       const allHubsFromDrivers = new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h));
-      const allUniqueHubs = new Set([...allHubsFromCalls, ...allHubsFromDrivers]);
-      return ["Todos os Hubs", ...Array.from(allUniqueHubs)].sort();
+      // Combinar todos os hubs
+      const allUniqueHubs = new Set([...allDefinedHubs, ...allHubsFromCalls, ...allHubsFromDrivers]);
+      const result = ["Todos os Hubs", ...Array.from(allUniqueHubs)].sort();
+      return result;
     },
     [calls, drivers]
   );
@@ -2358,6 +2680,111 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                    aria-label="Escolher cor do card"
+                    title="Escolher cor do card"
+                  >
+                    <Palette size={20} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-4" align="end">
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-sm">Cor de Fundo do Card</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-2 block">Cor Principal</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={cardBackgroundColor}
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setCardBackgroundColor(newColor);
+                              localStorage.setItem("adminCardBackgroundColor", newColor);
+                            }}
+                            className="w-16 h-10 rounded-lg border cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={cardBackgroundColor}
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setCardBackgroundColor(newColor);
+                              localStorage.setItem("adminCardBackgroundColor", newColor);
+                            }}
+                            className="flex-1 px-3 py-2 rounded-lg border text-sm"
+                            placeholder="#000000"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-2 block">Cor do Gradiente</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={cardGradientColor}
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setCardGradientColor(newColor);
+                              localStorage.setItem("adminCardGradientColor", newColor);
+                            }}
+                            className="w-16 h-10 rounded-lg border cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={cardGradientColor}
+                            onChange={(e) => {
+                              const newColor = e.target.value;
+                              setCardGradientColor(newColor);
+                              localStorage.setItem("adminCardGradientColor", newColor);
+                            }}
+                            className="flex-1 px-3 py-2 rounded-lg border text-sm"
+                            placeholder="#1a1a1a"
+                          />
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t">
+                        <label className="text-xs text-muted-foreground mb-2 block">Cores Pré-definidas</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { name: "Preto", main: "#000000", grad: "#1a1a1a" },
+                            { name: "Azul Escuro", main: "#1e3a5f", grad: "#2d4a6b" },
+                            { name: "Verde Escuro", main: "#1a3a1a", grad: "#2d4a2d" },
+                            { name: "Roxo Escuro", main: "#2d1a3a", grad: "#3d2a4a" },
+                            { name: "Vermelho Escuro", main: "#3a1a1a", grad: "#4a2a2d" },
+                            { name: "Laranja Escuro", main: "#3a2a1a", grad: "#4a3a2d" },
+                            { name: "Cinza Escuro", main: "#1a1a1a", grad: "#2d2d2d" },
+                            { name: "Azul Marinho", main: "#0a1a2a", grad: "#1a2a3a" },
+                          ].map((preset) => (
+                            <button
+                              key={preset.name}
+                              onClick={() => {
+                                setCardBackgroundColor(preset.main);
+                                setCardGradientColor(preset.grad);
+                                localStorage.setItem("adminCardBackgroundColor", preset.main);
+                                localStorage.setItem("adminCardGradientColor", preset.grad);
+                              }}
+                              className="p-2 rounded-lg border hover:border-orange-500 transition-all text-xs"
+                              title={preset.name}
+                            >
+                              <div
+                                className="w-full h-8 rounded mb-1"
+                                style={{
+                                  background: `linear-gradient(to bottom, ${preset.main} 0%, ${preset.grad} 100%)`,
+                                }}
+                              />
+                              <span className="text-[10px] text-muted-foreground">{preset.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <button
                 onClick={toggleTheme}
                 className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
@@ -2365,15 +2792,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
               </button>
-              <div className="w-full sm:w-auto sm:min-w-[250px]">
-                <SearchableSelect
-                  options={allHubsForFilter}
-                  value={globalHubFilter}
-                  onChange={setGlobalHubFilter}
-                  placeholder="Filtrar Hub Global..."
-                  icon={Building}
-                />
-              </div>
             </div>
           </header>
 
@@ -2382,8 +2800,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div
               className="w-full p-4 md:p-6 rounded-xl border border-orange-900/30 relative z-10"
               style={{
-                backgroundColor: "#000000",
-                background: "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
+                backgroundColor: cardBackgroundColor,
+                background: `linear-gradient(to bottom, ${cardBackgroundColor} 0%, ${cardGradientColor} 100%)`,
               }}
             >
               {/* Data e hora do Brasil no topo */}
@@ -2402,47 +2820,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
               
               {/* Informações do perfil */}
-              <div className="flex items-center gap-4">
-                {/* Foto de perfil */}
-                <div className="relative flex-shrink-0">
-                  {adminProfile.avatar ? (
-                    <img
-                      src={adminProfile.avatar}
-                      alt={adminProfile.name}
-                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
-                      onError={(e) => {
-                        // Se a imagem falhar, mostra as iniciais
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                        const parent = target.parentElement;
-                        if (parent) {
-                          const fallback = parent.querySelector(".avatar-fallback") as HTMLElement;
-                          if (fallback) fallback.style.display = "flex";
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className={`avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
-                    style={{ display: adminProfile.avatar ? "none" : "flex" }}
-                  >
-                    <span className="text-2xl md:text-3xl font-bold text-white">
-                      {adminProfile.initials || "A"}
-                    </span>
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mb-4">
+                {/* Foto de perfil e informações */}
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  {/* Foto de perfil */}
+                  <div className="relative flex-shrink-0">
+                    {adminProfile.avatar ? (
+                      <img
+                        src={adminProfile.avatar}
+                        alt={adminProfile.name}
+                        className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
+                        onError={(e) => {
+                          // Se a imagem falhar, mostra as iniciais
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = "none";
+                          const parent = target.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector(".avatar-fallback") as HTMLElement;
+                            if (fallback) fallback.style.display = "flex";
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className={`avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
+                      style={{ display: adminProfile.avatar ? "none" : "flex" }}
+                    >
+                      <span className="text-2xl md:text-3xl font-bold text-white">
+                        {adminProfile.initials || "A"}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                
-                {/* Nome e cidade */}
-                <div className="flex flex-col flex-1 min-w-0">
-                  <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
-                    {adminProfile.name || "Admin Shopee"}
-                  </h3>
-                  <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
-                    <MapPin size={16} className="text-orange-500 flex-shrink-0" />
-                    <span className="truncate">{adminProfile.city || "Não informado"}</span>
+                  
+                  {/* Nome e cidade */}
+                  <div className="flex flex-col flex-shrink-0">
+                    <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
+                      {adminProfile.name || "Admin Shopee"}
+                    </h3>
+                    <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
+                      <MapPin size={16} className="text-orange-500 flex-shrink-0" />
+                      <span className="truncate">{adminProfile.city || "Não informado"}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Previsão do Tempo - Preenchendo todo o espaço do card preto */}
+              {adminView === "kanban" && (
+                <div className="w-full">
+                  <WeatherForecast hub={globalHubFilter} className="w-full" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -2719,6 +3147,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </Button>
                   </CardContent>
                 </Card>
+                <Card className="shadow-lg bg-card">
+                  <CardContent className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-muted-foreground mr-2">
+                        Exportar Relatório:
+                      </span>
+                      <Button
+                        onClick={() => exportToCSV(filteredHistoryCalls)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FileSpreadsheet size={16} />
+                        CSV
+                      </Button>
+                      <Button
+                        onClick={() => exportToPDF(filteredHistoryCalls)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FileText size={16} />
+                        PDF
+                      </Button>
+                      <Button
+                        onClick={() => exportToJSON(filteredHistoryCalls)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FileText size={16} />
+                        JSON
+                      </Button>
+                      <Button
+                        onClick={() => exportToExcel(filteredHistoryCalls)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Excel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
                 <Card className="shadow-lg bg-card overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-foreground">
@@ -2905,12 +3378,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {isMuted ? "Ativar" : "Mutar"}
                             </Button>
                           </div>
+
+                          {/* Seleção de Hub */}
+                          <div className="space-y-2">
+                            <label className={cn(
+                              "text-sm font-semibold flex items-center gap-2",
+                              theme === "dark" ? "text-white" : "text-slate-800"
+                            )}>
+                              <Building size={16} />
+                              Filtrar por Hub
+                            </label>
+                            <Select
+                              value={globalHubFilter}
+                              onValueChange={setGlobalHubFilter}
+                            >
+                              <SelectTrigger className={cn(
+                                "w-full",
+                                theme === "dark"
+                                  ? "bg-slate-700/50 border-orange-500/30 text-white"
+                                  : "bg-white border-orange-200/50 text-slate-800"
+                              )}>
+                                <SelectValue placeholder="Selecione um hub" />
+                              </SelectTrigger>
+                              <SelectContent className={cn(
+                                theme === "dark"
+                                  ? "bg-slate-800 border-orange-500/30"
+                                  : "bg-white border-orange-200/50"
+                              )}>
+                                {allHubsForFilter.map((hub) => (
+                                  <SelectItem
+                                    key={hub}
+                                    value={hub}
+                                    className={cn(
+                                      theme === "dark"
+                                        ? "text-white hover:bg-slate-700 focus:bg-slate-700"
+                                        : "text-slate-800 hover:bg-orange-50 focus:bg-orange-50"
+                                    )}
+                                  >
+                                    {hub.replace(/_/g, " ")}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
 
                     {/* Coluna Direita - Formulário Completo */}
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-6">
+                      {/* Previsão do Tempo */}
+                      <WeatherForecast hub={globalHubFilter} />
+                      
                       <Card className={cn(
                         "shadow-lg border",
                         theme === "dark"
