@@ -21,32 +21,16 @@ export const SearchableSelect = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const filteredOptions = useMemo(() => {
-    // Se não há opções, retornar array vazio
-    if (!options || options.length === 0) {
-      return [];
-    }
-    
-    const lowerSearch = searchTerm.toLowerCase().trim();
+    const lowerSearch = searchTerm.toLowerCase();
     const allOption = options.find((option) =>
       option.toLowerCase().startsWith("todos")
     );
-    
-    // Se não há termo de busca, mostrar TODAS as opções (com "Todos" no início)
-    if (!lowerSearch) {
-      const otherOptions = options.filter(opt => !opt.toLowerCase().startsWith("todos"));
-      return allOption ? [allOption, ...otherOptions] : options;
-    }
-    
-    // Se há termo de busca, filtrar (mantendo "Todos" no início se corresponder)
     const filtered = options.filter(
       (option) =>
         option.toLowerCase().includes(lowerSearch) &&
         !option.toLowerCase().startsWith("todos")
     );
-    
-    // Verificar se "Todos" também corresponde à busca
-    const allMatches = allOption && allOption.toLowerCase().includes(lowerSearch);
-    return allMatches && allOption ? [allOption, ...filtered] : filtered;
+    return allOption ? [allOption, ...filtered] : filtered;
   }, [options, searchTerm]);
 
   useEffect(() => {
@@ -71,9 +55,7 @@ export const SearchableSelect = ({
     setIsOpen(false);
   };
 
-  // Quando o dropdown está aberto e não há busca, mostrar o valor atual
-  // Quando há busca, mostrar o termo de busca
-  const displayValue = isOpen && searchTerm ? searchTerm : value;
+  const displayValue = isOpen ? searchTerm : value;
 
   return (
     <div className="relative w-full" ref={wrapperRef}>
@@ -96,17 +78,9 @@ export const SearchableSelect = ({
               if (allOption) onChange(allOption);
             }
           }}
-          onFocus={(e) => {
+          onFocus={() => {
             setSearchTerm("");
             setIsOpen(true);
-            // Manter o valor atual no input quando focar
-            e.target.select();
-          }}
-          onClick={() => {
-            if (!isOpen) {
-              setSearchTerm("");
-              setIsOpen(true);
-            }
           }}
           className="w-full pl-10 pr-8 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-sans text-foreground placeholder:text-muted-foreground"
         />
@@ -118,14 +92,14 @@ export const SearchableSelect = ({
         />
       </div>
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto text-sm text-foreground">
+        <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto text-sm text-foreground">
           <ul>
             {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
+              filteredOptions.map((option, index) => (
                 <li
-                  key={option}
+                  key={index}
                   onClick={() => handleSelect(option)}
-                  className="px-4 py-2 hover:bg-muted cursor-pointer capitalize transition-colors"
+                  className="px-4 py-2 hover:bg-muted cursor-pointer capitalize"
                 >
                   {option.toLowerCase().replace(/_/g, " ")}
                 </li>

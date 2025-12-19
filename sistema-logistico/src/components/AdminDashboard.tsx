@@ -40,16 +40,13 @@ import {
   AlertOctagon,
   Sun,
   Moon,
-  Palette,
-  FileText,
-  FileSpreadsheet,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { doc, updateDoc, deleteField, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { Timestamp, doc, updateDoc, deleteField, getDoc, setDoc } from "firebase/firestore";
 import { db, auth, storage } from "../firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { Camera, Save, Mail, Linkedin, MessageCircle, Briefcase, Home, Hash } from "lucide-react";
+import { Camera, Save, Mail, Linkedin, MessageCircle, Briefcase, FileText, Home, Hash } from "lucide-react";
 import { Loading } from "./ui/loading";
 import {
   AvatarComponent,
@@ -78,18 +75,6 @@ import { cn } from "../lib/utils";
 import { TooltipProvider } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Switch } from "./ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import { RouteNotificationCard } from "./RouteNotificationCard";
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
-import { resetAllDrivers } from "../utils/resetDrivers";
-import { WeatherForecast } from "./WeatherForecast";
-import { HUBS } from "../constants/hubs";
 
 // --- DND KIT IMPORTS ---
 import {
@@ -238,17 +223,18 @@ const EnhancedDriverCard = ({
   <div
     className="p-4 rounded-xl flex items-center justify-between gap-3 group transition-all cursor-pointer"
     style={{
-      background: "#000000",
-      border: "1px solid rgba(238, 77, 45, 0.3)",
-      boxShadow: "0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(238, 77, 45, 0.1)",
+      background: "linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(16, 185, 129, 0.2)",
+      boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
     }}
     onMouseEnter={(e) => {
-      e.currentTarget.style.borderColor = "rgba(238, 77, 45, 0.5)";
-      e.currentTarget.style.boxShadow = "0 8px 32px rgba(238, 77, 45, 0.3), 0 0 0 1px rgba(238, 77, 45, 0.2)";
+      e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.4)";
+      e.currentTarget.style.boxShadow = "0 8px 32px rgba(16, 185, 129, 0.2)";
     }}
     onMouseLeave={(e) => {
-      e.currentTarget.style.borderColor = "rgba(238, 77, 45, 0.3)";
-      e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(238, 77, 45, 0.1)";
+      e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.2)";
+      e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.2)";
     }}
   >
     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -257,19 +243,19 @@ const EnhancedDriverCard = ({
       </div>
       <div className="flex-1 min-w-0">
         <p
-          className="font-bold text-orange-500 cursor-pointer truncate text-sm"
+          className="font-bold text-white cursor-pointer truncate text-sm"
           onClick={() => onInfoClick(driver)}
           title={driver.name}
         >
           {driver.name}
         </p>
-        <div className="text-xs text-orange-400 flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1.5">
+        <div className="text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center sm:gap-3 mt-1.5">
           <div className="flex items-center gap-1.5 truncate" title={driver.hub}>
-            <Building size={12} className="text-orange-500" />
+            <Building size={12} className="text-orange-400" />
             <span className="truncate">{driver.hub?.split("_")[2] || "N/A"}</span>
           </div>
           <div className="flex items-center gap-1.5 capitalize">
-            <Truck size={12} className="text-orange-500" />
+            <Truck size={12} className="text-orange-400" />
             <span>{driver.vehicleType || "N/A"}</span>
           </div>
         </div>
@@ -289,17 +275,10 @@ const EnhancedDriverCard = ({
       <Button
         onClick={() => handleContactDriver(driver.phone)}
         size="sm"
-        className="h-8 text-xs rounded-lg font-semibold text-white"
+        className="h-8 text-xs rounded-lg font-semibold"
         style={{
-          background: "linear-gradient(135deg, #EE4D2D 0%, #FF6B35 50%, #EE4D2D 100%)",
-          backgroundSize: "200% 200%",
-          boxShadow: "0 4px 20px -5px rgba(238, 77, 45, 0.5)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundPosition = "100% 0";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundPosition = "0% 0";
+          background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+          boxShadow: "0 4px 20px -5px rgba(249, 115, 22, 0.4)",
         }}
       >
         Acionar
@@ -710,24 +689,11 @@ const CallCard = ({
   call,
   onDelete,
   onClick,
-  drivers = [],
 }: {
   call: SupportCall;
   onDelete: (call: SupportCall) => void;
   onClick: (call: SupportCall) => void;
-  drivers?: Driver[];
 }) => {
-  // assignedTo contém o uid do Firebase Auth, então buscamos por uid, googleUid ou shopeeId
-  const assignedDriver = call.assignedTo ? drivers.find((d) => 
-    d.uid === call.assignedTo || 
-    d.googleUid === call.assignedTo || 
-    d.shopeeId === call.assignedTo
-  ) : null;
-  const requesterDriver = drivers.find((d) => 
-    d.uid === call.solicitante.id || 
-    d.googleUid === call.solicitante.id || 
-    d.shopeeId === call.solicitante.id
-  );
   const formatTime = (timestamp: any): string => {
     if (!timestamp) return "--:--";
     let date;
@@ -752,255 +718,72 @@ const CallCard = ({
       URGENTE: "border-l-red-600",
     }[call.urgency] || "border-l-gray-300";
 
-  // Parsear descrição para extrair informações
-  const parseDescription = (desc: string) => {
-    if (!desc) return null;
-    const info: any = {};
-    
-    const motivoMatch = desc.match(/MOTIVO:\s*([^.]+)/i);
-    if (motivoMatch) info.motivo = motivoMatch[1].trim();
-    
-    const detalhesMatch = desc.match(/DETALHES:\s*([^.]+(?:\.[^H]|$))/i);
-    if (detalhesMatch) info.detalhes = detalhesMatch[1].trim();
-    
-    const hubMatch = desc.match(/Hub:\s*([^.]+)/i);
-    if (hubMatch) info.hub = hubMatch[1].trim();
-    
-    const locMatch = desc.match(/Loc:\s*([^.]+)/i);
-    if (locMatch) info.loc = locMatch[1].trim();
-    
-    const qtdMatch = desc.match(/Qtd:\s*(\d+)/i);
-    if (qtdMatch) info.qtd = qtdMatch[1].trim();
-    
-    const regioesMatch = desc.match(/Regiões:\s*([^.]+)/i);
-    if (regioesMatch) {
-      info.regioes = regioesMatch[1].split(',').map((r: string) => r.trim()).filter(Boolean);
-    }
-    
-    const veiculosMatch = desc.match(/Veículos:\s*([^.]+)/i);
-    if (veiculosMatch) {
-      info.veiculos = veiculosMatch[1].split(',').map((v: string) => v.trim()).filter(Boolean);
-    }
-    
-    info.volumoso = /VOLUMOSO/i.test(desc);
-    
-    return Object.keys(info).length > 0 ? info : null;
-  };
-
-  const parsedInfo = call.description ? parseDescription(call.description) : null;
-
   return (
     <div
       className={cn(
-        "bg-card p-4 rounded-xl shadow-lg border-2 border-border hover:shadow-xl transition-all cursor-pointer group relative overflow-hidden",
+        "bg-card p-3 rounded-md shadow-sm border border-border hover:shadow-md transition-all cursor-pointer group relative flex flex-col gap-2",
         "border-l-4",
         urgencyColor
       )}
       onClick={() => onClick(call)}
-      style={{
-        minHeight: parsedInfo ? "280px" : "auto",
-      }}
     >
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <Ticket size={16} className="text-primary flex-shrink-0" />
-            <span className="text-sm font-bold font-mono text-primary truncate">
-              {call.routeId || "SEM ID"}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary/60 flex-shrink-0"></div>
-            <span className="text-base font-bold text-foreground break-words overflow-wrap-anywhere min-w-0">
-              {call.solicitante.name}
-            </span>
-          </div>
+      <div className="flex justify-between items-center pr-7">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Ticket size={14} className="text-muted-foreground flex-shrink-0" />
+          <span className="text-xs font-bold font-mono text-primary truncate">
+            {call.routeId || "SEM ID"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0 ml-2">
-          <Clock size={14} />
+        <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+          <Clock size={12} />
           <span>{timeString}</span>
         </div>
       </div>
 
-      {/* Motivo */}
-      {parsedInfo?.motivo && (
-        <div className="mb-3 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200/50 dark:border-red-800/30">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle size={14} className="text-red-600 dark:text-red-400" />
-            <span className="text-xs font-bold uppercase tracking-wide text-red-700 dark:text-red-300">
-              Motivo
-            </span>
-          </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-white pl-5 break-words overflow-wrap-anywhere">
-            {parsedInfo.motivo}
-          </p>
+      <div className="flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-primary/50"></div>
+        <span className="text-sm font-semibold text-foreground truncate leading-none">
+          {call.solicitante.name}
+        </span>
+      </div>
+
+      {call.reason && (
+        <div className="mt-1">
+          <Badge
+            variant="outline"
+            className="text-[10px] py-0 h-5 border-red-200 text-red-700 bg-red-50 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/50 truncate max-w-full"
+          >
+            {call.reason}
+          </Badge>
         </div>
       )}
 
-      {/* Detalhes */}
-      {parsedInfo?.detalhes && (
-        <div className="mb-3 p-2.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200/50 dark:border-orange-800/30">
-          <div className="flex items-center gap-2 mb-1">
-            <FileText size={14} className="text-orange-600 dark:text-orange-400" />
-            <span className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-              Detalhes
-            </span>
-          </div>
-          <p className="text-xs text-gray-800 dark:text-gray-200 pl-5 leading-relaxed break-words overflow-wrap-anywhere">
-            {parsedInfo.detalhes}
-          </p>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+        <div className="flex items-center gap-1" title="Pacotes">
+          <Package size={12} />
+          <span>{call.packageCount || "?"}</span>
         </div>
-      )}
-
-      {/* Grid de Informações */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {/* Hub */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200/50 dark:border-blue-800/30">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Building size={12} className="text-blue-600 dark:text-blue-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              Hub
-            </span>
-          </div>
-          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-3.5 break-words overflow-wrap-anywhere" title={parsedInfo?.hub || call.hub}>
-            {parsedInfo?.hub || call.hub?.split("_")[2] || call.hub || "N/A"}
-          </p>
+        <div className="flex items-center gap-1 capitalize" title="Veículo">
+          <Truck size={12} />
+          <span className="truncate max-w-[60px]">
+            {call.vehicleType?.split(" ")[0] || "?"}
+          </span>
         </div>
-        
-        {/* Pacotes */}
-        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2 border border-purple-200/50 dark:border-purple-800/30">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Package size={12} className="text-purple-600 dark:text-purple-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-purple-700 dark:text-purple-300">
-              Pacotes
-            </span>
-          </div>
-          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-3.5">
-            {parsedInfo?.qtd || call.packageCount || "?"}
-          </p>
-        </div>
-        
-        {/* Veículo */}
-        <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-2 border border-indigo-200/50 dark:border-indigo-800/30">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Truck size={12} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-              Veículo
-            </span>
-          </div>
-          <p className="text-xs font-semibold text-gray-900 dark:text-white pl-3.5 capitalize truncate">
-            {parsedInfo?.veiculos?.[0] || call.vehicleType?.split(" ")[0] || "?"}
-          </p>
-        </div>
-        
-        {/* Volumoso */}
-        {(parsedInfo?.volumoso || call.isBulky) && (
-          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-2 border-2 border-orange-300 dark:border-orange-700">
-            <div className="flex items-center gap-1.5">
-              <Weight size={12} className="text-orange-600 dark:text-orange-400" />
-              <span className="text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-                Volumoso
-              </span>
-            </div>
+        {call.isBulky && (
+          <div
+            className="flex items-center gap-1 text-orange-600"
+            title="Volumoso"
+          >
+            <Weight size={12} />
           </div>
         )}
       </div>
 
-      {/* Regiões */}
-      {parsedInfo?.regioes && parsedInfo.regioes.length > 0 && (
-        <div className="mb-3 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200/50 dark:border-green-800/30">
-          <div className="flex items-center gap-2 mb-1.5">
-            <MapPin size={12} className="text-green-600 dark:text-green-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-green-700 dark:text-green-300">
-              Regiões
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5 pl-3.5">
-            {parsedInfo.regioes.slice(0, 2).map((regiao: string, idx: number) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-green-100 dark:bg-green-800/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
-              >
-                {regiao}
-              </span>
-            ))}
-            {parsedInfo.regioes.length > 2 && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                +{parsedInfo.regioes.length - 2}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Motoristas - Substituição */}
-      <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-        <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mb-2">
-          Motoristas
-        </div>
-        <div className="flex items-center gap-2 overflow-hidden">
-          {/* Solicitante */}
-          <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200/50 dark:border-orange-800/30">
-            <div className="w-8 h-8 flex-shrink-0 rounded-full bg-orange-500/20 flex items-center justify-center text-xs font-bold text-orange-700 dark:text-orange-300">
-              {requesterDriver?.initials || call.solicitante.initials || call.solicitante.name?.charAt(0) || "?"}
-            </div>
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                {requesterDriver?.name || call.solicitante.name}
-              </p>
-              <p className="text-[10px] text-muted-foreground truncate">Solicitante</p>
-            </div>
-          </div>
-          {/* Seta de substituição */}
-          {call.assignedTo && (
-            <ArrowRight size={14} className="text-muted-foreground flex-shrink-0" />
-          )}
-          {/* Prestador */}
-          {call.assignedTo ? (
-            assignedDriver ? (
-              <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/30">
-                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300">
-                  {assignedDriver.initials || assignedDriver.name?.charAt(0) || "?"}
-                </div>
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                    {assignedDriver.name}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground truncate">Prestador</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200/50 dark:border-blue-800/30">
-                <div className="w-8 h-8 flex-shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300">
-                  ?
-                </div>
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                    Motorista não encontrado
-                  </p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Prestador (ID: {call.assignedTo.substring(0, 12)}...)
-                  </p>
-                </div>
-              </div>
-            )
-          ) : (
-            <div className="flex-1 min-w-0 flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/20 border border-gray-200/50 dark:border-gray-700/30">
-              <div className="flex-1 text-center">
-                <p className="text-xs text-muted-foreground truncate">Aguardando prestador</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Footer com ações */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground truncate max-w-[50%]">
           <Building size={12} className="shrink-0" />
           <span className="truncate" title={call.hub}>
-            {call.hub?.split("_")[2] || call.hub || "Hub..."}
+            {call.hub || "Hub..."}
           </span>
         </div>
 
@@ -1008,8 +791,7 @@ const CallCard = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const location = parsedInfo?.loc || call.location;
-              if (location) window.open(location, "_blank");
+              if (call.location) window.open(call.location, "_blank");
               else
                 showNotification(
                   "error",
@@ -1017,7 +799,7 @@ const CallCard = ({
                   "Localização não disponível para este chamado."
                 );
             }}
-            className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-colors"
+            className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors"
             title="Abrir no Maps"
           >
             <MapPin size={14} />
@@ -1027,7 +809,7 @@ const CallCard = ({
               e.stopPropagation();
               handleContactDriver(call.solicitante.phone);
             }}
-            className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 transition-colors"
+            className="p-1.5 rounded hover:bg-green-100 text-green-600 transition-colors"
             title="Chamar no WhatsApp"
           >
             <Phone size={14} />
@@ -1035,24 +817,12 @@ const CallCard = ({
         </div>
       </div>
 
-      {/* Badge de motivo se não foi parseado */}
-      {call.reason && !parsedInfo?.motivo && (
-        <div className="mt-2">
-          <Badge
-            variant="outline"
-            className="text-[10px] py-0.5 h-5 border-red-200 text-red-700 bg-red-50 dark:bg-red-900/20 dark:text-red-300 dark:border-red-900/50 truncate max-w-full"
-          >
-            {call.reason}
-          </Badge>
-        </div>
-      )}
-
       <button
         onClick={(e) => {
           e.stopPropagation();
           onDelete(call);
         }}
-        className="absolute top-3 right-12 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all z-10"
+        className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
         title="Excluir"
       >
         <Trash2 size={14} />
@@ -1074,11 +844,7 @@ const ApprovalCard = ({
   onDelete: (call: SupportCall) => void;
   drivers: Driver[];
 }) => {
-  const assignedDriver = call.assignedTo ? drivers.find((d) => 
-    d.uid === call.assignedTo || 
-    d.googleUid === call.assignedTo || 
-    d.shopeeId === call.assignedTo
-  ) : null;
+  const assignedDriver = drivers.find((d) => d.uid === call.assignedTo);
   const cleanDescription = (desc: string) => {
     if (desc.includes("Aqui está a descrição")) {
       const parts = desc.split('"');
@@ -1232,12 +998,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteAllExcluded,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMuted, setIsMuted] = useState(() => {
-    return localStorage.getItem("notificationsMuted") === "true";
-  });
-  const [routeNotifications, setRouteNotifications] = useState<SupportCall[]>([]);
-  const notifiedRouteIds = useRef<Set<string>>(new Set());
-  const isInitialCallsLoad = useRef(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [adminView, setAdminView] = useState<AdminView>("kanban");
   const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
   
@@ -1260,16 +1021,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   });
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [isResettingDrivers, setIsResettingDrivers] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [cardBackgroundColor, setCardBackgroundColor] = useState<string>(() => {
-    return localStorage.getItem("adminCardBackgroundColor") || "#000000";
-  });
-  const [cardGradientColor, setCardGradientColor] = useState<string>(() => {
-    return localStorage.getItem("adminCardGradientColor") || "#1a1a1a";
-  });
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
@@ -1316,23 +1069,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     const loadAdminProfile = async () => {
       const user = auth.currentUser;
-      if (!user) {
-        setIsLoadingProfile(false);
-        return;
-      }
+      if (!user) return;
 
       try {
         setIsLoadingProfile(true);
-        // Timeout de segurança para evitar travamento
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout")), 5000)
-        );
-        
         const adminDocRef = doc(db, "admins_pre_aprovados", user.uid);
-        const adminDocSnap = await Promise.race([
-          getDoc(adminDocRef),
-          timeoutPromise
-        ]) as any;
+        const adminDocSnap = await getDoc(adminDocRef);
 
         if (adminDocSnap.exists()) {
           const data = adminDocSnap.data();
@@ -1401,39 +1143,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             whatsapp: "",
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error("Erro ao carregar perfil:", error);
-        // Não mostrar erro se for timeout - apenas definir valores padrão
-        if (error.message !== "Timeout") {
-          sonnerToast.error("Erro ao carregar perfil");
-        }
-        // Definir valores padrão mesmo em caso de erro
-        const user = auth.currentUser;
-        if (user) {
-          const name = user.displayName || user.email?.split("@")[0] || "Admin";
-          const initials = name
-            .split(" ")
-            .map((n: string) => n[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2);
-          setAdminProfile({
-            name: name,
-            email: user.email || "",
-            phone: "",
-            city: "",
-            state: "",
-            avatar: user.photoURL || "",
-            initials: initials || "A",
-            address: "",
-            zipCode: "",
-            department: "",
-            position: "",
-            bio: "",
-            linkedin: "",
-            whatsapp: "",
-          });
-        }
+        sonnerToast.error("Erro ao carregar perfil");
       } finally {
         setIsLoadingProfile(false);
       }
@@ -1654,355 +1366,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTempHistoryFilters((prev) => ({ ...prev, [filterName]: value }));
   };
 
-  // Funções de exportação de relatórios
-  const exportToCSV = (calls: SupportCall[]) => {
-    const headers = [
-      "ID",
-      "Solicitante",
-      "Apoio",
-      "Hub",
-      "Status",
-      "Data",
-      "Aprovado Por",
-      "Urgência",
-      "Motivo",
-    ];
-
-    const rows = calls.map((call) => {
-      const assignedDriver = call.assignedTo
-        ? drivers.find(
-            (d) =>
-              d.uid === call.assignedTo ||
-              d.googleUid === call.assignedTo ||
-              d.shopeeId === call.assignedTo
-          )
-        : null;
-      const formattedDate = call.timestamp
-        ? format(
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toDate()
-              : new Date((call.timestamp as any).seconds * 1000),
-            "dd/MM/yyyy HH:mm",
-            { locale: ptBR }
-          )
-        : "N/A";
-
-      return [
-        call.id || "",
-        call.solicitante?.name || "",
-        assignedDriver?.name || "N/A",
-        call.hub || "N/A",
-        call.status?.replace("_", " ") || "N/A",
-        formattedDate,
-        call.approvedBy || "N/A",
-        call.urgency || "N/A",
-        call.reason || "",
-      ];
-    });
-
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification("success", "Exportado", "Relatório CSV exportado com sucesso!");
-  };
-
-  const exportToJSON = (calls: SupportCall[]) => {
-    const data = calls.map((call) => {
-      const assignedDriver = call.assignedTo
-        ? drivers.find(
-            (d) =>
-              d.uid === call.assignedTo ||
-              d.googleUid === call.assignedTo ||
-              d.shopeeId === call.assignedTo
-          )
-        : null;
-      const formattedDate = call.timestamp
-        ? format(
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toDate()
-              : new Date((call.timestamp as any).seconds * 1000),
-            "dd/MM/yyyy HH:mm",
-            { locale: ptBR }
-          )
-        : "N/A";
-
-      return {
-        id: call.id,
-        solicitante: call.solicitante?.name || "",
-        apoio: assignedDriver?.name || "N/A",
-        hub: call.hub || "N/A",
-        status: call.status?.replace("_", " ") || "N/A",
-        data: formattedDate,
-        aprovadoPor: call.approvedBy || "N/A",
-        urgencia: call.urgency || "N/A",
-        motivo: call.reason || "",
-      };
-    });
-
-    const jsonContent = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonContent], { type: "application/json" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.json`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification("success", "Exportado", "Relatório JSON exportado com sucesso!");
-  };
-
-  const exportToPDF = (calls: SupportCall[]) => {
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Relatório de Histórico</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 20px;
-            }
-            h1 {
-              color: #f97316;
-              text-align: center;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 20px;
-            }
-            th, td {
-              border: 1px solid #ddd;
-              padding: 8px;
-              text-align: left;
-            }
-            th {
-              background-color: #f97316;
-              color: white;
-            }
-            tr:nth-child(even) {
-              background-color: #f9f9f9;
-            }
-            .header-info {
-              margin-bottom: 20px;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header-info">
-            <h1>Relatório de Histórico de Solicitações</h1>
-            <p>Data de Exportação: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
-            <p>Total de Registros: ${calls.length}</p>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Solicitante</th>
-                <th>Apoio</th>
-                <th>Hub</th>
-                <th>Status</th>
-                <th>Data</th>
-                <th>Aprovado Por</th>
-                <th>Urgência</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${calls
-                .map((call) => {
-                  const assignedDriver = call.assignedTo
-                    ? drivers.find(
-                        (d) =>
-                          d.uid === call.assignedTo ||
-                          d.googleUid === call.assignedTo ||
-                          d.shopeeId === call.assignedTo
-                      )
-                    : null;
-                  const formattedDate = call.timestamp
-                    ? format(
-                        call.timestamp instanceof Timestamp
-                          ? call.timestamp.toDate()
-                          : new Date((call.timestamp as any).seconds * 1000),
-                        "dd/MM/yyyy HH:mm",
-                        { locale: ptBR }
-                      )
-                    : "N/A";
-
-                  return `
-                    <tr>
-                      <td>${call.id || ""}</td>
-                      <td>${call.solicitante?.name || ""}</td>
-                      <td>${assignedDriver?.name || "N/A"}</td>
-                      <td>${call.hub || "N/A"}</td>
-                      <td>${call.status?.replace("_", " ") || "N/A"}</td>
-                      <td>${formattedDate}</td>
-                      <td>${call.approvedBy || "N/A"}</td>
-                      <td>${call.urgency || "N/A"}</td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showNotification("success", "Exportado", "Relatório HTML exportado! Abra o arquivo e use 'Imprimir como PDF' no navegador.");
-  };
-
-  const exportToExcel = (calls: SupportCall[]) => {
-    const headers = [
-      "ID",
-      "Solicitante",
-      "Apoio",
-      "Hub",
-      "Status",
-      "Data",
-      "Aprovado Por",
-      "Urgência",
-      "Motivo",
-    ];
-
-    const rows = calls.map((call) => {
-      const assignedDriver = call.assignedTo
-        ? drivers.find(
-            (d) =>
-              d.uid === call.assignedTo ||
-              d.googleUid === call.assignedTo ||
-              d.shopeeId === call.assignedTo
-          )
-        : null;
-      const formattedDate = call.timestamp
-        ? format(
-            call.timestamp instanceof Timestamp
-              ? call.timestamp.toDate()
-              : new Date((call.timestamp as any).seconds * 1000),
-            "dd/MM/yyyy HH:mm",
-            { locale: ptBR }
-          )
-        : "N/A";
-
-      return [
-        call.id || "",
-        call.solicitante?.name || "",
-        assignedDriver?.name || "N/A",
-        call.hub || "N/A",
-        call.status?.replace("_", " ") || "N/A",
-        formattedDate,
-        call.approvedBy || "N/A",
-        call.urgency || "N/A",
-        call.reason || "",
-      ];
-    });
-
-    const tsvContent = [
-      headers.join("\t"),
-      ...rows.map((row) => row.join("\t")),
-    ].join("\n");
-
-    const blob = new Blob(["\uFEFF" + tsvContent], {
-      type: "application/vnd.ms-excel",
-    });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `historico_${format(new Date(), "dd-MM-yyyy_HH-mm")}.xls`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showNotification("success", "Exportado", "Relatório Excel exportado com sucesso!");
-  };
-
-  // Detectar novas rotas
-  useEffect(() => {
-    const callsQuery = query(
-      collection(db, "supportCalls"),
-      where("status", "==", "ABERTO"),
-      orderBy("timestamp", "desc")
-    );
-
-    const unsubscribe = onSnapshot(callsQuery, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added" && !isInitialCallsLoad.current) {
-          const callData = {
-            id: change.doc.id,
-            ...change.doc.data(),
-          } as SupportCall;
-
-          // Verificar se já foi notificado
-          if (!notifiedRouteIds.current.has(callData.id)) {
-            // Adicionar à lista de notificações
-            setRouteNotifications((prev) => [...prev, callData]);
-            notifiedRouteIds.current.add(callData.id);
-
-            // Tocar som de alerta se não estiver mutado
-            if (!isMuted) {
-              const audio = new Audio("/shopee-ringtone.mp3");
-              audio.volume = 0.5;
-              audio.play().catch(() => {});
-            }
-          }
-        }
-      });
-
-      if (isInitialCallsLoad.current) {
-        isInitialCallsLoad.current = false;
-      }
-    });
-
-    return () => unsubscribe();
-  }, [isMuted]);
-
-  const handleCloseNotification = (callId: string) => {
-    setRouteNotifications((prev) => prev.filter((call) => call.id !== callId));
-  };
-
   const toggleMute = () => {
     const newMutedState = !isMuted;
     setIsMuted(newMutedState);
     localStorage.setItem("notificationsMuted", String(newMutedState));
     if (!newMutedState) {
-      // Testar o som de alerta de rotas quando desmutar
       const audio = new Audio("/shopee-ringtone.mp3");
-      audio.volume = 0.5;
+      audio.volume = 0.3;
       audio.play().catch(() => {});
     }
     showNotification(
@@ -2334,19 +1704,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     [drivers]
   );
   const allHubsForFilter = useMemo(
-    () => {
-      // Incluir todos os hubs definidos no sistema (converter readonly array para array de strings)
-      const hubsArray: string[] = [...HUBS];
-      const allDefinedHubs = new Set(hubsArray);
-      // Também incluir hubs que possam existir nos dados mas não estejam na lista oficial
-      const allHubsFromCalls = new Set(calls.map((c) => c.hub).filter((h): h is string => !!h));
-      const allHubsFromDrivers = new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h));
-      // Combinar todos os hubs
-      const allUniqueHubs = new Set([...allDefinedHubs, ...allHubsFromCalls, ...allHubsFromDrivers]);
-      const result = ["Todos os Hubs", ...Array.from(allUniqueHubs)].sort();
-      return result;
-    },
-    [calls, drivers]
+    () =>
+      [
+        "Todos os Hubs",
+        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
+      ].sort(),
+    [calls]
   );
   const vehicleTypes = useMemo(
     () =>
@@ -2498,7 +1861,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             key={call.id}
             call={call}
             onDelete={handleDeleteClick}
-            drivers={drivers}
             onClick={setSelectedCall}
           />
         ))}
@@ -2508,27 +1870,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <TooltipProvider>
-      {/* Cards de Notificação de Rotas */}
-      {routeNotifications.map((call, index) => (
-        <RouteNotificationCard
-          key={call.id}
-          call={call}
-          onClose={() => handleCloseNotification(call.id)}
-          theme={theme}
-          index={index}
-        />
-      ))}
-      
       <div className={cn(
         "flex min-h-screen text-foreground",
         theme === "dark" && "bg-[hsl(222_47%_8%)]"
       )}
         style={{
           background: theme === "light" 
-            ? "linear-gradient(to bottom, #fff5f0 0%, #ffe8d6 5%, #ffd4b8 10%, #ffb88c 15%, #ffa366 20%, #ff8c42 25%, #ff7733 30%, #ff6622 35%, #ff5511 40%, #ff4400 45%, #ee3d00 50%, #dd3300 55%, #cc2a00 60%, #bb2200 65%, #aa1a00 70%, #991100 75%, #880900 80%, #770600 85%, #660400 90%, #550300 95%, #440200 100%)"
+            ? "linear-gradient(to bottom, hsl(30, 100%, 85%) 0%, hsl(28, 100%, 80%) 10%, hsl(25, 100%, 75%) 20%, hsl(22, 100%, 70%) 30%, hsl(20, 100%, 65%) 40%, hsl(18, 100%, 60%) 50%, hsl(15, 100%, 55%) 60%, hsl(12, 100%, 50%) 70%, hsl(10, 100%, 45%) 80%, hsl(8, 100%, 40%) 90%, hsl(5, 100%, 35%) 100%)"
             : undefined,
           backgroundAttachment: theme === "light" ? "fixed" : undefined,
-          minHeight: "100vh",
         }}
       >
         <aside
@@ -2680,118 +2030,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
-                <PopoverTrigger asChild>
-                  <button
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
-                    aria-label="Escolher cor do card"
-                    title="Escolher cor do card"
-                  >
-                    <Palette size={20} />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-4" align="end">
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-sm">Cor de Fundo do Card</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-2 block">Cor Principal</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="color"
-                            value={cardBackgroundColor}
-                            onChange={(e) => {
-                              const newColor = e.target.value;
-                              setCardBackgroundColor(newColor);
-                              localStorage.setItem("adminCardBackgroundColor", newColor);
-                            }}
-                            className="w-16 h-10 rounded-lg border cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={cardBackgroundColor}
-                            onChange={(e) => {
-                              const newColor = e.target.value;
-                              setCardBackgroundColor(newColor);
-                              localStorage.setItem("adminCardBackgroundColor", newColor);
-                            }}
-                            className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                            placeholder="#000000"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-2 block">Cor do Gradiente</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="color"
-                            value={cardGradientColor}
-                            onChange={(e) => {
-                              const newColor = e.target.value;
-                              setCardGradientColor(newColor);
-                              localStorage.setItem("adminCardGradientColor", newColor);
-                            }}
-                            className="w-16 h-10 rounded-lg border cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={cardGradientColor}
-                            onChange={(e) => {
-                              const newColor = e.target.value;
-                              setCardGradientColor(newColor);
-                              localStorage.setItem("adminCardGradientColor", newColor);
-                            }}
-                            className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                            placeholder="#1a1a1a"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-2 border-t">
-                        <label className="text-xs text-muted-foreground mb-2 block">Cores Pré-definidas</label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {[
-                            { name: "Preto", main: "#000000", grad: "#1a1a1a" },
-                            { name: "Azul Escuro", main: "#1e3a5f", grad: "#2d4a6b" },
-                            { name: "Verde Escuro", main: "#1a3a1a", grad: "#2d4a2d" },
-                            { name: "Roxo Escuro", main: "#2d1a3a", grad: "#3d2a4a" },
-                            { name: "Vermelho Escuro", main: "#3a1a1a", grad: "#4a2a2d" },
-                            { name: "Laranja Escuro", main: "#3a2a1a", grad: "#4a3a2d" },
-                            { name: "Cinza Escuro", main: "#1a1a1a", grad: "#2d2d2d" },
-                            { name: "Azul Marinho", main: "#0a1a2a", grad: "#1a2a3a" },
-                          ].map((preset) => (
-                            <button
-                              key={preset.name}
-                              onClick={() => {
-                                setCardBackgroundColor(preset.main);
-                                setCardGradientColor(preset.grad);
-                                localStorage.setItem("adminCardBackgroundColor", preset.main);
-                                localStorage.setItem("adminCardGradientColor", preset.grad);
-                              }}
-                              className="p-2 rounded-lg border hover:border-orange-500 transition-all text-xs"
-                              title={preset.name}
-                            >
-                              <div
-                                className="w-full h-8 rounded mb-1"
-                                style={{
-                                  background: `linear-gradient(to bottom, ${preset.main} 0%, ${preset.grad} 100%)`,
-                                }}
-                              />
-                              <span className="text-[10px] text-muted-foreground">{preset.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
               <button
                 onClick={toggleTheme}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
                 aria-label="Alternar tema"
               >
-                {theme === "light" ? <Moon size={18} className="sm:w-5 sm:h-5" /> : <Sun size={18} className="sm:w-5 sm:h-5" />}
+                {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
               </button>
+              <div className="w-full sm:w-auto sm:min-w-[250px]">
+                <SearchableSelect
+                  options={allHubsForFilter}
+                  value={globalHubFilter}
+                  onChange={setGlobalHubFilter}
+                  placeholder="Filtrar Hub Global..."
+                  icon={Building}
+                />
+              </div>
             </div>
           </header>
 
@@ -2800,8 +2054,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div
               className="w-full p-4 md:p-6 rounded-xl border border-orange-900/30 relative z-10"
               style={{
-                backgroundColor: cardBackgroundColor,
-                background: `linear-gradient(to bottom, ${cardBackgroundColor} 0%, ${cardGradientColor} 100%)`,
+                backgroundColor: "#000000",
+                background: "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
               }}
             >
               {/* Data e hora do Brasil no topo */}
@@ -2820,57 +2074,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
               
               {/* Informações do perfil */}
-              <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mb-4">
-                {/* Foto de perfil e informações */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  {/* Foto de perfil */}
-                  <div className="relative flex-shrink-0">
-                    {adminProfile.avatar ? (
-                      <img
-                        src={adminProfile.avatar}
-                        alt={adminProfile.name}
-                        className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
-                        onError={(e) => {
-                          // Se a imagem falhar, mostra as iniciais
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = "none";
-                          const parent = target.parentElement;
-                          if (parent) {
-                            const fallback = parent.querySelector(".avatar-fallback") as HTMLElement;
-                            if (fallback) fallback.style.display = "flex";
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <div 
-                      className={`avatar-fallback w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
-                      style={{ display: adminProfile.avatar ? "none" : "flex" }}
-                    >
-                      <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
-                        {adminProfile.initials || "A"}
-                      </span>
-                    </div>
+              <div className="flex items-center gap-4">
+                {/* Foto de perfil */}
+                <div className="relative flex-shrink-0">
+                  {adminProfile.avatar ? (
+                    <img
+                      src={adminProfile.avatar}
+                      alt={adminProfile.name}
+                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
+                      onError={(e) => {
+                        // Se a imagem falhar, mostra as iniciais
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = "none";
+                        const parent = target.parentElement;
+                        if (parent) {
+                          const fallback = parent.querySelector(".avatar-fallback") as HTMLElement;
+                          if (fallback) fallback.style.display = "flex";
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div 
+                    className={`avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${adminProfile.avatar ? "hidden" : ""}`}
+                    style={{ display: adminProfile.avatar ? "none" : "flex" }}
+                  >
+                    <span className="text-2xl md:text-3xl font-bold text-white">
+                      {adminProfile.initials || "A"}
+                    </span>
                   </div>
-                  
-                  {/* Nome e cidade */}
-                  <div className="flex flex-col flex-shrink-0 min-w-0 flex-1 sm:flex-none">
-                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-1 truncate">
-                      {adminProfile.name || "Admin Shopee"}
-                    </h3>
-                    <div className="flex items-center gap-1.5 text-xs sm:text-sm md:text-base text-gray-300">
-                      <MapPin size={14} className="sm:w-4 sm:h-4 text-orange-500 flex-shrink-0" />
-                      <span className="truncate">{adminProfile.city || "Não informado"}</span>
-                    </div>
+                </div>
+                
+                {/* Nome e cidade */}
+                <div className="flex flex-col flex-1 min-w-0">
+                  <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
+                    {adminProfile.name || "Admin Shopee"}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
+                    <MapPin size={16} className="text-orange-500 flex-shrink-0" />
+                    <span className="truncate">{adminProfile.city || "Não informado"}</span>
                   </div>
                 </div>
               </div>
-
-              {/* Previsão do Tempo - Preenchendo todo o espaço do card preto */}
-              {adminView === "kanban" && (
-                <div className="w-full">
-                  <WeatherForecast hub={globalHubFilter} className="w-full" />
-                </div>
-              )}
             </div>
           </div>
 
@@ -3013,13 +2257,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       return (
                         <Card
                           key={call.id}
-                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 overflow-hidden"
+                          className="p-4 shadow-md bg-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
                         >
-                          <div className="flex-grow min-w-0">
-                            <p className="font-semibold text-foreground break-words overflow-wrap-anywhere">
+                          <div className="flex-grow">
+                            <p className="font-semibold text-foreground">
                               {call.solicitante.name}
                             </p>
-                            <p className="text-sm text-muted-foreground break-words overflow-wrap-anywhere line-clamp-2">
+                            <p className="text-sm text-muted-foreground truncate">
                               {call.description}
                             </p>
                             {call.deletedAt && (
@@ -3147,51 +2391,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </Button>
                   </CardContent>
                 </Card>
-                <Card className="shadow-lg bg-card">
-                  <CardContent className="p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-muted-foreground mr-2">
-                        Exportar Relatório:
-                      </span>
-                      <Button
-                        onClick={() => exportToCSV(filteredHistoryCalls)}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        <FileSpreadsheet size={16} />
-                        CSV
-                      </Button>
-                      <Button
-                        onClick={() => exportToPDF(filteredHistoryCalls)}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        <FileText size={16} />
-                        PDF
-                      </Button>
-                      <Button
-                        onClick={() => exportToJSON(filteredHistoryCalls)}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        <FileText size={16} />
-                        JSON
-                      </Button>
-                      <Button
-                        onClick={() => exportToExcel(filteredHistoryCalls)}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        <FileSpreadsheet size={16} />
-                        Excel
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
                 <Card className="shadow-lg bg-card overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-foreground">
@@ -3207,11 +2406,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </thead>
                       <tbody>
                         {filteredHistoryCalls.map((call) => {
-                          const assignedDriver = call.assignedTo ? drivers.find(
-                            (d) => d.uid === call.assignedTo || 
-                            d.googleUid === call.assignedTo || 
-                            d.shopeeId === call.assignedTo
-                          ) : null;
+                          const assignedDriver = drivers.find(
+                            (d) => d.uid === call.assignedTo
+                          );
                           const formattedDate = call.timestamp
                             ? format(
                                 call.timestamp instanceof Timestamp
@@ -3378,58 +2575,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {isMuted ? "Ativar" : "Mutar"}
                             </Button>
                           </div>
-
-                          {/* Seleção de Hub */}
-                          <div className="space-y-2">
-                            <label className={cn(
-                              "text-sm font-semibold flex items-center gap-2",
-                              theme === "dark" ? "text-white" : "text-slate-800"
-                            )}>
-                              <Building size={16} />
-                              Filtrar por Hub
-                            </label>
-                            <Select
-                              value={globalHubFilter}
-                              onValueChange={setGlobalHubFilter}
-                            >
-                              <SelectTrigger className={cn(
-                                "w-full",
-                                theme === "dark"
-                                  ? "bg-slate-700/50 border-orange-500/30 text-white"
-                                  : "bg-white border-orange-200/50 text-slate-800"
-                              )}>
-                                <SelectValue placeholder="Selecione um hub" />
-                              </SelectTrigger>
-                              <SelectContent className={cn(
-                                theme === "dark"
-                                  ? "bg-slate-800 border-orange-500/30"
-                                  : "bg-white border-orange-200/50"
-                              )}>
-                                {allHubsForFilter.map((hub) => (
-                                  <SelectItem
-                                    key={hub}
-                                    value={hub}
-                                    className={cn(
-                                      theme === "dark"
-                                        ? "text-white hover:bg-slate-700 focus:bg-slate-700"
-                                        : "text-slate-800 hover:bg-orange-50 focus:bg-orange-50"
-                                    )}
-                                  >
-                                    {hub.replace(/_/g, " ")}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
                         </CardContent>
                       </Card>
                     </div>
 
                     {/* Coluna Direita - Formulário Completo */}
-                    <div className="lg:col-span-2 space-y-6">
-                      {/* Previsão do Tempo */}
-                      <WeatherForecast hub={globalHubFilter} />
-                      
+                    <div className="lg:col-span-2">
                       <Card className={cn(
                         "shadow-lg border",
                         theme === "dark"
@@ -3819,43 +2970,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </>
                           )}
                         </CardContent>
-                        <CardFooter className="flex justify-between gap-3 pt-6 border-t border-border">
-                          <Button
-                            onClick={async () => {
-                              if (!confirm("Tem certeza que deseja resetar TODOS os cadastros de motoristas? Esta ação irá remover as vinculações (uid, googleUid, email) mas manterá os dados dos motoristas.")) {
-                                return;
-                              }
-                              setIsResettingDrivers(true);
-                              try {
-                                const result = await resetAllDrivers();
-                                if (result.success) {
-                                  sonnerToast.success(`Reset Concluído: ${result.message}`);
-                                } else {
-                                  sonnerToast.error(`Erro no Reset: ${result.message}`);
-                                }
-                              } catch (error: any) {
-                                sonnerToast.error(`Erro ao resetar: ${error.message}`);
-                              } finally {
-                                setIsResettingDrivers(false);
-                              }
-                            }}
-                            disabled={isResettingDrivers}
-                            variant="destructive"
-                            className="shadow-md px-6"
-                            size="lg"
-                          >
-                            {isResettingDrivers ? (
-                              <>
-                                <Loading size="sm" variant="spinner" className="mr-2" />
-                                Resetando...
-                              </>
-                            ) : (
-                              <>
-                                <RotateCcw size={18} className="mr-2" />
-                                Resetar Cadastros
-                              </>
-                            )}
-                          </Button>
+                        <CardFooter className="flex justify-end gap-3 pt-6 border-t border-border">
                           <Button
                             onClick={handleSaveProfile}
                             disabled={isSavingProfile || isLoadingProfile}
