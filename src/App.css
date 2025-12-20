@@ -1,0 +1,22 @@
+:root {
+  --primary: 258 100% 66%;
+  --primary-light: 258 100% 72%;
+  --primary-dark: 259 44% 21%;
+
+  --accent: 160 100% 61%;
+
+  --background: 240 5% 12%;
+  --foreground: 0 0% 100%;
+
+  --card: 259 44% 21%;
+  --card-foreground: 0 0% 100%;
+
+  --radius: 12px;
+
+  /* Status */
+  --status-available: 160 100% 61%;
+  --status-unavailable: 0 70% 55%;
+  --status-progress: 220 90% 60%;
+  --status-open: 40 90% 60%;
+  --status-completed: 130 60% 50%;
+}

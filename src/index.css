@@ -1,0 +1,393 @@
+/* Importa a fonte profissional "Plus Jakarta Sans" */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cores Base - Gradiente Laranja */
+    --background: 0 0% 97%;
+    --foreground: 222 15% 15%; /* Texto levemente azulado para leitura melhor */
+
+    /* Sistema de Cards - Tom laranja suave */
+    --card: 30 50% 95%;
+    --card-foreground: 222 15% 15%;
+
+    /* Elementos Interativos */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 15%;
+
+    /* Tema SPX (Laranja Shopee) - Cores oficiais Shopee */
+    --primary: 11 86% 53%; /* #FA4F26 - Laranja principal Shopee */
+    --primary-foreground: 0 0% 100%;
+
+    /* Paleta de Laranja Shopee: #FFCC33, #FFA832, #FE8330, #FE5F2F, #FD3A2D, #FA4F26 */
+    --orange-1: 48 100% 60%; /* #FFCC33 - Amarelo laranja claro */
+    --orange-2: 30 100% 60%; /* #FFA832 - Laranja médio claro */
+    --orange-3: 18 99% 59%; /* #FE8330 - Laranja médio */
+    --orange-4: 12 99% 59%; /* #FE5F2F - Laranja médio escuro */
+    --orange-5: 6 98% 58%; /* #FD3A2D - Laranja escuro */
+    --orange-6: 11 86% 53%; /* #FA4F26 - Laranja principal Shopee */
+
+    /* Variações SPX para uso no Tailwind */
+    --spx-orange: 11 86% 53%;
+    --spx-orange-light: 48 100% 60%;
+    --spx-orange-dark: 6 98% 58%;
+    --spx-background: 11 86% 53%;
+
+    /* Cores Secundárias e de Apoio - Tons laranja Shopee suaves */
+    --secondary: 30 50% 92%;
+    --secondary-foreground: 11 86% 53%;
+
+    --muted: 30 40% 90%;
+    --muted-foreground: 11 60% 40%;
+
+    --accent: 30 55% 94%;
+    --accent-foreground: 11 86% 53%;
+
+    /* Cores de Estado e Feedback */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Cores Semânticas de Logística (Status) */
+    --status-open: 45 93% 47%; /* Amarelo/Laranja */
+    --status-progress: 221 83% 53%; /* Azul */
+    --status-completed: 142 76% 36%; /* Verde */
+    --status-available: 142 76% 36%;
+    --status-unavailable: 0 84% 60%;
+
+    /* Bordas e Inputs - Tons laranja Shopee */
+    --border: 30 40% 85%;
+    --input: 30 50% 95%;
+    --ring: 11 86% 53%; /* Anel de foco laranja Shopee */
+
+    --radius: 0.5rem;
+
+    /* Gráficos */
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+
+    /* Sidebar (Menu Lateral) */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Background escuro estilo dashboard (azul muito escuro/preto) */
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 11 86% 53%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Paleta de Laranja da foto para modo escuro */
+    --orange-1: 48 100% 60%; /* #FFCC33 */
+    --orange-2: 30 100% 60%; /* #FFA832 */
+    --orange-3: 18 99% 59%; /* #FE8330 */
+    --orange-4: 12 99% 59%; /* #FE5F2F */
+    --orange-5: 6 98% 58%; /* #FD3A2D */
+
+    --spx-orange: 11 86% 53%;
+    --spx-orange-light: 48 100% 60%;
+    --spx-orange-dark: 6 98% 58%;
+    --spx-background: 11 86% 53%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --status-open: 48 96% 53%;
+    --status-progress: 217 91% 60%;
+    --status-completed: 142 71% 45%;
+    --status-available: 142 71% 45%;
+    --status-unavailable: 0 62.8% 30.6%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 11 86% 53%;
+
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  html,
+  body {
+    /* CORREÇÃO DAS BORDAS: Impede scroll lateral e "bounces" indesejados */
+    @apply h-full w-full overflow-x-hidden text-foreground antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Gradiente laranja vertical para modo claro (do suave no topo para escuro no final) */
+  body:not(.dark) {
+    background: linear-gradient(
+      to bottom,
+      hsl(30, 100%, 85%) 0%,
+      hsl(28, 100%, 80%) 10%,
+      hsl(25, 100%, 75%) 20%,
+      hsl(22, 100%, 70%) 30%,
+      hsl(20, 100%, 65%) 40%,
+      hsl(18, 100%, 60%) 50%,
+      hsl(15, 100%, 55%) 60%,
+      hsl(12, 100%, 50%) 70%,
+      hsl(10, 100%, 45%) 80%,
+      hsl(8, 100%, 40%) 90%,
+      hsl(5, 100%, 35%) 100%
+    );
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Background totalmente escuro para modo dark */
+  body.dark {
+    background: hsl(222 47% 8%) !important;
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  /* Garantir que html também fique escuro no modo dark */
+  html.dark {
+    background: hsl(222 47% 8%) !important;
+  }
+  
+  /* Forçar background escuro em containers principais no modo dark */
+  body.dark .min-h-dvh,
+  body.dark .min-h-screen {
+    background: hsl(222 47% 8%) !important;
+  }
+  
+  /* Garantir que elementos sem background específico sejam transparentes no dark */
+  body.dark > div:not([class*="bg-"]):not([style*="background"]) {
+    background: transparent !important;
+  }
+
+  /* Scrollbar Fina e Moderna */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors;
+  }
+
+  /* Background gradiente laranja para modo claro (do claro no topo para escuro na base) */
+  .light-bg-gradient {
+    background: linear-gradient(
+      180deg,
+      hsl(30 100% 85%) 0%,
+      hsl(25 100% 75%) 25%,
+      hsl(20 100% 65%) 50%,
+      hsl(18 100% 55%) 75%,
+      hsl(15 100% 45%) 100%
+    );
+  }
+
+  /* Background escuro estilo dashboard (azul muito escuro/preto) */
+  .dark-bg-gradient {
+    background: hsl(222 47% 8%);
+  }
+
+  /* Esconder scrollbar mas manter funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Melhorias de responsividade */
+  @media (max-width: 640px) {
+    .light-bg-gradient,
+    .dark-bg-gradient {
+      background-attachment: fixed;
+    }
+  }
+}
+
+/* --- CALENDÁRIO (Correções Visuais) --- */
+.rdp-vhidden {
+  @apply hidden;
+}
+
+/* Dropdowns de Ano/Mês (Estilizados como Inputs do Shadcn) */
+.rdp-dropdown_month .rdp-dropdown,
+.rdp-dropdown_year .rdp-dropdown {
+  @apply appearance-none bg-transparent border border-input rounded-md px-2 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer;
+}
+
+/* Texto dos dias sempre visível */
+.rdp-day {
+  @apply text-foreground font-medium;
+}
+
+/* Dia selecionado (Laranja SPX) */
+.rdp-day_selected {
+  @apply text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground !important;
+}
+
+/* Hover nos dias não selecionados */
+.rdp-day:hover:not(.rdp-day_selected) {
+  @apply bg-accent text-accent-foreground rounded-md;
+}
+
+/* Ajustes para Mobile (Notch) */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Animação de braços mexendo - mais realista */
+@keyframes waveArm {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-20deg);
+  }
+  75% {
+    transform: rotate(20deg);
+  }
+}
+
+@keyframes waveForearm {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(15deg);
+  }
+  75% {
+    transform: rotate(-15deg);
+  }
+}
+
+/* Animações de Loading */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  40% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Transições suaves para abas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.tab-content-enter {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tab-content-slide {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Animação do gradiente de fundo Shopee */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
