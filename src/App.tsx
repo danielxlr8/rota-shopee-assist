@@ -6,7 +6,6 @@ import {
   doc,
   getDoc,
   collection,
-  onSnapshot,
   updateDoc,
   deleteDoc,
   query,
@@ -20,11 +19,17 @@ import { AuthPage } from "./components/AuthPage";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { DriverInterface } from "./components/DriverInterface";
 import { VerifyEmailPage } from "./components/VerifyEmailPage";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { Toaster } from "sonner";
+import { toast as sonnerToast } from "sonner";
 import type {
   SupportCall as OriginalSupportCall,
   Driver,
 } from "./types/logistics";
+import { useSafeFirestore } from "./hooks/useSafeFirestore";
+import { useFirestoreQuery, clearCollectionCache } from "./hooks/useFirestoreQuery";
+import { usePresence } from "./hooks/usePresence";
+import { checkAccessPermission } from "./services/gatekeeper";
 
 export type SupportCall = OriginalSupportCall & {
   deletedAt?: any;
@@ -35,7 +40,7 @@ const LogOutIcon = (props: React.SVGProps<SVGSVGElement>) => (
     xmlns="http://www.w3.org/2000/svg"
     width="24"
     height="24"
-    viewBox="0 0 24"
+    viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
@@ -62,15 +67,111 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isAdminUnverified, setIsAdminUnverified] = useState(false);
 
-  const [calls, setCalls] = useState<SupportCall[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  // ========================================
+  // NOVA IMPLEMENTAÇÃO COM useFirestoreQuery (SIMPLIFICADO)
+  // ========================================
+  
+  // Hook para chamados - simples e rápido
+  const {
+    data: calls,
+    loading: callsLoading,
+    error: callsError,
+    refresh: refreshCalls,
+  } = useFirestoreQuery<SupportCall>({
+    collectionName: "supportCalls",
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    limitCount: 100,
+    enableCache: true,
+    cacheDuration: 2 * 60 * 1000, // 2 minutos
+  });
+
+  // Hook para motoristas - simples e rápido
+  const {
+    data: drivers,
+    loading: driversLoading,
+    error: driversError,
+    refresh: refreshDrivers,
+  } = useFirestoreQuery<Driver>({
+    collectionName: "motoristas_pre_aprovados",
+    orderByField: "name",
+    orderDirection: "asc",
+    limitCount: 200,
+    enableCache: true,
+    cacheDuration: 5 * 60 * 1000, // 5 minutos
+  });
+
+  // ========================================
+  // ATIVA PRESENÇA DO USUÁRIO (para contador online)
+  // ========================================
+  usePresence(
+    user?.uid || null,
+    userData?.role || "driver",
+    userData ? { name: userData.name, email: userData.email } : null,
+    !!user && !!userData // Só ativa se usuário estiver logado
+  );
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setIsAdminUnverified(false);
+    console.log("🔹 Iniciando useEffect de autenticação");
+    
+    // Timeout de segurança: se após 15 segundos ainda estiver carregando, exibe erro
+    const safetyTimeout = setTimeout(() => {
+      if (loading) {
+        console.error("⚠️ Timeout de segurança atingido. Forçando fim do carregamento.");
+        setLoading(false);
+        setUser(null);
+        setUserData(null);
+      }
+    }, 15000);
 
-      if (currentUser) {
-        await currentUser.reload();
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      console.log("🔹 onAuthStateChanged disparado", currentUser ? "COM usuário" : "SEM usuário");
+      try {
+        setIsAdminUnverified(false);
+
+        if (currentUser) {
+          console.log("🔹 Recarregando dados do usuário...");
+          await currentUser.reload();
+
+          // ========================================
+          // GATEKEEPER: Verificação de limite de usuários simultâneos
+          // ========================================
+          console.log("🔹 Verificando gatekeeper...");
+          const accessCheck = await Promise.race([
+            checkAccessPermission(currentUser.email || undefined),
+            new Promise<any>((resolve) => 
+              setTimeout(() => {
+                console.warn("⏱️ Timeout no gatekeeper, permitindo acesso");
+                resolve({ allowed: true });
+              }, 5000)
+            )
+          ]);
+
+          console.log("🔹 Resultado do gatekeeper:", accessCheck);
+
+        if (!accessCheck.allowed) {
+          // Servidor cheio - mostra notificação e faz logout
+          sonnerToast.error("Servidor Cheio", {
+            description: accessCheck.reason || "Tente novamente em instantes.",
+            duration: 5000,
+          });
+
+          console.warn("⛔ Acesso negado - Servidor cheio:", {
+            currentCount: accessCheck.currentCount,
+            maxCount: accessCheck.maxCount,
+          });
+
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
+
+        console.log("✅ Acesso permitido via Gatekeeper:", {
+          currentCount: accessCheck.currentCount,
+          maxCount: accessCheck.maxCount,
+        });
+
+        console.log("🔹 Começando a buscar dados do usuário...");
         let resolvedUserData: UserData | null = null;
 
         if (currentUser.email?.endsWith("@shopee.com")) {
@@ -133,46 +234,25 @@ function App() {
             await signOut(auth);
           }
         }
-      } else {
+        } else {
+          setUser(null);
+          setUserData(null);
+        }
+      } catch (error) {
+        console.error("❌ Erro durante autenticação:", error);
         setUser(null);
         setUserData(null);
+      } finally {
+        setLoading(false);
+        clearTimeout(safetyTimeout);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      unsubscribe();
+    };
   }, [isAdminUnverified]);
-
-  useEffect(() => {
-    if (user && userData && !isAdminUnverified) {
-      const callsCollection = collection(db, "supportCalls");
-      const driversCollection = collection(db, "motoristas_pre_aprovados");
-
-      const unsubCalls = onSnapshot(callsCollection, (snapshot) => {
-        const callsData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as SupportCall)
-        );
-        setCalls(callsData);
-      });
-
-      const unsubDrivers = onSnapshot(driversCollection, (snapshot) => {
-        const driversData = snapshot.docs.map(
-          (doc) =>
-            ({
-              shopeeId: doc.id,
-              ...doc.data(),
-              uid: doc.data().uid || doc.data().googleUid || doc.id,
-            } as Driver)
-        );
-        setDrivers(driversData);
-      });
-
-      return () => {
-        unsubCalls();
-        unsubDrivers();
-      };
-    }
-  }, [user, userData, isAdminUnverified]);
 
   const handleUpdateCall = async (
     id: string,
@@ -181,6 +261,9 @@ function App() {
     const callDocRef = doc(db, "supportCalls", id);
     try {
       await updateDoc(callDocRef, updates);
+      // Limpa cache e recarrega
+      clearCollectionCache("supportCalls");
+      refreshCalls();
     } catch (error) {
       console.error("Erro ao atualizar chamado: ", error);
     }
@@ -197,6 +280,9 @@ function App() {
     const callDocRef = doc(db, "supportCalls", id);
     try {
       await deleteDoc(callDocRef);
+      // Limpa cache e recarrega
+      clearCollectionCache("supportCalls");
+      refreshCalls();
     } catch (error) {
       console.error("Erro ao excluir chamado permanentemente: ", error);
     }
@@ -212,18 +298,17 @@ function App() {
     querySnapshot.forEach((doc) => batch.delete(doc.ref));
     try {
       await batch.commit();
+      // Limpa cache e recarrega
+      clearCollectionCache("supportCalls");
+      refreshCalls();
     } catch (error) {
       console.error("Erro ao limpar chamados excluídos: ", error);
     }
   };
 
   const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen">
-          <p>A carregar...</p>
-        </div>
-      );
+    if (loading || callsLoading || driversLoading) {
+      return <LoadingScreen />;
     }
 
     if (user && isAdminUnverified) {
@@ -232,6 +317,35 @@ function App() {
 
     if (!user || !userData) {
       return <AuthPage />;
+    }
+
+    // Exibe erros se houver
+    if (callsError || driversError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4">
+          {callsError && (
+            <div className="text-red-600 bg-red-50 p-4 rounded-lg border border-red-200">
+              <p className="font-bold">Erro ao carregar chamados:</p>
+              <p>{callsError}</p>
+            </div>
+          )}
+          {driversError && (
+            <div className="text-red-600 bg-red-50 p-4 rounded-lg border border-red-200">
+              <p className="font-bold">Erro ao carregar motoristas:</p>
+              <p>{driversError}</p>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              refreshCalls();
+              refreshDrivers();
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      );
     }
 
     switch (userData.role) {
@@ -244,6 +358,10 @@ function App() {
             onDeleteCall={handleDeleteCall}
             onDeletePermanently={handlePermanentDeleteCall}
             onDeleteAllExcluded={handleDeleteAllExcluded}
+            onRefresh={() => {
+              refreshCalls();
+              refreshDrivers();
+            }}
           />
         );
       case "driver":
@@ -255,7 +373,6 @@ function App() {
         );
 
         if (driverProfile) {
-          // Passando o perfil do motorista como prop
           return <DriverInterface driver={driverProfile} />;
         }
 

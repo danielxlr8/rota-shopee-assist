@@ -1,0 +1,25 @@
+Analisando o projeto e testando algumas funções identifiquei algumas falhas na execução de algumas funções
+
+1 - na plataforma do motorista, ao tentar se colocar disponivel não funciona, fica somente congelado no indisponivel sem poder realizar a troca, identifique o erro, corrija e adicione melhorias para está função.
+
+2 - ao solicitar apoio na plataforma do motorista, o chamado é aceito, confirma que a solicitação foi feita, porém a solicitação não aparece no painel do admin, identifique e corrija.
+
+3 - o fluxo entre a troca de hubs, acredito que não está sendo executado de forma coerente nos dois paineis tanto no do admin quanto no do motorista, execute melhorias para evitar falhas e evitar confirmações fantasmas de que a função foi executada corretamente por exemplo
+(trocar de hub, a notificação de troca foi confirmada, porém não foi executada. sendo apenas uma notificação falsa)
+
+4 - quero que altere a cor background da plataforma do Admin, para o mesmo tema que está na plataforma do driver (isso exclusivamente no modo dark) modo claro mantenha o atual.
+
+5 - no authpage, tela de login, faltam algumas funções para o usuario entender o que está acontecendo, por exemplo ao tentar se registrar na plataforma,caso ela falhe ela congela sem aparecer informações de falha ao registrar e etc, faça uma varredura nestas funções e acrescente informações detalhadas ao usuario do que está acontecendo.
+
+6 - ao conseguir realizar o cadastro, ela instantaneamente volta para a tela inicial, sem confirmar ao usario que seu registro foi feito com sucesso e leva-lo até a plataforma na qual se registrou, adicione informaçoes claras ao usario.
+e também adicione uma função, caso o registro tenha sido feito com sucesso, leva-lo até o painel sem voltar para a tela incial.
+
+nos demais faça uma varredura no codigo identifique falhas e corrija, mantenha o padrão já existente, porém corrija sem ferir o codigo de maneira intensiva.
+
+caso identifique algum ponto de melhoria na experencia do usuario, me repasse o que foi identificado e iremos discutir quais podem ser acrescentadas, neste ponto não acrescente nada sem minha autorização, somente as correções.
+
+adicione um limitador de acessos: caso o numero de usuarios online seja muito alto, adicione um limitador de pessoas online ao mesmo tempo, para evitar estourar o limite de dados do firebase, adicione uma mensagem para quem não conseguiu acessar que a plataforma está sobrecarregada no momento.
+
+adicione no painel do admin na parte superior da pagina, o numero de usarios online, dividos entre motorista e admin, para controle.
+
+por ultimo, adicione um Product Tour, como forma de tutorial da pagina caso seja primeiro acesso, apresentando a plataforma de forma clara e especifica, sobre o que faz cada função e mostrando as funções que existem na plataforma, vamos trabalhando nisto juntos.

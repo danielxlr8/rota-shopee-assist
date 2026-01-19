@@ -52,6 +52,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db, auth, storage } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
   Camera,
@@ -92,6 +93,11 @@ import { cn } from "../lib/utils";
 import { TooltipProvider } from "./ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Switch } from "./ui/switch";
+import { WeatherForecast } from "./WeatherForecast";
+import { HUBS, getCityFromHub } from "../constants/hubs";
+import { Palette } from "lucide-react";
+import { usePresence } from "../hooks/usePresence";
+import { OnlineUsersMonitor } from "./OnlineUsersMonitor";
 
 // --- DND KIT IMPORTS ---
 import {
@@ -367,7 +373,7 @@ const SearchableSelect = ({
     <div className="relative w-full" ref={wrapperRef}>
       <div className="relative">
         <Icon
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           size={16}
         />
         <input
@@ -388,30 +394,36 @@ const SearchableSelect = ({
             setSearchTerm("");
             setIsOpen(true);
           }}
-          className="w-full pl-10 pr-8 py-2 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary font-sans"
+          className="w-full pl-10 pr-8 py-2.5 border border-orange-500/30 rounded-lg bg-slate-700/50 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 font-sans"
         />
         <ChevronDown
-          className={`absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-transform ${
+          className={`absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-transform ${
             isOpen ? "rotate-180" : ""
           }`}
           size={16}
         />
       </div>
       {isOpen && (
-        <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto text-sm">
+        <div className="absolute z-10 w-full mt-1 bg-slate-800/95 backdrop-blur-sm border border-orange-500/30 rounded-lg shadow-lg max-h-60 overflow-y-auto text-sm">
           <ul>
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => (
                 <li
                   key={index}
                   onClick={() => handleSelect(option)}
-                  className="px-4 py-2 hover:bg-muted cursor-pointer capitalize"
+                  className={cn(
+                    "px-4 py-3 hover:bg-slate-700/90 cursor-pointer transition-colors flex items-center justify-between",
+                    value === option && "bg-orange-500/10"
+                  )}
                 >
-                  {option.toLowerCase().replace(/_/g, " ")}
+                  <span className="text-slate-200">{option}</span>
+                  {value === option && (
+                    <CheckCircle size={16} className="text-orange-500 flex-shrink-0" />
+                  )}
                 </li>
               ))
             ) : (
-              <li className="px-4 py-2 text-muted-foreground">
+              <li className="px-4 py-2 text-slate-400">
                 Nenhuma opção encontrada.
               </li>
             )}
@@ -1001,6 +1013,7 @@ interface AdminDashboardProps {
   onDeleteCall: (id: string) => void;
   onDeletePermanently: (id: string) => void;
   onDeleteAllExcluded: () => void;
+  onRefresh?: () => void;
 }
 
 type AdminView = "kanban" | "excluded" | "history" | "profile";
@@ -1019,6 +1032,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteCall,
   onDeletePermanently,
   onDeleteAllExcluded,
+  onRefresh,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -1041,7 +1055,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     bio: "",
     linkedin: "",
     whatsapp: "",
+    hub: "",
   });
+  
+  // Estados para customização do card
+  const [cardColors, setCardColors] = useState({
+    mainColor: "#000000",
+    gradientColor: "#1a1a1a",
+  });
+  
+  // Estado para previsão do tempo
+  const [selectedWeatherDay, setSelectedWeatherDay] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -1054,6 +1078,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     return "light";
   });
+
+  // ========================================
+  // SISTEMA DE PRESENÇA - Rastreamento de admins online
+  // ========================================
+  const currentUser = auth.currentUser;
+  usePresence(
+    currentUser?.uid || null,
+    "admin",
+    currentUser
+      ? {
+          name: adminProfile.name || currentUser.displayName || "Admin",
+          email: currentUser.email || "",
+        }
+      : null,
+    true // Sempre ativo para admins
+  );
 
   // Atualizar data/hora do Brasil
   useEffect(() => {
@@ -1092,9 +1132,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Carregar perfil do admin
   useEffect(() => {
-    const loadAdminProfile = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setIsLoadingProfile(false);
+        return;
+      }
 
       try {
         setIsLoadingProfile(true);
@@ -1126,8 +1168,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             bio: data.bio || "",
             linkedin: data.linkedin || "",
             whatsapp: data.whatsapp || "",
+            hub: data.hub || "",
           });
           setAvatarPreview(data.avatar || null);
+          
+          // Carregar cores do card
+          if (data.cardMainColor && data.cardGradientColor) {
+            setCardColors({
+              mainColor: data.cardMainColor,
+              gradientColor: data.cardGradientColor,
+            });
+          }
         } else {
           // Criar perfil inicial se não existir
           const name = user.displayName || user.email?.split("@")[0] || "Admin";
@@ -1166,6 +1217,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             bio: "",
             linkedin: "",
             whatsapp: "",
+            hub: "",
           });
         }
       } catch (error) {
@@ -1174,9 +1226,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       } finally {
         setIsLoadingProfile(false);
       }
-    };
+    });
 
-    loadAdminProfile();
+    return () => unsubscribe();
   }, []);
 
   // Upload de avatar
@@ -1258,6 +1310,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         bio: adminProfile.bio.trim(),
         linkedin: adminProfile.linkedin.trim(),
         whatsapp: adminProfile.whatsapp.replace(/\D/g, ""),
+        hub: adminProfile.hub || "",
+        cardMainColor: cardColors.mainColor,
+        cardGradientColor: cardColors.gradientColor,
       });
 
       setAdminProfile((prev) => ({ ...prev, initials }));
@@ -1283,8 +1338,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const [excludedNameFilter, setExcludedNameFilter] = useState("");
   const [excludedHubFilter, setExcludedHubFilter] = useState("Todos os Hubs");
-  const [globalHubFilter, setGlobalHubFilter] =
-    useState<string>("Todos os Hubs");
   const [tempHistoryFilters, setTempHistoryFilters] = useState({
     start: "",
     end: "",
@@ -1571,12 +1624,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const filteredCalls = useMemo(
-    () =>
-      calls.filter(
-        (call) =>
-          globalHubFilter === "Todos os Hubs" || call.hub === globalHubFilter
-      ),
-    [calls, globalHubFilter]
+    () => calls,
+    [calls]
   );
   const activeCalls = useMemo(
     () =>
@@ -1612,12 +1661,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 
   const filteredDrivers = useMemo(
-    () =>
-      drivers.filter(
-        (driver) =>
-          globalHubFilter === "Todos os Hubs" || driver.hub === globalHubFilter
-      ),
-    [drivers, globalHubFilter]
+    () => drivers,
+    [drivers]
   );
   const availableDrivers = useMemo(
     () =>
@@ -1727,14 +1772,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         ...new Set(drivers.map((d) => d.hub).filter((h): h is string => !!h)),
       ].sort(),
     [drivers]
-  );
-  const allHubsForFilter = useMemo(
-    () =>
-      [
-        "Todos os Hubs",
-        ...new Set(calls.map((c) => c.hub).filter((h): h is string => !!h)),
-      ].sort(),
-    [calls]
   );
   const vehicleTypes = useMemo(
     () =>
@@ -1897,14 +1934,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <TooltipProvider>
       <div
         className={cn(
-          "flex min-h-screen text-foreground",
-          theme === "dark" && "bg-[hsl(222_47%_8%)]"
+          "flex min-h-screen text-foreground"
         )}
         style={{
           background:
             theme === "light"
               ? "linear-gradient(to bottom, hsl(30, 100%, 85%) 0%, hsl(28, 100%, 80%) 10%, hsl(25, 100%, 75%) 20%, hsl(22, 100%, 70%) 30%, hsl(20, 100%, 65%) 40%, hsl(18, 100%, 60%) 50%, hsl(15, 100%, 55%) 60%, hsl(12, 100%, 50%) 70%, hsl(10, 100%, 45%) 80%, hsl(8, 100%, 40%) 90%, hsl(5, 100%, 35%) 100%)"
-              : undefined,
+              : "#1a0f0a",
           backgroundAttachment: theme === "light" ? "fixed" : undefined,
         }}
       >
@@ -1914,7 +1950,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             isSidebarCollapsed ? "w-20" : "w-64",
             theme === "light"
               ? "bg-white/70 border-orange-200/50"
-              : "bg-slate-900/95 border-slate-700/50"
+              : "bg-[#1a0f0a]/98 border-[#2d1810]/80"
           )}
         >
           <Button
@@ -2061,6 +2097,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
+              {onRefresh && (
+                <button
+                  onClick={() => {
+                    onRefresh();
+                    showNotification("info", "Atualizando", "Recarregando dados do servidor...");
+                  }}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                  aria-label="Atualizar dados"
+                  title="Atualizar dados do servidor"
+                >
+                  <RotateCcw size={20} />
+                </button>
+              )}
               <button
                 onClick={toggleTheme}
                 className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
@@ -2068,15 +2117,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               >
                 {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
               </button>
-              <div className="w-full sm:w-auto sm:min-w-[250px]">
-                <SearchableSelect
-                  options={allHubsForFilter}
-                  value={globalHubFilter}
-                  onChange={setGlobalHubFilter}
-                  placeholder="Filtrar Hub Global..."
-                  icon={Building}
-                />
-              </div>
             </div>
           </header>
 
@@ -2085,14 +2125,139 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div
               className="w-full p-4 md:p-6 rounded-xl border border-orange-900/30 relative z-10"
               style={{
-                backgroundColor: "#000000",
-                background:
-                  "linear-gradient(to bottom, #000000 0%, #1a1a1a 100%)",
+                backgroundColor: cardColors.mainColor,
+                background: `linear-gradient(to bottom, ${cardColors.mainColor} 0%, ${cardColors.gradientColor} 100%)`,
               }}
             >
+              {/* Paleta de cores no canto superior direito */}
+              {adminView === "kanban" && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all"
+                      aria-label="Personalizar cores do card"
+                    >
+                      <Palette size={20} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
+                    <h4 className="font-medium mb-4 text-sm">Cor de Fundo do Card</h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-600">Cor Principal</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={cardColors.mainColor}
+                            onChange={(e) => {
+                              setCardColors((prev) => ({
+                                ...prev,
+                                mainColor: e.target.value,
+                              }));
+                              const user = auth.currentUser;
+                              if (user) {
+                                updateDoc(doc(db, "admins_pre_aprovados", user.uid), {
+                                  cardMainColor: e.target.value,
+                                });
+                              }
+                            }}
+                            className="w-12 h-12 rounded border cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={cardColors.mainColor}
+                            onChange={(e) => {
+                              setCardColors((prev) => ({
+                                ...prev,
+                                mainColor: e.target.value,
+                              }));
+                            }}
+                            className="flex-1 px-3 py-2 border rounded text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-600">Cor do Gradiente</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={cardColors.gradientColor}
+                            onChange={(e) => {
+                              setCardColors((prev) => ({
+                                ...prev,
+                                gradientColor: e.target.value,
+                              }));
+                              const user = auth.currentUser;
+                              if (user) {
+                                updateDoc(doc(db, "admins_pre_aprovados", user.uid), {
+                                  cardGradientColor: e.target.value,
+                                });
+                              }
+                            }}
+                            className="w-12 h-12 rounded border cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={cardColors.gradientColor}
+                            onChange={(e) => {
+                              setCardColors((prev) => ({
+                                ...prev,
+                                gradientColor: e.target.value,
+                              }));
+                            }}
+                            className="flex-1 px-3 py-2 border rounded text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-slate-600">Cores Pré-definidas</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { name: "Preto", main: "#000000", gradient: "#1a1a1a" },
+                            { name: "Azul Escuro", main: "#1e3a8a", gradient: "#1e40af" },
+                            { name: "Verde Escuro", main: "#166534", gradient: "#15803d" },
+                            { name: "Roxo Escuro", main: "#581c87", gradient: "#6b21a8" },
+                            { name: "Vermelho Escuro", main: "#991b1b", gradient: "#b91c1c" },
+                            { name: "Laranja Escuro", main: "#9a3412", gradient: "#c2410c" },
+                            { name: "Cinza Escuro", main: "#374151", gradient: "#4b5563" },
+                            { name: "Azul Marinho", main: "#0f172a", gradient: "#1e293b" },
+                          ].map((preset) => (
+                            <button
+                              key={preset.name}
+                              onClick={() => {
+                                setCardColors({
+                                  mainColor: preset.main,
+                                  gradientColor: preset.gradient,
+                                });
+                                const user = auth.currentUser;
+                                if (user) {
+                                  updateDoc(doc(db, "admins_pre_aprovados", user.uid), {
+                                    cardMainColor: preset.main,
+                                    cardGradientColor: preset.gradient,
+                                  });
+                                }
+                              }}
+                              className="flex flex-col items-center gap-1 p-2 rounded border hover:bg-slate-50 transition-colors"
+                            >
+                              <div
+                                className="w-full h-8 rounded"
+                                style={{
+                                  background: `linear-gradient(to bottom, ${preset.main} 0%, ${preset.gradient} 100%)`,
+                                }}
+                              />
+                              <span className="text-xs text-slate-600">{preset.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
               {/* Data e hora do Brasil no topo */}
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-orange-900/20">
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 flex-1">
                   <div className="flex items-center gap-2 text-white">
                     <Clock size={20} className="text-orange-500" />
                     <span className="text-xl md:text-2xl font-bold">
@@ -2104,60 +2269,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       locale: ptBR,
                     })}
                   </div>
-                </div>
-              </div>
-
-              {/* Informações do perfil */}
-              <div className="flex items-center gap-4">
-                {/* Foto de perfil */}
-                <div className="relative flex-shrink-0">
-                  {adminProfile.avatar ? (
-                    <img
-                      src={adminProfile.avatar}
-                      alt={adminProfile.name}
-                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-orange-500/50 shadow-lg"
-                      onError={(e) => {
-                        // Se a imagem falhar, mostra as iniciais
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                        const parent = target.parentElement;
-                        if (parent) {
-                          const fallback = parent.querySelector(
-                            ".avatar-fallback"
-                          ) as HTMLElement;
-                          if (fallback) fallback.style.display = "flex";
-                        }
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    className={`avatar-fallback w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center border-2 border-orange-500/50 shadow-lg ${
-                      adminProfile.avatar ? "hidden" : ""
-                    }`}
-                    style={{ display: adminProfile.avatar ? "none" : "flex" }}
-                  >
-                    <span className="text-2xl md:text-3xl font-bold text-white">
-                      {adminProfile.initials || "A"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Nome e cidade */}
-                <div className="flex flex-col flex-1 min-w-0">
-                  <h3 className="text-lg md:text-xl font-bold text-white mb-1 truncate">
-                    {adminProfile.name || "Admin Shopee"}
-                  </h3>
-                  <div className="flex items-center gap-1.5 text-sm md:text-base text-gray-300">
-                    <MapPin
-                      size={16}
-                      className="text-orange-500 flex-shrink-0"
-                    />
-                    <span className="truncate">
-                      {adminProfile.city || "Não informado"}
-                    </span>
+                  {/* Nome do Admin abaixo da data */}
+                  <div className="mt-2 ml-8">
+                    <h3 className="text-lg md:text-xl font-bold text-white">
+                      {adminProfile.name || "Admin Shopee"}
+                    </h3>
                   </div>
                 </div>
               </div>
+
+              {/* Previsão do tempo - ocupando toda a largura */}
+              {adminView === "kanban" && (
+                <div className="w-full">
+                  <WeatherForecast
+                    city={adminProfile.city || getCityFromHub(adminProfile.hub)}
+                    hub={adminProfile.hub}
+                    theme="dark"
+                    showDetailed={true}
+                    selectedDay={selectedWeatherDay}
+                    onDayClick={(day) => {
+                      setSelectedWeatherDay(selectedWeatherDay === day.date ? null : day.date);
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -2202,6 +2337,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       colorClass="#10B981"
                     />
                   </div>
+
+                  {/* Monitor de Usuários Online */}
+                  <OnlineUsersMonitor theme={theme} />
 
                   <ResizablePanelGroup
                     direction="horizontal"
@@ -2671,12 +2809,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               {isMuted ? "Ativar" : "Mutar"}
                             </Button>
                           </div>
+
+                          {/* Filtrar por Hub */}
+                          <div
+                            className={cn(
+                              "p-4 rounded-lg border",
+                              theme === "dark"
+                                ? "bg-slate-700/50 border-orange-500/30"
+                                : "bg-orange-50/80 border-orange-200/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              <Building
+                                size={20}
+                                className={
+                                  theme === "dark"
+                                    ? "text-slate-300"
+                                    : "text-slate-600"
+                                }
+                              />
+                              <label
+                                className={cn(
+                                  "text-sm font-medium",
+                                  theme === "dark"
+                                    ? "text-white"
+                                    : "text-slate-800"
+                                )}
+                              >
+                                Filtrar por Hub
+                              </label>
+                            </div>
+                            <div className="relative">
+                              <SearchableSelect
+                                options={[...HUBS]}
+                                value={adminProfile.hub || ""}
+                                onChange={(value) => {
+                                  const selectedHub = value;
+                                  const city = getCityFromHub(selectedHub);
+                                  setAdminProfile((prev) => ({
+                                    ...prev,
+                                    hub: selectedHub,
+                                    city: city,
+                                  }));
+                                  // Salvar imediatamente
+                                  const user = auth.currentUser;
+                                  if (user) {
+                                    updateDoc(doc(db, "admins_pre_aprovados", user.uid), {
+                                      hub: selectedHub,
+                                      city: city,
+                                    }).catch((error) => {
+                                      console.error("Erro ao salvar hub:", error);
+                                      sonnerToast.error("Erro ao salvar hub selecionado");
+                                    });
+                                  }
+                                }}
+                                placeholder="Selecione um Hub"
+                                icon={Building}
+                              />
+                            </div>
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
 
-                    {/* Coluna Direita - Formulário Completo */}
-                    <div className="lg:col-span-2">
+                    {/* Coluna Direita - Formulário Completo e Previsão do Tempo */}
+                    <div className="lg:col-span-2 space-y-6">
                       <Card
                         className={cn(
                           "shadow-lg border",
@@ -3223,6 +3420,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             )}
                           </Button>
                         </CardFooter>
+                      </Card>
+
+                      {/* Monitoramento de Usuários Online */}
+                      <OnlineUsersMonitor theme={theme} />
+
+                      {/* Previsão do Tempo */}
+                      <Card
+                        className={cn(
+                          "shadow-lg border",
+                          theme === "dark"
+                            ? "bg-slate-800/90 border-orange-500/30"
+                            : "bg-white/80 border-orange-200/50"
+                        )}
+                      >
+                        <CardContent className="pt-6">
+                          <WeatherForecast
+                            city={adminProfile.city || getCityFromHub(adminProfile.hub)}
+                            hub={adminProfile.hub}
+                            theme={theme}
+                            showDetailed={true}
+                            selectedDay={selectedWeatherDay}
+                            onDayClick={(day) => {
+                              setSelectedWeatherDay(selectedWeatherDay === day.date ? null : day.date);
+                            }}
+                          />
+                        </CardContent>
                       </Card>
                     </div>
                   </div>

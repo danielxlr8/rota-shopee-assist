@@ -86,6 +86,7 @@ import { formatTimestamp, formatPhoneNumber } from "../utils/formatting";
 import { showNotification } from "../utils/notifications";
 import { toast as sonnerToast } from "sonner";
 import { Loading, LoadingOverlay } from "./ui/loading";
+import { usePresence } from "../hooks/usePresence";
 
 interface DriverInterfaceProps {
   driver: Driver;
@@ -140,7 +141,7 @@ const DriverCallHistoryCard = ({
               "p-2 rounded-xl backdrop-blur-sm shadow-lg shadow-black/10",
               isRequester
                 ? "bg-orange-500/20 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-400/30"
-                : "bg-blue-500/20 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-400/30"
+                : "bg-orange-500/20 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 border border-orange-400/30"
             )}
           >
             {isRequester ? <Package size={18} /> : <Truck size={18} />}
@@ -234,8 +235,8 @@ const DriverCallHistoryCard = ({
             className={cn(
               "flex items-center gap-1 hover:underline text-xs font-medium truncate transition-colors",
               isDark
-                ? "text-blue-300 hover:text-blue-200"
-                : "text-blue-600 hover:text-blue-500"
+                ? "text-orange-300 hover:text-orange-200"
+                : "text-orange-600 hover:text-orange-500"
             )}
           >
             <MapPin size={12} /> {call.location} <ExternalLink size={10} />
@@ -336,6 +337,11 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  // Estado local para Optimistic UI - atualização instantânea
+  const [localDriverStatus, setLocalDriverStatus] = useState<string>(
+    driver?.status || "INDISPONIVEL"
+  );
+
   // Form States
   const [location, setLocation] = useState("");
   const [isLocating, setIsLocating] = useState(false);
@@ -369,6 +375,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const [reauthError, setReauthError] = useState("");
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [currentDateTime, setCurrentDateTime] = useState<Date>(new Date());
 
   // UI States
   const [historyFilter, setHistoryFilter] = useState<
@@ -391,6 +398,21 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const userId = auth.currentUser?.uid;
   const isInitialOpenCallsLoad = useRef(true);
+
+  // ========================================
+  // SISTEMA DE PRESENÇA - Rastreamento de usuários online
+  // ========================================
+  usePresence(
+    userId || null,
+    "driver",
+    driver
+      ? {
+          name: driver.name || "Motorista",
+          email: auth.currentUser?.email || "",
+        }
+      : null,
+    true // Sempre ativo para motoristas
+  );
 
   const TABS = useMemo(
     () => [
@@ -430,6 +452,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       ) || null
     );
   }, [allMyCalls, userId]);
+
+  // Driver com status local para Optimistic UI
+  const driverWithLocalStatus = useMemo(() => {
+    return {
+      ...driver,
+      status: localDriverStatus as
+        | "DISPONIVEL"
+        | "INDISPONIVEL"
+        | "EM_ROTA"
+        | "OFFLINE",
+    };
+  }, [driver, localDriverStatus]);
 
   const filteredHubs = useMemo(() => {
     if (!hubSearch) return HUBS;
@@ -474,6 +508,21 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     setTheme(isDark ? "dark" : "light");
   }, []);
 
+  // Atualizar data/hora do Brasil
+  useEffect(() => {
+    const updateDateTime = () => {
+      const brazilTime = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })
+      );
+      setCurrentDateTime(brazilTime);
+    };
+
+    updateDateTime();
+    const interval = setInterval(updateDateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const toggleTheme = () => {
     const root = window.document.documentElement;
     const newTheme = theme === "light" ? "dark" : "light";
@@ -502,6 +551,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       setHub(driver.hub || "");
       setVehicleType(driver.vehicleType || "");
       setHubSearch(driver.hub || "");
+      // Sincronizar status local com o driver
+      setLocalDriverStatus(driver.status || "INDISPONIVEL");
     }
   }, [driver]);
 
@@ -573,7 +624,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
   useEffect(() => {
     triggerNotificationRef.current = (newCall: SupportCall) => {
       if (
-        driver?.status !== "DISPONIVEL" ||
+        localDriverStatus !== "DISPONIVEL" ||
         sessionNotifiedCallIds.has(newCall.id)
       )
         return;
@@ -599,7 +650,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
       ));
       sessionNotifiedCallIds.add(newCall.id);
     };
-  }, [driver?.status, isMuted]);
+  }, [localDriverStatus, isMuted]);
 
   useEffect(() => {
     if (!userId) return;
@@ -718,28 +769,44 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     });
   };
 
-  const handleAvailabilityChange = (isAvailable: boolean) => {
+  const handleAvailabilityChange = async (isAvailable: boolean) => {
     if (!isProfileComplete || !shopeeId)
       return showNotification(
         "error",
         "Perfil Incompleto",
         "Verifique seus dados."
       );
-    updateDriver(shopeeId, {
-      status: isAvailable ? "DISPONIVEL" : "INDISPONIVEL",
-    });
+
+    // OPTIMISTIC UI: Atualizar estado local IMEDIATAMENTE
+    const newStatus = isAvailable ? "DISPONIVEL" : "INDISPONIVEL";
+    setLocalDriverStatus(newStatus);
+
+    // Depois atualizar no Firebase (não esperamos a resposta)
+    try {
+      await updateDriver(shopeeId, { status: newStatus });
+    } catch (error) {
+      // Se falhar, reverter o estado local
+      setLocalDriverStatus(driver.status || "INDISPONIVEL");
+      showNotification("error", "Erro", "Falha ao atualizar status.");
+    }
   };
 
   const handleAcceptCall = async (callId: string) => {
     if (!isProfileComplete || !userId || !shopeeId)
       return showNotification("error", "Erro", "Perfil incompleto.");
-    if (driver.status === "EM_ROTA")
+    if (localDriverStatus === "EM_ROTA")
       return showNotification("error", "Ocupado", "Você já está em rota.");
     setAcceptingCallId(callId);
+
+    // OPTIMISTIC UI: Atualizar status local para EM_ROTA imediatamente
+    setLocalDriverStatus("EM_ROTA");
+
     try {
       await updateCall(callId, { assignedTo: userId, status: "EM ANDAMENTO" });
       await updateDriver(shopeeId, { status: "EM_ROTA" });
     } catch {
+      // Se falhar, reverter o status
+      setLocalDriverStatus(driver.status || "INDISPONIVEL");
       showNotification("error", "Erro", "Falha ao aceitar.");
     } finally {
       setAcceptingCallId(null);
@@ -756,12 +823,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
   const handleCancelSupport = async (id: string) => {
     if (!userId || !shopeeId) return;
-    await updateCall(id, {
-      assignedTo: deleteField(),
-      status: "ABERTO",
-    } as any);
-    await updateDriver(shopeeId, { status: "DISPONIVEL" });
-    showNotification("success", "Cancelado", "Apoio cancelado.");
+
+    // OPTIMISTIC UI: Atualizar status local para DISPONIVEL imediatamente
+    setLocalDriverStatus("DISPONIVEL");
+
+    try {
+      await updateCall(id, {
+        assignedTo: deleteField(),
+        status: "ABERTO",
+      } as any);
+      await updateDriver(shopeeId, { status: "DISPONIVEL" });
+      showNotification("success", "Cancelado", "Apoio cancelado.");
+    } catch {
+      // Se falhar, reverter o status
+      setLocalDriverStatus(driver.status || "INDISPONIVEL");
+      showNotification("error", "Erro", "Falha ao cancelar.");
+    }
   };
 
   const onDeleteSupportRequest = async (id: string) => {
@@ -772,14 +849,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     showNotification("success", "Excluído", "Solicitação removida.");
   };
 
-  const handleUpdateProfile = () => {
+  const handleUpdateProfile = async () => {
     if (!shopeeId) return;
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length !== 11)
       return showNotification("error", "Telefone", "Use DDD + 9 dígitos.");
     if (!HUBS.includes(hub as any))
       return showNotification("error", "Hub", "Selecione um Hub válido.");
-    updateDriver(shopeeId, { name, phone: cleanPhone, hub, vehicleType });
+    await updateDriver(shopeeId, { name, phone: cleanPhone, hub, vehicleType });
     showNotification("success", "Salvo", "Perfil atualizado.");
     setIsProfileWarningVisible(false);
   };
@@ -856,7 +933,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocation(
-          `http://googleusercontent.com/maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`
+          `http://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`
         );
         setIsLocating(false);
       },
@@ -993,19 +1070,33 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
         isLoading={isSubmitting || isReauthenticating}
         text="Processando..."
       />
-      <div className="min-h-dvh font-sans pb-24 transition-colors duration-300">
+      <div
+        className="min-h-dvh font-sans pb-24 transition-colors duration-300"
+        style={{
+          background:
+            theme === "dark"
+              ? "linear-gradient(180deg, #1a0a05 0%, #2d0f08 30%, #1a0a05 60%, #0f0503 100%)"
+              : "linear-gradient(180deg, #FFF5F0 0%, #FFE8E0 30%, #FFDBD0 60%, #FFCCC0 100%)",
+          backgroundAttachment: "fixed",
+        }}
+      >
         {/* HEADER MODERNO */}
-        <header className="sticky top-0 z-30 px-4 sm:px-6 py-4 flex justify-between items-center bg-background/95 dark:bg-background/95 backdrop-blur-xl border-b border-border">
+        <header
+          className={cn(
+            "sticky top-0 z-30 px-4 sm:px-6 py-4 flex justify-between items-center backdrop-blur-xl border-b transition-all",
+            theme === "dark"
+              ? "border-orange-500/30 bg-slate-900/85"
+              : "border-orange-400/30 bg-white/85"
+          )}
+          style={{
+            backdropFilter: "blur(12px)",
+          }}
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-primary-foreground bg-primary shadow-lg">
               <ArrowRightLeft size={20} strokeWidth={2.5} />
             </div>
-            <h1
-              className={cn(
-                "font-bold text-base tracking-tight",
-                theme === "light" ? "text-slate-800" : "text-foreground"
-              )}
-            >
+            <h1 className="font-bold text-base tracking-tight text-slate-900">
               Sistema Logístico
             </h1>
           </div>
@@ -1060,10 +1151,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             </div>
           )}
           <ProfileHeaderCard
-            driver={driver}
+            driver={driverWithLocalStatus}
             isUploading={isUploading}
             onEditClick={() => fileInputRef.current?.click()}
             activeCall={activeCallForDriver}
+            theme={theme}
+            currentDateTime={currentDateTime}
           />
           <input
             type="file"
@@ -1076,10 +1169,10 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
           {/* TABS NAVIGATION MODERNAS */}
           <div
             className={cn(
-              "p-1.5 rounded-2xl flex justify-between overflow-x-auto scrollbar-hide border border-border shadow-lg transition-all duration-300",
+              "p-1.5 rounded-2xl flex justify-between overflow-x-auto scrollbar-hide border shadow-lg transition-all duration-300",
               theme === "light"
                 ? "bg-white/80 backdrop-blur-xl border-orange-200/50"
-                : "bg-slate-800/90 backdrop-blur-xl border-slate-600/50"
+                : "bg-slate-900/40 backdrop-blur-xl border-orange-500/30"
             )}
           >
             {TABS.map((tab) => (
@@ -1091,8 +1184,8 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   activeTab === tab.id
                     ? "text-white bg-primary shadow-lg scale-105"
                     : theme === "light"
-                    ? "text-slate-700 hover:text-slate-900 hover:bg-white/80"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    ? "text-slate-700 hover:text-slate-900 hover:bg-orange-50/80"
+                    : "text-slate-300 hover:text-white hover:bg-orange-500/20"
                 )}
               >
                 <div className="transition-transform duration-300">
@@ -1115,7 +1208,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             {activeTab === "availability" && (
               <div className="tab-content-enter">
                 <StatusSection
-                  driver={driver}
+                  driver={driverWithLocalStatus}
                   onAvailabilityChange={handleAvailabilityChange}
                   filteredOpenCalls={filteredOpenCalls}
                   routeIdSearch={routeIdSearch}
@@ -1160,10 +1253,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       key={f}
                       onClick={() => setHistoryFilter(f as any)}
                       className={cn(
-                        "px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap backdrop-blur-xl shadow-lg shadow-black/5 dark:shadow-black/10 transition-all duration-300 ease-in-out",
+                        "px-4 py-2 rounded-xl text-xs font-bold border whitespace-nowrap backdrop-blur-xl shadow-lg transition-all duration-300 ease-in-out",
                         historyFilter === f
-                          ? "bg-white/60 dark:bg-slate-700/90 text-foreground dark:text-white border-border dark:border-slate-600/50 shadow-xl transform scale-105"
-                          : "bg-white/40 dark:bg-slate-800/90 text-muted-foreground dark:text-slate-300 border-border dark:border-slate-600/50 hover:bg-white/60 dark:hover:bg-slate-700/90 hover:text-foreground dark:hover:text-white hover:scale-102"
+                          ? theme === "dark"
+                            ? "bg-orange-500/20 text-white border-orange-500/40 shadow-xl transform scale-105"
+                            : "bg-orange-50 text-slate-900 border-orange-300 shadow-xl transform scale-105"
+                          : theme === "dark"
+                          ? "bg-slate-900/60 text-slate-300 border-orange-500/20 hover:bg-orange-500/10 hover:text-white hover:scale-102"
+                          : "bg-white/60 text-slate-700 border-orange-200/40 hover:bg-orange-50 hover:text-slate-900 hover:scale-102"
                       )}
                     >
                       {f === "all"
@@ -1254,7 +1351,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       />
                     ))
                   ) : (
-                    <div className="text-center py-12 opacity-50 bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl border border-dashed border-border dark:border-slate-600/50 shadow-xl shadow-black/5 dark:shadow-black/20">
+                    <div className="text-center py-12 opacity-50 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-dashed border-orange-200/50 dark:border-orange-500/30 shadow-xl shadow-black/5 dark:shadow-black/20">
                       <HistoryIcon
                         size={48}
                         className="mx-auto text-muted-foreground dark:text-white/30 mb-2"
@@ -1271,16 +1368,33 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
             {activeTab === "tutorial" && (
               <div className="tab-content-enter space-y-6 pb-10">
                 <Tabs defaultValue="solicitante" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl p-1 rounded-xl h-10 mb-4 border border-border dark:border-slate-600/50 shadow-xl shadow-black/5 dark:shadow-black/20">
+                  <TabsList
+                    className={cn(
+                      "grid w-full grid-cols-2 backdrop-blur-xl p-1 rounded-xl h-10 mb-4 border shadow-xl",
+                      theme === "dark"
+                        ? "bg-slate-900/60 border-orange-500/30"
+                        : "bg-white/80 border-orange-200/50"
+                    )}
+                  >
                     <TabsTrigger
                       value="solicitante"
-                      className="text-xs text-muted-foreground dark:text-slate-300 data-[state=active]:text-foreground dark:data-[state=active]:text-white data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700/90 rounded-lg"
+                      className={cn(
+                        "text-xs data-[state=active]:shadow rounded-lg transition-all",
+                        theme === "dark"
+                          ? "text-slate-300 data-[state=active]:text-white data-[state=active]:bg-orange-500/20"
+                          : "text-slate-600 data-[state=active]:text-slate-900 data-[state=active]:bg-orange-50"
+                      )}
                     >
                       Solicitante
                     </TabsTrigger>
                     <TabsTrigger
                       value="prestador"
-                      className="text-xs text-muted-foreground dark:text-slate-300 data-[state=active]:text-foreground dark:data-[state=active]:text-white data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700/90 rounded-lg"
+                      className={cn(
+                        "text-xs data-[state=active]:shadow rounded-lg transition-all",
+                        theme === "dark"
+                          ? "text-slate-300 data-[state=active]:text-white data-[state=active]:bg-orange-500/20"
+                          : "text-slate-600 data-[state=active]:text-slate-900 data-[state=active]:bg-orange-50"
+                      )}
                     >
                       Prestador
                     </TabsTrigger>
@@ -1289,7 +1403,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     {TUTORIALS_SOLICITANTE.map((t) => (
                       <div
                         key={t.id}
-                        className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl p-4 border border-border dark:border-slate-600/50 shadow-xl shadow-black/5 dark:shadow-black/20"
+                        className={cn(
+                          "backdrop-blur-xl rounded-2xl p-4 border shadow-xl",
+                          theme === "dark"
+                            ? "bg-slate-900/60 border-orange-500/30"
+                            : "bg-white/80 border-orange-200/50"
+                        )}
                       >
                         <h4 className="font-bold text-sm mb-2 flex gap-2 items-center text-foreground dark:text-white">
                           <HelpCircle size={16} className="text-primary" />{" "}
@@ -1305,7 +1424,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     {TUTORIALS_PRESTADOR.map((t) => (
                       <div
                         key={t.id}
-                        className="bg-white/80 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl p-4 border border-border dark:border-slate-600/50 shadow-xl shadow-black/5 dark:shadow-black/20"
+                        className={cn(
+                          "backdrop-blur-xl rounded-2xl p-4 border shadow-xl",
+                          theme === "dark"
+                            ? "bg-slate-900/60 border-orange-500/30"
+                            : "bg-white/80 border-orange-200/50"
+                        )}
                       >
                         <h4 className="font-bold text-sm mb-2 flex gap-2 items-center text-foreground dark:text-white">
                           <HelpCircle size={16} className="text-primary" />{" "}
@@ -1328,21 +1452,27 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   className={cn(
                     "rounded-[1.5rem] p-5 border",
                     theme === "dark"
-                      ? "bg-slate-800/90 border-orange-500/30"
+                      ? "bg-slate-900/40 border-orange-500/30 backdrop-blur-sm"
                       : "bg-white/80 border-orange-200/50"
                   )}
                   style={
                     theme === "dark"
                       ? {
                           boxShadow:
-                            "0 25px 50px -12px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(249, 115, 22, 0.1)",
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.3), inset 0 1px 0 0 rgba(254, 95, 47, 0.1)",
                         }
                       : {
-                          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.1)",
+                          boxShadow:
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.15)",
                         }
                   }
                 >
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 tracking-wide">
+                  <h4
+                    className={cn(
+                      "text-xs font-bold uppercase mb-4 tracking-wide",
+                      theme === "dark" ? "text-orange-300" : "text-slate-600"
+                    )}
+                  >
                     Configurações
                   </h4>
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1350,16 +1480,14 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       <div
                         className={cn(
                           "p-3 rounded-xl",
-                          isMuted ? "text-slate-500" : "text-emerald-400"
+                          isMuted
+                            ? theme === "dark"
+                              ? "text-slate-400 bg-slate-800/80 border border-slate-600/30"
+                              : "text-slate-500 bg-slate-100 border border-slate-300"
+                            : theme === "dark"
+                            ? "text-emerald-300 bg-emerald-500/20 border border-emerald-400/30"
+                            : "text-emerald-600 bg-emerald-50 border border-emerald-300"
                         )}
-                        style={{
-                          background: isMuted
-                            ? "rgba(30, 41, 59, 0.8)"
-                            : "rgba(16, 185, 129, 0.15)",
-                          border: isMuted
-                            ? "1px solid rgba(71, 85, 105, 0.3)"
-                            : "1px solid rgba(16, 185, 129, 0.3)",
-                        }}
                       >
                         {isMuted ? (
                           <VolumeX size={22} />
@@ -1368,7 +1496,12 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         )}
                       </div>
                       <div>
-                        <p className="font-bold text-sm text-white">
+                        <p
+                          className={cn(
+                            "font-bold text-sm",
+                            theme === "dark" ? "text-white" : "text-slate-800"
+                          )}
+                        >
                           Sons de Alerta
                         </p>
                         <p
@@ -1397,17 +1530,18 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   className={cn(
                     "rounded-[1.5rem] p-5 space-y-4 border",
                     theme === "dark"
-                      ? "bg-slate-800/90 border-orange-500/30"
+                      ? "bg-slate-900/40 border-orange-500/30 backdrop-blur-sm"
                       : "bg-white/80 border-orange-200/50"
                   )}
                   style={
                     theme === "dark"
                       ? {
                           boxShadow:
-                            "0 25px 50px -12px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(249, 115, 22, 0.1)",
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.3), inset 0 1px 0 0 rgba(254, 95, 47, 0.1)",
                         }
                       : {
-                          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.1)",
+                          boxShadow:
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.15)",
                         }
                   }
                 >
@@ -1421,18 +1555,39 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   </h4>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        theme === "dark" ? "text-orange-300" : "text-slate-600"
+                      )}
+                    >
                       ID Motorista
                     </label>
                     <div
-                      className="p-4 rounded-xl text-sm font-mono text-slate-300 flex justify-between items-center"
+                      className={cn(
+                        "p-4 rounded-xl text-sm font-mono flex justify-between items-center",
+                        theme === "dark" ? "text-orange-200" : "text-slate-700"
+                      )}
                       style={{
-                        background: "rgba(15, 23, 42, 0.6)",
-                        border: "1px solid rgba(71, 85, 105, 0.3)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(254, 95, 47, 0.15)"
+                            : "rgba(255, 168, 50, 0.15)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(254, 95, 47, 0.3)"
+                            : "1px solid rgba(255, 168, 50, 0.3)",
                       }}
                     >
                       {shopeeId}
-                      <Lock size={14} className="text-slate-600" />
+                      <Lock
+                        size={14}
+                        className={
+                          theme === "dark"
+                            ? "text-orange-400"
+                            : "text-orange-500"
+                        }
+                      />
                     </div>
                   </div>
 
@@ -1440,7 +1595,7 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                     <label
                       className={cn(
                         "text-xs font-bold",
-                        theme === "dark" ? "text-slate-300" : "text-slate-600"
+                        theme === "dark" ? "text-orange-300" : "text-slate-600"
                       )}
                     >
                       Hub
@@ -1464,17 +1619,28 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       />
                       {isHubDropdownOpen && filteredHubs.length > 0 && (
                         <div
-                          className="absolute z-10 w-full mt-2 rounded-xl max-h-48 overflow-y-auto"
+                          className={cn(
+                            "absolute z-10 w-full mt-2 rounded-xl max-h-48 overflow-y-auto border",
+                            theme === "dark"
+                              ? "bg-slate-900/98 border-orange-500/40 backdrop-blur-xl"
+                              : "bg-white border-orange-200/50"
+                          )}
                           style={{
-                            background: "rgba(30, 41, 59, 0.98)",
-                            border: "1px solid rgba(71, 85, 105, 0.4)",
-                            boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.5)",
+                            boxShadow:
+                              theme === "dark"
+                                ? "0 20px 40px -10px rgba(254, 95, 47, 0.4)"
+                                : "0 20px 40px -10px rgba(254, 95, 47, 0.2)",
                           }}
                         >
                           {filteredHubs.map((h) => (
                             <div
                               key={h}
-                              className="p-3 hover:bg-slate-700/90 cursor-pointer text-sm text-slate-300 hover:text-white transition-colors first:rounded-t-xl last:rounded-b-xl"
+                              className={cn(
+                                "p-3 cursor-pointer text-sm transition-colors first:rounded-t-xl last:rounded-b-xl",
+                                theme === "dark"
+                                  ? "text-slate-300 hover:text-white hover:bg-orange-500/20"
+                                  : "text-slate-700 hover:text-slate-900 hover:bg-orange-50"
+                              )}
                               onClick={() => {
                                 setHub(h);
                                 setHubSearch(h);
@@ -1490,20 +1656,40 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        theme === "dark" ? "text-orange-300" : "text-slate-600"
+                      )}
+                    >
                       Veículo
                     </label>
                     <select
                       value={vehicleType}
                       onChange={(e) => setVehicleType(e.target.value)}
-                      className="w-full p-4 rounded-xl text-sm font-medium capitalize text-white focus:ring-2 focus:ring-orange-500/50 outline-none transition-all appearance-none cursor-pointer"
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm font-medium capitalize focus:ring-2 focus:ring-orange-500/50 outline-none transition-all appearance-none cursor-pointer",
+                        theme === "dark" ? "text-white" : "text-slate-800"
+                      )}
                       style={{
-                        background: "rgba(15, 23, 42, 0.6)",
-                        border: "1px solid rgba(71, 85, 105, 0.3)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(254, 95, 47, 0.15)"
+                            : "rgba(255, 168, 50, 0.15)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(254, 95, 47, 0.3)"
+                            : "1px solid rgba(255, 168, 50, 0.3)",
                       }}
                     >
                       {VEHICLE_TYPES.map((v) => (
-                        <option key={v} value={v} className="bg-slate-900">
+                        <option
+                          key={v}
+                          value={v}
+                          className={
+                            theme === "dark" ? "bg-slate-900" : "bg-white"
+                          }
+                        >
                           {v}
                         </option>
                       ))}
@@ -1511,38 +1697,73 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        theme === "dark" ? "text-orange-300" : "text-slate-600"
+                      )}
+                    >
                       Nome
                     </label>
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full p-4 rounded-xl text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all"
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                        theme === "dark"
+                          ? "text-white placeholder:text-slate-400"
+                          : "text-slate-800 placeholder:text-slate-500"
+                      )}
                       style={{
-                        background: "rgba(15, 23, 42, 0.6)",
-                        border: "1px solid rgba(71, 85, 105, 0.3)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(254, 95, 47, 0.15)"
+                            : "rgba(255, 168, 50, 0.15)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(254, 95, 47, 0.3)"
+                            : "1px solid rgba(255, 168, 50, 0.3)",
                       }}
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-400">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        theme === "dark" ? "text-orange-300" : "text-slate-600"
+                      )}
+                    >
                       Telefone
                     </label>
                     <input
                       value={formatPhoneNumber(phone)}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full p-4 rounded-xl text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all"
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                        theme === "dark"
+                          ? "text-white placeholder:text-slate-400"
+                          : "text-slate-800 placeholder:text-slate-500"
+                      )}
                       style={{
-                        background: "rgba(15, 23, 42, 0.6)",
-                        border: "1px solid rgba(71, 85, 105, 0.3)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(254, 95, 47, 0.15)"
+                            : "rgba(255, 168, 50, 0.15)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(254, 95, 47, 0.3)"
+                            : "1px solid rgba(255, 168, 50, 0.3)",
                       }}
                     />
                   </div>
 
                   <button
                     onClick={handleUpdateProfile}
-                    className="w-full py-4 mt-2 rounded-xl text-white font-bold text-sm transition-all hover:opacity-90"
+                    className={cn(
+                      "w-full py-4 mt-2 rounded-xl font-bold text-sm transition-all hover:opacity-90",
+                      theme === "dark" ? "text-white" : "text-white"
+                    )}
                     style={{
                       background:
                         "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
@@ -1555,16 +1776,30 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
 
                 {/* Segurança */}
                 <section
-                  className="rounded-[1.5rem] p-5 space-y-4"
-                  style={{
-                    background:
-                      "linear-gradient(160deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98))",
-                    border: "1px solid rgba(71, 85, 105, 0.3)",
-                    boxShadow:
-                      "0 25px 50px -12px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)",
-                  }}
+                  className={cn(
+                    "rounded-[1.5rem] p-5 space-y-4 border",
+                    theme === "dark"
+                      ? "bg-slate-900/40 border-orange-500/30 backdrop-blur-sm"
+                      : "bg-white/80 border-orange-200/50"
+                  )}
+                  style={
+                    theme === "dark"
+                      ? {
+                          boxShadow:
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.3), inset 0 1px 0 0 rgba(254, 95, 47, 0.1)",
+                        }
+                      : {
+                          boxShadow:
+                            "0 25px 50px -12px rgba(254, 95, 47, 0.15)",
+                        }
+                  }
                 >
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 tracking-wide">
+                  <h4
+                    className={cn(
+                      "text-xs font-bold uppercase mb-2 tracking-wide",
+                      theme === "dark" ? "text-orange-300" : "text-slate-600"
+                    )}
+                  >
                     Segurança
                   </h4>
 
@@ -1575,16 +1810,22 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Nova Senha"
-                        className="w-full p-4 rounded-xl text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all"
-                        style={{
-                          background: "rgba(15, 23, 42, 0.6)",
-                          border: "1px solid rgba(71, 85, 105, 0.3)",
-                        }}
+                        className={cn(
+                          "w-full p-4 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                          theme === "dark"
+                            ? "text-white placeholder:text-slate-400 bg-orange-500/10 border border-orange-500/30"
+                            : "text-slate-800 placeholder:text-slate-500 bg-orange-50/50 border border-orange-200/50"
+                        )}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-4 text-slate-500 hover:text-white transition-colors"
+                        className={cn(
+                          "absolute right-4 top-4 transition-colors",
+                          theme === "dark"
+                            ? "text-slate-400 hover:text-white"
+                            : "text-slate-500 hover:text-slate-700"
+                        )}
                       >
                         {showPassword ? (
                           <EyeOff size={18} />
@@ -1598,19 +1839,21 @@ export const DriverInterface: React.FC<DriverInterfaceProps> = ({ driver }) => {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Confirmar Nova Senha"
-                      className="w-full p-4 rounded-xl text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500/50 outline-none transition-all"
-                      style={{
-                        background: "rgba(15, 23, 42, 0.6)",
-                        border: "1px solid rgba(71, 85, 105, 0.3)",
-                      }}
+                      className={cn(
+                        "w-full p-4 rounded-xl text-sm focus:ring-2 focus:ring-orange-500/50 outline-none transition-all",
+                        theme === "dark"
+                          ? "text-white placeholder:text-slate-400 bg-orange-500/10 border border-orange-500/30"
+                          : "text-slate-800 placeholder:text-slate-500 bg-orange-50/50 border border-orange-200/50"
+                      )}
                     />
                     <button
                       onClick={handleChangePassword}
-                      className="w-full py-4 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-all"
-                      style={{
-                        background: "rgba(30, 41, 59, 0.5)",
-                        border: "1px solid rgba(71, 85, 105, 0.4)",
-                      }}
+                      className={cn(
+                        "w-full py-4 rounded-xl text-sm font-medium transition-all border",
+                        theme === "dark"
+                          ? "text-slate-300 hover:text-white bg-slate-800/50 border-orange-500/30 hover:bg-orange-500/10"
+                          : "text-slate-700 hover:text-slate-900 bg-white border-orange-200/50 hover:bg-orange-50"
+                      )}
                     >
                       Atualizar Senha
                     </button>

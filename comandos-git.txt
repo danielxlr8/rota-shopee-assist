@@ -1,0 +1,47 @@
+# Navegue até a pasta do projeto
+cd "C:\Users\SPXBR16535\Desktop\codigos\Projeto apoio\sistema-logistico"
+
+# Verificar Git
+git --version
+
+# Ver status
+git status
+
+# Adicionar arquivos
+git add .
+
+# Verificar novamente (NÃO deve mostrar .env)
+git status
+
+# Criar commit
+git commit -m "feat: Sistema Logistico Shopee Express completo - Deploy inicial by Daniel Pires"
+
+# Verificar remote
+git remote -v
+
+# === PAUSA AQUI ===
+# Agora vá para GitHub e crie o repositório:
+# https://github.com/new
+# Nome: sistema-logistico-shopee
+# Copie a URL que termina em .git
+# === CONTINUE ABAIXO ===
+
+# Adicionar remote (SUBSTITUA A URL pela sua)
+git remote add origin https://github.com/SEU-USUARIO/sistema-logistico-shopee.git
+
+# Se já existe remote, use este ao invés:
+# git remote set-url origin https://github.com/SEU-USUARIO/sistema-logistico-shopee.git
+
+# Garantir branch main
+git branch -M main
+
+# PUSH para GitHub
+git push -u origin main
+
+# Username: seu_usuario_github
+# Password: USE_SEU_PERSONAL_ACCESS_TOKEN (não a senha!)
+# Crie token em: https://github.com/settings/tokens
+
+# === FIM ===
+# Verifique no GitHub se apareceu tudo!
+# https://github.com/SEU-USUARIO/sistema-logistico-shopee

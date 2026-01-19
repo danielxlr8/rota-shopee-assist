@@ -70,7 +70,7 @@ export const SummaryCard = ({
       className={cn(
         "relative overflow-hidden backdrop-blur-xl",
         isDark
-          ? "bg-gradient-to-br from-slate-800/90 via-slate-700/90 to-slate-800/90 border-slate-600/50"
+          ? "bg-[#1a0f0a]/95 border-[#2d1810]/80"
           : "bg-white/80 border-orange-200/50"
       )}
     >
@@ -131,15 +131,15 @@ export const KanbanColumn = ({
       className={cn(
         "flex flex-col h-full rounded-xl overflow-hidden backdrop-blur-xl",
         isDark
-          ? "bg-gradient-to-br from-slate-800/90 via-slate-700/90 to-slate-800/90 border-slate-600/50"
+          ? "bg-[#1a0f0a]/95 border-[#2d1810]/80"
           : "bg-white/80 border-orange-200/50"
       )}
       style={{
         border: isDark
-          ? "1px solid rgba(255, 255, 255, 0.1)"
+          ? "1px solid rgba(45, 24, 16, 0.8)"
           : "1px solid rgba(254, 131, 48, 0.3)",
         boxShadow: isDark
-          ? "0 8px 32px rgba(0, 0, 0, 0.3)"
+          ? "0 8px 32px rgba(0, 0, 0, 0.5)"
           : "0 4px 20px rgba(0, 0, 0, 0.1)",
       }}
     >
@@ -147,7 +147,7 @@ export const KanbanColumn = ({
         className={cn(
           "p-4 sticky top-0 z-10 backdrop-blur-xl",
           isDark
-            ? "bg-slate-800/95 border-b border-slate-600/50"
+            ? "bg-[#1a0f0a]/98 border-b border-[#2d1810]/80"
             : "bg-white/90 border-b border-orange-200/50"
         )}
       >

@@ -9,12 +9,14 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    outDir: "dist",
+  },
   server: {
     host: true,
-    port: 8080,
-    strictPort: true, // garante que o Vite realmente rode na 8080
+    port: 3000,
+    strictPort: true, // garante que o Vite rode na porta 3000
     cors: true, // libera requisições externas
     allowedHosts: ["odoriferously-nonstringent-vergie.ngrok-free.dev"], // libera hosts externos
-    origin: "http://localhost:5173", // <-- ESSENCIAL p/ HMR + NGROK
   },
 });

@@ -1481,6 +1481,73 @@ export const AuthPage = () => {
           </motion.div>
         </motion.div>
       </motion.div>
+      
+      {/* Assinatura do desenvolvedor no rodapé */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 0.6 }}
+        className="absolute bottom-6 left-6 z-20"
+      >
+        <div className="flex items-center gap-3 px-6 py-3 rounded-2xl backdrop-blur-md border border-white/20"
+          style={{
+            background: "linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)",
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <motion.div
+              animate={{
+                rotate: [0, 360],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+                boxShadow: "0 0 20px rgba(249, 115, 22, 0.5)",
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </motion.div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-white leading-tight">Daniel Pires</span>
+              <span className="text-xs text-white/70 leading-tight">Desenvolvedor</span>
+            </div>
+          </div>
+          <motion.div
+            animate={{
+              scale: [1, 1.1, 1],
+              opacity: [0.5, 1, 0.5],
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              boxShadow: "0 0 10px rgba(16, 185, 129, 0.8)",
+            }}
+          />
+        </div>
+      </motion.div>
     </div>
   );
 };
